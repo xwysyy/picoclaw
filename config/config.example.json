@@ -257,7 +257,7 @@
   },
   "heartbeat": {
     "enabled": true,
-    "interval": 30
+    "interval": 5
   },
   "devices": {
     "enabled": false,
