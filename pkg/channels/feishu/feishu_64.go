@@ -246,7 +246,7 @@ func (c *FeishuChannel) handleMessageReceive(ctx context.Context, event *larkim.
 	return nil
 }
 
-func (c *FeishuChannel) handleLegacyMessageReceive(_ context.Context, event *larkim.P1MessageReceiveV1) error {
+func (c *FeishuChannel) handleLegacyMessageReceive(ctx context.Context, event *larkim.P1MessageReceiveV1) error {
 	if event == nil || event.Event == nil {
 		logger.DebugC("feishu", "Ignored empty P1 legacy message event")
 		return nil
@@ -279,8 +279,9 @@ func (c *FeishuChannel) handleLegacyMessageReceive(_ context.Context, event *lar
 	}
 
 	metadata := map[string]string{}
-	if payload.OpenMessageID != "" {
-		metadata["message_id"] = payload.OpenMessageID
+	messageID := strings.TrimSpace(payload.OpenMessageID)
+	if messageID != "" {
+		metadata["message_id"] = messageID
 	}
 	if payload.MsgType != "" {
 		metadata["message_type"] = payload.MsgType
@@ -293,12 +294,21 @@ func (c *FeishuChannel) handleLegacyMessageReceive(_ context.Context, event *lar
 	}
 
 	chatType := strings.ToLower(strings.TrimSpace(payload.ChatType))
+	peer := bus.Peer{Kind: "group", ID: chatID}
 	if chatType == "p2p" || chatType == "private" {
+		peer = bus.Peer{Kind: "direct", ID: senderID}
 		metadata["peer_kind"] = "direct"
 		metadata["peer_id"] = senderID
 	} else {
 		metadata["peer_kind"] = "group"
 		metadata["peer_id"] = chatID
+
+		// In group chats, apply unified group trigger filtering
+		respond, cleaned := c.ShouldRespondInGroup(false, content)
+		if !respond {
+			return nil
+		}
+		content = cleaned
 	}
 
 	logger.InfoCF("feishu", "Feishu message received (legacy event)", map[string]any{
@@ -307,7 +317,13 @@ func (c *FeishuChannel) handleLegacyMessageReceive(_ context.Context, event *lar
 		"preview":   utils.Truncate(content, 80),
 	})
 
-	c.HandleMessage(senderID, chatID, content, nil, metadata)
+	senderInfo := bus.SenderInfo{
+		Platform:    "feishu",
+		PlatformID:  senderID,
+		CanonicalID: identity.BuildCanonicalID("feishu", senderID),
+	}
+
+	c.HandleMessage(ctx, peer, messageID, senderID, chatID, content, nil, metadata, senderInfo)
 	return nil
 }
 

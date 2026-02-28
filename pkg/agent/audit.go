@@ -596,11 +596,19 @@ func (al *AgentLoop) publishAuditReport(report *AuditReport) {
 		return
 	}
 
-	al.bus.PublishOutbound(bus.OutboundMessage{
+	pubCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if err := al.bus.PublishOutbound(pubCtx, bus.OutboundMessage{
 		Channel: channel,
 		ChatID:  chatID,
 		Content: report.FormatMessage(),
-	})
+	}); err != nil {
+		logger.WarnCF("agent.audit", "Failed to publish audit report", map[string]any{
+			"channel": channel,
+			"chat_id": chatID,
+			"error":   err.Error(),
+		})
+	}
 }
 
 func (al *AgentLoop) resolveAuditDestination() (string, string) {
