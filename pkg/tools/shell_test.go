@@ -332,3 +332,13 @@ func TestShellTool_RestrictToWorkspace_StillBlocksRealPathAfterEnvAssignment(t *
 		t.Fatalf("expected outside working dir error, got: %s", guardErr)
 	}
 }
+
+func TestShellTool_RestrictToWorkspace_AllowsHTTPSURLPathSegments(t *testing.T) {
+	tmpDir := t.TempDir()
+	tool := NewExecTool(tmpDir, true)
+
+	guardErr := tool.guardCommand("git clone https://github.com/xwysyy/Claw-Paper-Notes.git", tmpDir)
+	if guardErr != "" {
+		t.Fatalf("expected URL path segments to be ignored by guard, got: %s", guardErr)
+	}
+}

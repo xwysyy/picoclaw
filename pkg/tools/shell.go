@@ -576,7 +576,7 @@ func (t *ExecTool) guardCommand(command, cwd string) string {
 		matches := guardPathPattern.FindAllStringIndex(cmd, -1)
 		for _, match := range matches {
 			raw := cmd[match[0]:match[1]]
-			if pathMatchIsEnvAssignmentValue(cmd, match[0]) {
+			if pathMatchIsEnvAssignmentValue(cmd, match[0]) || pathMatchIsURLSegment(cmd, raw, match[0]) {
 				continue
 			}
 
@@ -618,6 +618,26 @@ func pathMatchIsEnvAssignmentValue(command string, matchStart int) bool {
 	}
 
 	return envVarNamePattern.MatchString(prefix[:eq])
+}
+
+// pathMatchIsURLSegment detects path-like regex matches that are actually
+// URL path segments (e.g. "/owner/repo.git" in "https://github.com/owner/repo.git").
+func pathMatchIsURLSegment(command, raw string, matchStart int) bool {
+	if matchStart <= 0 || matchStart > len(command) {
+		return false
+	}
+
+	tokenStart := strings.LastIndexAny(command[:matchStart], " \t\r\n") + 1
+	if tokenStart < 0 || tokenStart >= matchStart {
+		return false
+	}
+
+	prefix := command[tokenStart:matchStart]
+	if strings.Contains(prefix, "://") {
+		return true
+	}
+
+	return strings.HasPrefix(raw, "//") && strings.HasSuffix(prefix, ":")
 }
 
 func (t *ExecTool) SetTimeout(timeout time.Duration) {
