@@ -64,9 +64,14 @@ func (al *AgentLoop) flushMemorySnapshot(ctx context.Context, agent *AgentInstan
 	}
 
 	var prompt strings.Builder
-	prompt.WriteString("Extract durable memory from this chat.\n")
+	prompt.WriteString("Extract durable memory from this chat — facts worth remembering long-term.\n")
 	prompt.WriteString("Return concise markdown bullets under these headings only:\n")
-	prompt.WriteString("## Profile\n## Long-term Facts\n## Active Goals\n## Constraints\n## Open Threads\n## Deprecated/Resolved\n")
+	prompt.WriteString("## Profile\n## Long-term Facts\n## Active Goals\n## Constraints\n## Open Threads\n## Deprecated/Resolved\n\n")
+	prompt.WriteString("Rules:\n")
+	prompt.WriteString("- Only extract information that would be useful in FUTURE conversations.\n")
+	prompt.WriteString("- Skip transient details (greetings, acknowledgements, single-use commands).\n")
+	prompt.WriteString("- Each bullet should be self-contained and understandable without context.\n")
+	prompt.WriteString("- Omit sections with nothing to report.\n")
 	prompt.WriteString("\nCHAT:\n")
 	for _, m := range recent {
 		prompt.WriteString(m.Role)
@@ -235,7 +240,14 @@ func (al *AgentLoop) summarizeBatchStructured(
 ) (string, error) {
 	var sb strings.Builder
 	sb.WriteString("Summarize this conversation segment for future continuity.\n")
-	sb.WriteString("Use concise markdown with sections: Intent, Decisions, Tool Results, Pending Actions, Constraints.\n")
+	sb.WriteString("Output EXACTLY in this format (keep each section to 1-3 bullet points):\n\n")
+	sb.WriteString("## Intent\n- <what the user wants to achieve>\n\n")
+	sb.WriteString("## Decisions\n- <key decisions made during the conversation>\n\n")
+	sb.WriteString("## Tool Results\n- <important tool outputs with key data points>\n\n")
+	sb.WriteString("## Pending Actions\n- <what still needs to be done>\n\n")
+	sb.WriteString("## Constraints\n- <any limitations or requirements discovered>\n\n")
+	sb.WriteString("Keep total output under 300 words. Prioritize actionable information over conversational details.\n")
+	sb.WriteString("Omit empty sections. Do NOT include greetings, pleasantries, or meta-commentary.\n")
 	if existingSummary != "" {
 		sb.WriteString("\nExisting summary:\n")
 		sb.WriteString(existingSummary)

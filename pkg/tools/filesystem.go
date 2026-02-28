@@ -108,7 +108,10 @@ func (t *ReadFileTool) ParallelPolicy() ToolParallelPolicy {
 }
 
 func (t *ReadFileTool) Description() string {
-	return "Read the contents of a file"
+	return "Read the contents of a file and return its text. " +
+		"Input: path (string, required). " +
+		"Output: the file's full text content. " +
+		"Use this instead of 'exec' with cat/head/tail for reading files."
 }
 
 func (t *ReadFileTool) Parameters() map[string]any {
@@ -150,7 +153,10 @@ func (t *WriteFileTool) Name() string {
 }
 
 func (t *WriteFileTool) Description() string {
-	return "Write content to a file"
+	return "Create or overwrite a file with the given content. " +
+		"Input: path (string, required), content (string, required). " +
+		"Output: confirmation of the write. " +
+		"Warning: this overwrites the entire file. To modify part of a file, use 'edit_file' instead."
 }
 
 func (t *WriteFileTool) Parameters() map[string]any {
@@ -205,7 +211,9 @@ func (t *ListDirTool) ParallelPolicy() ToolParallelPolicy {
 }
 
 func (t *ListDirTool) Description() string {
-	return "List files and directories in a path"
+	return "List files and directories in a given path. " +
+		"Input: path (string, optional — defaults to workspace root). " +
+		"Output: list of entries with name, type (file/dir), size, and modification time."
 }
 
 func (t *ListDirTool) Parameters() map[string]any {

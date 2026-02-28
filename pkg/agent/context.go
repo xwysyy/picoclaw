@@ -43,6 +43,11 @@ type ContextBuilder struct {
 	bootstrapMu    sync.RWMutex
 	bootstrapCache map[string]string
 
+	// WorkingState provides structured task progress for the current session.
+	// Set by the agent loop; if nil, no working state section is injected.
+	workingState   *WorkingState
+	workingStateMu sync.RWMutex
+
 	// Cache for static system prompt to avoid rebuilding on every call.
 	// Dynamic per-request data (time/session/summary) is appended in BuildMessages.
 	systemPromptMutex  sync.RWMutex
@@ -163,15 +168,31 @@ Your workspace is at: %s
 
 %s
 
+## Decision Process
+
+When you receive a task, follow these steps:
+
+1. **Understand** — Identify what the user actually needs. If the request is ambiguous, ask for clarification before acting.
+2. **Plan** — Determine which tools and steps are needed. For complex tasks (3+ steps), briefly outline your approach.
+3. **Execute** — Use tools one step at a time. Check each result before proceeding to the next step.
+4. **Verify** — Confirm the result matches the user's intent. If it doesn't, adjust and retry.
+5. **Respond** — Provide a concise summary of what was done and the outcome.
+
 ## Important Rules
 
-1. **ALWAYS use tools** - When you need to perform an action (schedule reminders, send messages, execute commands, etc.), you MUST call the appropriate tool. Do NOT just say you'll do it or pretend to do it.
+1. **ALWAYS use tools** — When you need to perform an action (schedule reminders, send messages, execute commands, etc.), you MUST call the appropriate tool. Do NOT just say you'll do it or pretend to do it.
 
-2. **Be helpful and accurate** - When using tools, briefly explain what you're doing.
+2. **Be helpful and accurate** — When using tools, briefly explain what you're doing.
 
-3. **Memory** - When interacting with me if something seems memorable, update %s/memory/MEMORY.md
+3. **Memory** — When interacting with me if something seems memorable, update %s/memory/MEMORY.md
 
-4. **Context summaries** - Conversation summaries provided as context are approximate references only. They may be incomplete or outdated. Always defer to explicit user instructions over summary content.`,
+4. **Context summaries** — Conversation summaries provided as context are approximate references only. They may be incomplete or outdated. Always defer to explicit user instructions over summary content.
+
+5. **Honesty** — If you cannot complete a task, explain WHY clearly. Do NOT fabricate results or pretend an action succeeded. If tool results are ambiguous, present the raw data and let the user decide.
+
+6. **Error recovery** — If a tool fails, read the error message and try an alternative approach. Do NOT repeat the same failed tool call with identical arguments. If you've tried 3+ approaches without progress, explain what you've tried and ask for help.
+
+7. **Avoid loops** — NEVER call the same tool with the same arguments more than twice. If you find yourself repeating actions, stop and reassess your approach.`,
 		workspacePath, workspacePath, workspacePath, workspacePath, toolsSection, workspacePath)
 }
 
@@ -411,6 +432,13 @@ func (cb *ContextBuilder) LoadBootstrapFiles(sessionKey string) string {
 	return content
 }
 
+// SetWorkingState sets the structured working state for context injection.
+func (cb *ContextBuilder) SetWorkingState(ws *WorkingState) {
+	cb.workingStateMu.Lock()
+	defer cb.workingStateMu.Unlock()
+	cb.workingState = ws
+}
+
 func (cb *ContextBuilder) buildDynamicContext(channel, chatID string) string {
 	now := time.Now().Format("2006-01-02 15:04 (Monday)")
 	rt := fmt.Sprintf("%s %s, Go %s", runtime.GOOS, runtime.GOARCH, runtime.Version())
@@ -420,6 +448,17 @@ func (cb *ContextBuilder) buildDynamicContext(channel, chatID string) string {
 	if channel != "" && chatID != "" {
 		fmt.Fprintf(&sb, "\n\n## Current Session\nChannel: %s\nChat ID: %s", channel, chatID)
 	}
+
+	// Inject working state if available
+	cb.workingStateMu.RLock()
+	ws := cb.workingState
+	cb.workingStateMu.RUnlock()
+	if ws != nil {
+		if wsCtx := ws.FormatForContext(); wsCtx != "" {
+			fmt.Fprintf(&sb, "\n\n%s", wsCtx)
+		}
+	}
+
 	return sb.String()
 }
 

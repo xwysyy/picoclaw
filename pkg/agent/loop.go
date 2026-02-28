@@ -620,10 +620,15 @@ func (al *AgentLoop) runAgentLoop(ctx context.Context, agent *AgentInstance, opt
 		opts.ChatID,
 	)
 
-	// 3. Save user message to session
+	// 3. Set up working state for structured task tracking
+	ws := NewWorkingState(opts.UserMessage)
+	agent.ContextBuilder.SetWorkingState(ws)
+	defer agent.ContextBuilder.SetWorkingState(nil) // clean up after processing
+
+	// 4. Save user message to session
 	agent.Sessions.AddMessage(opts.SessionKey, "user", opts.UserMessage)
 
-	// 4. Run LLM iteration loop
+	// 5. Run LLM iteration loop
 	finalContent, iteration, err := al.runLLMIteration(ctx, agent, messages, opts)
 	if err != nil {
 		return "", err
@@ -669,6 +674,32 @@ func (al *AgentLoop) runAgentLoop(ctx context.Context, agent *AgentInstance, opt
 }
 
 // runLLMIteration executes the LLM call loop with tool handling.
+// toolCallSignature captures a tool call for loop detection.
+type toolCallSignature struct {
+	Name string
+	Args string
+}
+
+// detectToolCallLoop checks if any of the current tool calls have been
+// repeated with identical arguments more than the threshold within the
+// recent history. Returns the name of the looping tool, or "" if none.
+func detectToolCallLoop(recent []toolCallSignature, current []providers.ToolCall, threshold int) string {
+	for _, tc := range current {
+		argsJSON, _ := json.Marshal(tc.Arguments)
+		sig := string(argsJSON)
+		count := 0
+		for _, prev := range recent {
+			if prev.Name == tc.Name && prev.Args == sig {
+				count++
+			}
+		}
+		if count >= threshold {
+			return tc.Name
+		}
+	}
+	return ""
+}
+
 func (al *AgentLoop) runLLMIteration(
 	ctx context.Context,
 	agent *AgentInstance,
@@ -677,6 +708,7 @@ func (al *AgentLoop) runLLMIteration(
 ) (string, int, error) {
 	iteration := 0
 	var finalContent string
+	recentToolCalls := make([]toolCallSignature, 0, 32) // for loop detection
 
 	for iteration < agent.MaxIterations {
 		iteration++
@@ -855,6 +887,34 @@ func (al *AgentLoop) runLLMIteration(
 				"iteration": iteration,
 			})
 
+		// Loop detection: check if the same tool+args have been called too many times
+		if loopingTool := detectToolCallLoop(recentToolCalls, normalizedToolCalls, 3); loopingTool != "" {
+			logger.WarnCF("agent", "Tool call loop detected",
+				map[string]any{
+					"agent_id":  agent.ID,
+					"tool":      loopingTool,
+					"iteration": iteration,
+				})
+			// Inject a system nudge to break the loop
+			messages = append(messages, providers.Message{
+				Role: "user",
+				Content: fmt.Sprintf("[System notice: You have called '%s' with the same arguments 3+ times. "+
+					"This appears to be a loop. Please try a different approach, use a different tool, "+
+					"or explain why you are stuck and ask for help.]", loopingTool),
+			})
+			// Skip executing tools this round — let LLM reconsider
+			continue
+		}
+
+		// Track current tool calls for future loop detection
+		for _, tc := range normalizedToolCalls {
+			argsJSON, _ := json.Marshal(tc.Arguments)
+			recentToolCalls = append(recentToolCalls, toolCallSignature{
+				Name: tc.Name,
+				Args: string(argsJSON),
+			})
+		}
+
 		// Build assistant message with tool calls
 		assistantMsg := providers.Message{
 			Role:             "assistant",
@@ -928,6 +988,14 @@ func (al *AgentLoop) runLLMIteration(
 		for _, executed := range toolExecutions {
 			toolResult := executed.Result
 			tc := executed.ToolCall
+
+			// Track tool execution in working state
+			agent.ContextBuilder.workingStateMu.RLock()
+			ws := agent.ContextBuilder.workingState
+			agent.ContextBuilder.workingStateMu.RUnlock()
+			if ws != nil {
+				ws.RecordToolCall(tc.Name, toolResult.IsError)
+			}
 
 			// Send ForUser content to user immediately if not Silent.
 			if !toolResult.Silent && toolResult.ForUser != "" && opts.SendResponse {

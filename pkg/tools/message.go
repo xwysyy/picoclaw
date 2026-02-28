@@ -23,7 +23,11 @@ func (t *MessageTool) Name() string {
 }
 
 func (t *MessageTool) Description() string {
-	return "Send a message to user on a chat channel. Use this when you want to communicate something."
+	return "Send a message to user on a chat channel. " +
+		"Input: content (string, required), channel (string, optional), chat_id (string, optional). " +
+		"Output: confirmation that the message was sent (silent — user receives the message directly). " +
+		"If channel/chat_id are omitted, uses the current conversation context. " +
+		"Use this to proactively communicate results, progress updates, or ask follow-up questions."
 }
 
 func (t *MessageTool) Parameters() map[string]any {

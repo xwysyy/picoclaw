@@ -131,6 +131,26 @@ func (tr *ToolResult) MarshalJSON() ([]byte, error) {
 	})
 }
 
+// ErrorWithSuggestion creates a ToolResult representing an error with
+// an actionable suggestion for the LLM on how to recover.
+// The suggestion is appended to the error message so the agent knows
+// what to try next.
+//
+// Example:
+//
+//	result := ErrorWithSuggestion(
+//	    "File not found: data.csv",
+//	    "Check the file path with 'list_dir' or search for similar filenames.",
+//	)
+func ErrorWithSuggestion(message, suggestion string) *ToolResult {
+	return &ToolResult{
+		ForLLM:  message + "\nSuggestion: " + suggestion,
+		Silent:  false,
+		IsError: true,
+		Async:   false,
+	}
+}
+
 // WithError sets the Err field and returns the result for chaining.
 // This preserves the error for logging while keeping it out of JSON.
 //

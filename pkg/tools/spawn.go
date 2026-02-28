@@ -32,7 +32,12 @@ func (t *SpawnTool) Name() string {
 }
 
 func (t *SpawnTool) Description() string {
-	return "Spawn a subagent to handle a task in the background. Use this for complex or time-consuming tasks that can run independently. The subagent will complete the task and report back when done."
+	return "Spawn a subagent to handle a task asynchronously in the background. " +
+		"Input: task (string, required) — clear description of what the subagent should do. " +
+		"Output: confirmation with subagent task ID. The result will be reported back via system message when done. " +
+		"Use this for tasks that can run independently (e.g., research, long computations). " +
+		"The subagent has access to the same tools but runs in its own context. " +
+		"For tasks where you need the result immediately, use the 'subagent' tool instead."
 }
 
 func (t *SpawnTool) Parameters() map[string]any {

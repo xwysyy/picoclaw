@@ -123,7 +123,14 @@ func (t *ExecTool) Name() string {
 }
 
 func (t *ExecTool) Description() string {
-	return "Execute a shell command and return its output. Use with caution."
+	return "Execute a shell command in the workspace directory and return stdout/stderr. " +
+		"Input: command (string, required). " +
+		"Output: stdout content, with stderr appended if present. Includes exit code on failure. " +
+		"Constraints: Dangerous commands (rm -rf, sudo, etc.) are blocked. " +
+		"Commands are restricted to the workspace directory. " +
+		"Default timeout: 60 seconds (override with timeout_seconds). " +
+		"Use background=true for long-running commands. " +
+		"When NOT to use: for reading file content (use read_file instead), for writing files (use write_file/edit_file)."
 }
 
 func (t *ExecTool) Parameters() map[string]any {
@@ -534,7 +541,11 @@ func (t *ExecTool) guardCommand(command, cwd string) string {
 
 	for _, pattern := range t.denyPatterns {
 		if pattern.MatchString(lower) {
-			return "Command blocked by safety guard (dangerous pattern detected)"
+			return "Command blocked by safety guard (dangerous pattern detected). " +
+				"Suggestion: Use safer alternatives — " +
+				"for file operations use read_file/write_file/edit_file tools, " +
+				"for directory listing use list_dir, " +
+				"or rephrase the command to avoid dangerous patterns (rm -rf, sudo, eval, etc.)."
 		}
 	}
 
@@ -553,7 +564,9 @@ func (t *ExecTool) guardCommand(command, cwd string) string {
 
 	if t.restrictToWorkspace {
 		if strings.Contains(cmd, "..\\") || strings.Contains(cmd, "../") {
-			return "Command blocked by safety guard (path traversal detected)"
+			return "Command blocked by safety guard (path traversal detected). " +
+				"Suggestion: Use absolute paths within the workspace directory, " +
+				"or use read_file/list_dir tools to access files."
 		}
 
 		cwdPath, err := filepath.Abs(cwd)
@@ -579,7 +592,9 @@ func (t *ExecTool) guardCommand(command, cwd string) string {
 			}
 
 			if strings.HasPrefix(rel, "..") {
-				return "Command blocked by safety guard (path outside working dir)"
+				return "Command blocked by safety guard (path outside working dir). " +
+					"Suggestion: Only access files within the workspace directory. " +
+					"Use list_dir to see available files."
 			}
 		}
 	}

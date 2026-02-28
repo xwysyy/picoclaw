@@ -30,7 +30,12 @@ func (t *EditFileTool) Name() string {
 }
 
 func (t *EditFileTool) Description() string {
-	return "Edit a file by replacing old_text with new_text. The old_text must exist exactly in the file."
+	return "Edit a file by replacing old_text with new_text. " +
+		"Input: path (string, required), old_text (string, required — must match exactly), new_text (string, required). " +
+		"Output: confirmation of the edit. " +
+		"The old_text must appear exactly once in the file. " +
+		"If it appears multiple times, include more surrounding context to make it unique. " +
+		"Use this instead of write_file when you only need to change part of a file."
 }
 
 func (t *EditFileTool) Parameters() map[string]any {
@@ -95,7 +100,10 @@ func (t *AppendFileTool) Name() string {
 }
 
 func (t *AppendFileTool) Description() string {
-	return "Append content to the end of a file"
+	return "Append content to the end of a file without modifying existing content. " +
+		"Input: path (string, required), content (string, required). " +
+		"Output: confirmation of the append. " +
+		"Creates the file if it doesn't exist."
 }
 
 func (t *AppendFileTool) Parameters() map[string]any {
@@ -164,7 +172,7 @@ func replaceEditContent(content []byte, oldText, newText string) ([]byte, error)
 	contentStr := string(content)
 
 	if !strings.Contains(contentStr, oldText) {
-		return nil, fmt.Errorf("old_text not found in file. Make sure it matches exactly")
+		return nil, fmt.Errorf("old_text not found in file. Make sure it matches exactly, including whitespace and newlines. Suggestion: use read_file first to see the current file content, then copy the exact text to replace")
 	}
 
 	count := strings.Count(contentStr, oldText)

@@ -543,7 +543,11 @@ func (t *WebSearchTool) ParallelPolicy() ToolParallelPolicy {
 }
 
 func (t *WebSearchTool) Description() string {
-	return "Search the web for current information. Returns titles, URLs, and snippets from search results."
+	return "Search the web for current information. " +
+		"Input: query (string, required), count (integer, optional, 1-10, default 5). " +
+		"Output: list of results with title, URL, and snippet for each. " +
+		"Use this for questions about current events, recent data, or facts you are unsure about. " +
+		"For reading a specific URL after searching, use the 'web_fetch' tool."
 }
 
 func (t *WebSearchTool) Parameters() map[string]any {
@@ -622,7 +626,11 @@ func (t *WebFetchTool) ParallelPolicy() ToolParallelPolicy {
 }
 
 func (t *WebFetchTool) Description() string {
-	return "Fetch a URL and extract readable content (HTML to text). Use this to get weather info, news, articles, or any web content."
+	return "Fetch a URL and extract readable content (HTML to text). " +
+		"Input: url (string, required), maxChars (integer, optional — max chars to extract). " +
+		"Output: extracted text content with metadata (status code, content type, length). " +
+		"Supports HTML pages, JSON APIs, and plain text. " +
+		"Use this to read specific web pages, API endpoints, or articles found via 'web_search'."
 }
 
 func (t *WebFetchTool) Parameters() map[string]any {

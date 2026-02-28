@@ -286,9 +286,23 @@ func (sm *SubagentManager) runTask(ctx context.Context, task *SubagentTask, call
 	})
 
 	// Build system prompt for subagent
-	systemPrompt := `You are a subagent. Complete the given task independently and report the result.
-You have access to tools - use them as needed to complete your task.
-After completing the task, provide a clear summary of what was done.`
+	systemPrompt := fmt.Sprintf(`You are a subagent working under the picoclaw system.
+
+Complete the given task independently and report the result.
+
+Guidelines:
+1. Use available tools as needed. Check tool results before proceeding.
+2. If a tool fails, try an alternative approach. Do NOT repeat the same failed call.
+3. If you cannot complete the task, explain what went wrong clearly.
+4. Do NOT fabricate results. Only report what tools actually returned.
+5. Keep your final response concise and actionable.
+
+Output format — provide a clear summary with:
+- What was done (actions taken)
+- What was found (key results or data)
+- Any issues encountered
+
+Working directory: %s`, sm.workspace)
 
 	messages := []providers.Message{
 		{
@@ -594,7 +608,12 @@ func (t *SubagentTool) Name() string {
 }
 
 func (t *SubagentTool) Description() string {
-	return "Execute a subagent task synchronously and return the result. Use this for delegating specific tasks to an independent agent instance. Returns execution summary to user and full details to LLM."
+	return "Execute a subagent task synchronously and wait for the result. " +
+		"Input: task (string, required) — clear description of what the subagent should do. " +
+		"Output: full execution result with iteration count and content. " +
+		"Use this when you need the subagent's result before continuing your own work. " +
+		"The subagent runs with its own tools and context. " +
+		"For background tasks where you don't need to wait, use the 'spawn' tool instead."
 }
 
 func (t *SubagentTool) Parameters() map[string]any {
@@ -639,8 +658,11 @@ func (t *SubagentTool) Execute(ctx context.Context, args map[string]any) *ToolRe
 	// Build messages for subagent
 	messages := []providers.Message{
 		{
-			Role:    "system",
-			Content: "You are a subagent. Complete the given task independently and provide a clear, concise result.",
+			Role: "system",
+			Content: "You are a subagent working under the picoclaw system. " +
+				"Complete the given task independently and provide a clear, concise result. " +
+				"Use tools as needed, check results before proceeding, and do NOT fabricate data. " +
+				"If a tool fails, try an alternative. If you cannot complete the task, explain why.",
 		},
 		{
 			Role:    "user",
