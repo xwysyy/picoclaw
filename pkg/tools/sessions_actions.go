@@ -38,7 +38,12 @@ func (t *SessionsSendTool) Name() string {
 }
 
 func (t *SessionsSendTool) Description() string {
-	return "Send a message into another session and return the target session's assistant reply."
+	return "Send a message into another named session and return the target session's assistant reply synchronously. " +
+		"Input: session_key (string, required — from sessions_list), message (string, required), timeout_seconds (int, optional, default 30, max 3600). " +
+		"Output: JSON with status ('ok', 'timeout', or 'error'), session_key, and reply (on success) or error (on failure). " +
+		"This is a synchronous/blocking call — you will wait until the target session responds or the timeout expires. " +
+		"Use this for cross-session coordination when you need the reply before proceeding. " +
+		"For fire-and-forget background tasks, use sessions_spawn instead."
 }
 
 func (t *SessionsSendTool) Parameters() map[string]any {
@@ -159,7 +164,12 @@ func (t *SessionsSpawnTool) Name() string {
 }
 
 func (t *SessionsSpawnTool) Description() string {
-	return "Spawn a background subagent task and return task metadata."
+	return "Spawn an asynchronous background subagent to execute a task independently. " +
+		"Input: task (string, required — the task description), label (string, optional — short tracking label), agent_id (string, optional — target agent). " +
+		"Output: JSON with status ('accepted'), task_id, task, label, and agent_id. " +
+		"The subagent runs in the background — this call returns immediately with task metadata. " +
+		"Use this for tasks that can run independently and do not need their result before proceeding. " +
+		"For synchronous cross-session calls where you need the reply, use sessions_send instead."
 }
 
 func (t *SessionsSpawnTool) Parameters() map[string]any {

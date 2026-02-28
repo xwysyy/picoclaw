@@ -891,6 +891,20 @@ func (al *AgentLoop) runLLMIteration(
 			normalizedToolCalls = append(normalizedToolCalls, providers.NormalizeToolCall(tc))
 		}
 
+		// Update working state with LLM's reasoning as next-action hint
+		if reasoning := strings.TrimSpace(response.Content); reasoning != "" {
+			agent.ContextBuilder.workingStateMu.RLock()
+			ws := agent.ContextBuilder.workingState
+			agent.ContextBuilder.workingStateMu.RUnlock()
+			if ws != nil {
+				hint := reasoning
+				if len(hint) > 200 {
+					hint = hint[:200] + "..."
+				}
+				ws.SetNextAction(hint)
+			}
+		}
+
 		// Log tool calls
 		toolNames := make([]string, 0, len(normalizedToolCalls))
 		for _, tc := range normalizedToolCalls {
@@ -1034,6 +1048,15 @@ func (al *AgentLoop) runLLMIteration(
 			agent.ContextBuilder.workingStateMu.RUnlock()
 			if ws != nil {
 				ws.RecordToolCall(tc.Name, toolResult.IsError)
+				// Record as a completed step with truncated outcome
+				outcome := toolResult.ForLLM
+				if len(outcome) > 120 {
+					outcome = outcome[:120] + "..."
+				}
+				if toolResult.IsError {
+					outcome = "[error] " + outcome
+				}
+				ws.AddCompletedStep(tc.Name, outcome, tc.Name)
 			}
 
 			// Send ForUser content to user immediately if not Silent.

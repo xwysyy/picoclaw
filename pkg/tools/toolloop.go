@@ -63,6 +63,11 @@ func RunToolLoop(
 	trace := make([]ToolExecutionTrace, 0)
 	precedingTools := make([]string, 0, 16) // accumulates tool names across iterations
 
+	// Loop detection state
+	type toolloopCallSig struct{ name, args string }
+	recentCalls := make([]toolloopCallSig, 0, 32)
+	const loopThreshold = 3
+
 	for iteration < config.MaxIterations {
 		iteration++
 
@@ -122,6 +127,29 @@ func RunToolLoop(
 				"iteration": iteration,
 			})
 
+		// Loop detection: check for repeated identical tool calls
+		loopDetected := ""
+		for _, tc := range normalizedToolCalls {
+			argsJSON, _ := json.Marshal(tc.Arguments)
+			sig := string(argsJSON)
+			count := 0
+			for _, prev := range recentCalls {
+				if prev.name == tc.Name && prev.args == sig {
+					count++
+				}
+			}
+			if count >= loopThreshold {
+				loopDetected = tc.Name
+				break
+			}
+		}
+
+		// Track current calls
+		for _, tc := range normalizedToolCalls {
+			argsJSON, _ := json.Marshal(tc.Arguments)
+			recentCalls = append(recentCalls, toolloopCallSig{name: tc.Name, args: string(argsJSON)})
+		}
+
 		// 6. Build assistant message with tool calls
 		assistantMsg := providers.Message{
 			Role:    "assistant",
@@ -141,6 +169,40 @@ func RunToolLoop(
 			})
 		}
 		messages = append(messages, assistantMsg)
+
+		// Loop break: if a repeated tool call pattern was detected, skip execution
+		// and inject error tool results so the LLM can course-correct.
+		if loopDetected != "" {
+			logger.WarnCF("toolloop", "Loop detected, injecting error results",
+				map[string]any{
+					"tool":      loopDetected,
+					"iteration": iteration,
+					"threshold": loopThreshold,
+				})
+			for _, tc := range normalizedToolCalls {
+				errMsg := fmt.Sprintf(
+					"Loop detected: tool '%s' has been called with identical arguments %d+ times. "+
+						"This is not making progress. Try a different approach, use different arguments, "+
+						"or consider whether the task can be completed with the information already gathered.",
+					loopDetected, loopThreshold,
+				)
+				trace = append(trace, ToolExecutionTrace{
+					Iteration:    iteration,
+					ToolName:     tc.Name,
+					Arguments:    tc.Arguments,
+					Result:       errMsg,
+					IsError:      true,
+					ToolCallID:   tc.ID,
+					LLMReasoning: response.Content,
+				})
+				messages = append(messages, providers.Message{
+					Role:       "tool",
+					Content:    errMsg,
+					ToolCallID: tc.ID,
+				})
+			}
+			continue
+		}
 
 		toolExecutions := ExecuteToolCalls(ctx, config.Tools, normalizedToolCalls, ToolCallExecutionOptions{
 			Channel:   channel,
