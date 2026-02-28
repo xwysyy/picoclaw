@@ -233,10 +233,6 @@ func (m *Manager) initChannels() error {
 		m.initChannel("discord", "Discord")
 	}
 
-	if m.config.Channels.MaixCam.Enabled {
-		m.initChannel("maixcam", "MaixCam")
-	}
-
 	if m.config.Channels.QQ.Enabled {
 		m.initChannel("qq", "QQ")
 	}

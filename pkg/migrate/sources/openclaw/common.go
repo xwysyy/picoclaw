@@ -18,7 +18,6 @@ var supportedChannels = map[string]bool{
 	"telegram":  true,
 	"feishu":    true,
 	"discord":   true,
-	"maixcam":   true,
 	"qq":        true,
 	"dingtalk":  true,
 	"slack":     true,

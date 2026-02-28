@@ -28,7 +28,6 @@ Most channel setup docs are currently in Chinese:
 | Feishu | [channels/feishu/README.zh.md](channels/feishu/README.zh.md) |
 | LINE | [channels/line/README.zh.md](channels/line/README.zh.md) |
 | OneBot | [channels/onebot/README.zh.md](channels/onebot/README.zh.md) |
-| MaixCam | [channels/maixcam/README.zh.md](channels/maixcam/README.zh.md) |
 
 ## 3. Providers and Tools
 

@@ -9,19 +9,19 @@ package config
 func DefaultConfig() *Config {
 	return &Config{
 		Agents: AgentsConfig{
-				Defaults: AgentDefaults{
-					Workspace:           "~/.picoclaw/workspace",
-					RestrictToWorkspace: true,
-					Provider:            "",
-					Model:               "",
-					MaxTokens:           32768,
-					Temperature:         nil, // nil means use provider default
-					MaxToolIterations:   50,
-					Compaction: AgentCompactionConfig{
-						Mode:             "safeguard",
-						ReserveTokens:    2048,
-						KeepRecentTokens: 2048,
-						MaxHistoryShare:  0.5,
+			Defaults: AgentDefaults{
+				Workspace:           "~/.picoclaw/workspace",
+				RestrictToWorkspace: true,
+				Provider:            "",
+				Model:               "",
+				MaxTokens:           32768,
+				Temperature:         nil, // nil means use provider default
+				MaxToolIterations:   50,
+				Compaction: AgentCompactionConfig{
+					Mode:             "safeguard",
+					ReserveTokens:    2048,
+					KeepRecentTokens: 2048,
+					MaxHistoryShare:  0.5,
 					MemoryFlush: AgentCompactionMemoryFlushConfig{
 						Enabled:             true,
 						SoftThresholdTokens: 1500,
@@ -42,11 +42,11 @@ func DefaultConfig() *Config {
 					Dimensions:      256,
 					TopK:            6,
 					MinScore:        0.15,
-						MaxContextChars: 1800,
-						RecentDailyDays: 14,
-					},
+					MaxContextChars: 1800,
+					RecentDailyDays: 14,
 				},
 			},
+		},
 		Bindings: []AgentBinding{},
 		Session: SessionConfig{
 			DMScope: "per-channel-peer",
@@ -82,12 +82,6 @@ func DefaultConfig() *Config {
 				Token:       "",
 				AllowFrom:   FlexibleStringSlice{},
 				MentionOnly: false,
-			},
-			MaixCam: MaixCamConfig{
-				Enabled:   false,
-				Host:      "0.0.0.0",
-				Port:      18790,
-				AllowFrom: FlexibleStringSlice{},
 			},
 			QQ: QQConfig{
 				Enabled:   false,
@@ -368,10 +362,6 @@ func DefaultConfig() *Config {
 		Heartbeat: HeartbeatConfig{
 			Enabled:  true,
 			Interval: 5,
-		},
-		Devices: DevicesConfig{
-			Enabled:    false,
-			MonitorUSB: true,
 		},
 		Orchestration: OrchestrationConfig{
 			Enabled:                   false,

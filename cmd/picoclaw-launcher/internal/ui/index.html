@@ -546,7 +546,6 @@
                         <div class="sidebar-item" data-panel="panelCh_whatsapp">WhatsApp</div>
                         <div class="sidebar-item" data-panel="panelCh_qq">QQ</div>
                         <div class="sidebar-item" data-panel="panelCh_onebot">OneBot</div>
-                        <div class="sidebar-item" data-panel="panelCh_maixcam">MaixCAM</div>
                     </div>
                 </div>
                 <div class="sidebar-divider"></div>
@@ -614,7 +613,6 @@
                 <div class="content-panel" id="panelCh_whatsapp"></div>
                 <div class="content-panel" id="panelCh_qq"></div>
                 <div class="content-panel" id="panelCh_onebot"></div>
-                <div class="content-panel" id="panelCh_maixcam"></div>
 
                 <!-- Logs Panel -->
                 <div class="content-panel" id="panelLogs">
@@ -1083,13 +1081,6 @@ const channelSchemas = {
             { key: 'access_token', label: 'Access Token', type: 'password', placeholder: 'Access token' },
             { key: 'reconnect_interval', label: 'Reconnect Interval (s)', type: 'number', placeholder: '5' },
             { key: 'group_trigger_prefix', label: 'ch.groupTrigger', type: 'array', placeholder: 'Trigger word', i18nLabel: true },
-        ]
-    },
-    maixcam: {
-        title: 'MaixCAM', configKey: 'maixcam', docSlug: 'maixcam',
-        fields: [
-            { key: 'host', label: 'Host', type: 'text', placeholder: '0.0.0.0' },
-            { key: 'port', label: 'Port', type: 'number', placeholder: '18790' },
         ]
     },
 };

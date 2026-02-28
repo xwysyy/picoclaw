@@ -28,7 +28,6 @@ PicoClaw 当前只维护 **中文** 与 **English** 两种文档语言。
 | 飞书 | [channels/feishu/README.zh.md](channels/feishu/README.zh.md) |
 | LINE | [channels/line/README.zh.md](channels/line/README.zh.md) |
 | OneBot | [channels/onebot/README.zh.md](channels/onebot/README.zh.md) |
-| MaixCam | [channels/maixcam/README.zh.md](channels/maixcam/README.zh.md) |
 
 ## 3. Provider 与工具
 

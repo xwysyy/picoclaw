@@ -97,13 +97,6 @@
       "allow_from": [],
       "reasoning_channel_id": ""
     },
-    "maixcam": {
-      "enabled": false,
-      "host": "0.0.0.0",
-      "port": 18790,
-      "allow_from": [],
-      "reasoning_channel_id": ""
-    },
     "whatsapp": {
       "enabled": false,
       "bridge_url": "ws://localhost:3001",
@@ -286,10 +279,6 @@
   "heartbeat": {
     "enabled": true,
     "interval": 5
-  },
-  "devices": {
-    "enabled": false,
-    "monitor_usb": true
   },
   "orchestration": {
     "enabled": false,

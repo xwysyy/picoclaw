@@ -17,7 +17,6 @@ import (
 	_ "github.com/sipeed/picoclaw/pkg/channels/discord"
 	_ "github.com/sipeed/picoclaw/pkg/channels/feishu"
 	_ "github.com/sipeed/picoclaw/pkg/channels/line"
-	_ "github.com/sipeed/picoclaw/pkg/channels/maixcam"
 	_ "github.com/sipeed/picoclaw/pkg/channels/onebot"
 	_ "github.com/sipeed/picoclaw/pkg/channels/pico"
 	_ "github.com/sipeed/picoclaw/pkg/channels/qq"
@@ -28,13 +27,11 @@ import (
 	_ "github.com/sipeed/picoclaw/pkg/channels/whatsapp_native"
 	"github.com/sipeed/picoclaw/pkg/config"
 	"github.com/sipeed/picoclaw/pkg/cron"
-	"github.com/sipeed/picoclaw/pkg/devices"
 	"github.com/sipeed/picoclaw/pkg/health"
 	"github.com/sipeed/picoclaw/pkg/heartbeat"
 	"github.com/sipeed/picoclaw/pkg/logger"
 	"github.com/sipeed/picoclaw/pkg/media"
 	"github.com/sipeed/picoclaw/pkg/providers"
-	"github.com/sipeed/picoclaw/pkg/state"
 	"github.com/sipeed/picoclaw/pkg/tools"
 )
 
@@ -157,18 +154,6 @@ func gatewayCmd(debug bool) error {
 	}
 	fmt.Println("✓ Heartbeat service started")
 
-	stateManager := state.NewManager(cfg.WorkspacePath())
-	deviceService := devices.NewService(devices.Config{
-		Enabled:    cfg.Devices.Enabled,
-		MonitorUSB: cfg.Devices.MonitorUSB,
-	}, stateManager)
-	deviceService.SetBus(msgBus)
-	if err := deviceService.Start(ctx); err != nil {
-		fmt.Printf("Error starting device service: %v\n", err)
-	} else if cfg.Devices.Enabled {
-		fmt.Println("✓ Device event service started")
-	}
-
 	// Setup shared HTTP server with health endpoints and webhook handlers
 	healthServer := health.NewServer(cfg.Gateway.Host, cfg.Gateway.Port)
 	addr := fmt.Sprintf("%s:%d", cfg.Gateway.Host, cfg.Gateway.Port)
@@ -200,7 +185,6 @@ func gatewayCmd(debug bool) error {
 	defer shutdownCancel()
 
 	channelManager.StopAll(shutdownCtx)
-	deviceService.Stop()
 	heartbeatService.Stop()
 	cronService.Stop()
 	mediaStore.Stop()

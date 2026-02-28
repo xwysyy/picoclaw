@@ -32,12 +32,6 @@ func (s *appState) channelMenu() tview.Primitive {
 			func() { s.push("channel-qq", s.qqForm()) },
 		),
 		channelItem(
-			"MaixCam",
-			"MaixCam gateway",
-			s.config.Channels.MaixCam.Enabled,
-			func() { s.push("channel-maixcam", s.maixcamForm()) },
-		),
-		channelItem(
 			"WhatsApp",
 			"WhatsApp bridge",
 			s.config.Channels.WhatsApp.Enabled,
@@ -122,12 +116,6 @@ func refreshChannelMenuFromState(menu *Menu, s *appState) {
 			"QQ bot settings",
 			s.config.Channels.QQ.Enabled,
 			func() { s.push("channel-qq", s.qqForm()) },
-		),
-		channelItem(
-			"MaixCam",
-			"MaixCam gateway",
-			s.config.Channels.MaixCam.Enabled,
-			func() { s.push("channel-maixcam", s.maixcamForm()) },
 		),
 		channelItem(
 			"WhatsApp",
@@ -241,26 +229,6 @@ func (s *appState) qqForm() tview.Primitive {
 	form.AddInputField("App Secret", cfg.AppSecret, 128, nil, func(text string) {
 		cfg.AppSecret = strings.TrimSpace(text)
 	})
-	form.AddInputField("Allow From", strings.Join(cfg.AllowFrom, ","), 128, nil, func(text string) {
-		cfg.AllowFrom = splitCSV(text)
-	})
-	return wrapWithBack(form, s)
-}
-
-func (s *appState) maixcamForm() tview.Primitive {
-	cfg := &s.config.Channels.MaixCam
-	form := baseChannelForm("MaixCam", cfg.Enabled, func(v bool) {
-		cfg.Enabled = v
-		s.dirty = true
-		refreshMainMenuIfPresent(s)
-		if menu, ok := s.menus["channel"]; ok {
-			refreshChannelMenuFromState(menu, s)
-		}
-	})
-	form.AddInputField("Host", cfg.Host, 64, nil, func(text string) {
-		cfg.Host = strings.TrimSpace(text)
-	})
-	addIntField(form, "Port", cfg.Port, func(value int) { cfg.Port = value })
 	form.AddInputField("Allow From", strings.Join(cfg.AllowFrom, ","), 128, nil, func(text string) {
 		cfg.AllowFrom = splitCSV(text)
 	})

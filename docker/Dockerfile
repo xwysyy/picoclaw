@@ -48,7 +48,14 @@ ENV HTTP_PROXY=$HTTP_PROXY \
   https_proxy=$https_proxy \
   no_proxy=$no_proxy
 
-RUN apk add --no-cache ca-certificates tzdata curl
+RUN apk add --no-cache \
+  ca-certificates \
+  tzdata \
+  curl \
+  python3 \
+  poppler-utils \
+  imagemagick \
+  texlive
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \

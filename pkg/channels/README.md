@@ -60,7 +60,7 @@ pkg/channels/
 ├── discord/
 │   ├── init.go
 │   └── discord.go
-├── slack/ line/ onebot/ dingtalk/ feishu/ wecom/ qq/ whatsapp/ maixcam/ pico/
+├── slack/ line/ onebot/ dingtalk/ feishu/ wecom/ qq/ whatsapp/ pico/
 │   └── ...
 
 pkg/bus/
@@ -1216,7 +1216,6 @@ make test                                       # Full test suite
 | `pkg/channels/wecom/` | `"wecom"` + `"wecom_app"` | WebhookHandler |
 | `pkg/channels/qq/` | `"qq"` | — |
 | `pkg/channels/whatsapp/` | `"whatsapp"` | — |
-| `pkg/channels/maixcam/` | `"maixcam"` | — |
 | `pkg/channels/pico/` | `"pico"` | WebhookHandler (Pico Protocol), TypingCapable, PlaceholderCapable |
 
 ### A.3 Interface Quick Reference
