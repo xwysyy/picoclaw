@@ -3,7 +3,6 @@ package agent
 import (
 	"encoding/json"
 	"fmt"
-	"strings"
 	"sync"
 )
 

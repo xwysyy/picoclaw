@@ -709,6 +709,7 @@ func (al *AgentLoop) runLLMIteration(
 	iteration := 0
 	var finalContent string
 	recentToolCalls := make([]toolCallSignature, 0, 32) // for loop detection
+	totalPromptTokens, totalCompletionTokens := 0, 0     // cumulative token tracking
 
 	for iteration < agent.MaxIterations {
 		iteration++
@@ -857,6 +858,22 @@ func (al *AgentLoop) runLLMIteration(
 			return "", iteration, fmt.Errorf("LLM call failed after retries: %w", err)
 		}
 
+		// Log token usage if available
+		if response.Usage != nil {
+			logger.InfoCF("agent", "Token usage",
+				map[string]any{
+					"agent_id":          agent.ID,
+					"iteration":         iteration,
+					"model":             agent.Model,
+					"prompt_tokens":     response.Usage.PromptTokens,
+					"completion_tokens": response.Usage.CompletionTokens,
+					"total_tokens":      response.Usage.TotalTokens,
+					"session_key":       opts.SessionKey,
+				})
+			totalPromptTokens += response.Usage.PromptTokens
+			totalCompletionTokens += response.Usage.CompletionTokens
+		}
+
 		// Check if no tool calls - we're done
 		if len(response.ToolCalls) == 0 {
 			finalContent = response.Content
@@ -895,14 +912,36 @@ func (al *AgentLoop) runLLMIteration(
 					"tool":      loopingTool,
 					"iteration": iteration,
 				})
-			// Inject a system nudge to break the loop
-			messages = append(messages, providers.Message{
-				Role: "user",
-				Content: fmt.Sprintf("[System notice: You have called '%s' with the same arguments 3+ times. "+
-					"This appears to be a loop. Please try a different approach, use a different tool, "+
-					"or explain why you are stuck and ask for help.]", loopingTool),
-			})
-			// Skip executing tools this round — let LLM reconsider
+
+			// Build assistant message so tool results can be attached (API requirement)
+			loopAssistantMsg := providers.Message{
+				Role:    "assistant",
+				Content: response.Content,
+			}
+			for _, tc := range normalizedToolCalls {
+				argumentsJSON, _ := json.Marshal(tc.Arguments)
+				loopAssistantMsg.ToolCalls = append(loopAssistantMsg.ToolCalls, providers.ToolCall{
+					ID:   tc.ID,
+					Type: "function",
+					Name: tc.Name,
+					Function: &providers.FunctionCall{
+						Name:      tc.Name,
+						Arguments: string(argumentsJSON),
+					},
+				})
+			}
+			messages = append(messages, loopAssistantMsg)
+
+			// Return error tool results for each call
+			loopNotice := fmt.Sprintf("Loop detected: '%s' called with same arguments 3+ times. "+
+				"Try a different approach, use a different tool, or explain why you are stuck.", loopingTool)
+			for _, tc := range normalizedToolCalls {
+				messages = append(messages, providers.Message{
+					Role:       "tool",
+					Content:    loopNotice,
+					ToolCallID: tc.ID,
+				})
+			}
 			continue
 		}
 
@@ -1027,6 +1066,19 @@ func (al *AgentLoop) runLLMIteration(
 			// Save tool result message to session
 			agent.Sessions.AddFullMessage(opts.SessionKey, toolResultMsg)
 		}
+	}
+
+	// Log cumulative token usage for the entire request
+	if totalPromptTokens > 0 || totalCompletionTokens > 0 {
+		logger.InfoCF("agent", "Request token usage summary",
+			map[string]any{
+				"agent_id":                agent.ID,
+				"iterations":              iteration,
+				"total_prompt_tokens":     totalPromptTokens,
+				"total_completion_tokens": totalCompletionTokens,
+				"total_tokens":            totalPromptTokens + totalCompletionTokens,
+				"session_key":             opts.SessionKey,
+			})
 	}
 
 	return finalContent, iteration, nil

@@ -39,13 +39,15 @@ type ToolLoopResult struct {
 
 // ToolExecutionTrace captures a single tool execution inside the loop.
 type ToolExecutionTrace struct {
-	Iteration  int
-	ToolName   string
-	Arguments  map[string]any
-	Result     string
-	IsError    bool
-	DurationMS int64
-	ToolCallID string
+	Iteration      int
+	ToolName       string
+	Arguments      map[string]any
+	Result         string
+	IsError        bool
+	DurationMS     int64
+	ToolCallID     string
+	LLMReasoning   string   // The LLM's text reasoning that accompanied this tool call
+	PrecedingTools []string // Names of tools called in previous iterations
 }
 
 // RunToolLoop executes the LLM + tool call iteration loop.
@@ -59,6 +61,7 @@ func RunToolLoop(
 	iteration := 0
 	var finalContent string
 	trace := make([]ToolExecutionTrace, 0)
+	precedingTools := make([]string, 0, 16) // accumulates tool names across iterations
 
 	for iteration < config.MaxIterations {
 		iteration++
@@ -163,15 +166,22 @@ func RunToolLoop(
 				contentForLLM = toolResult.Err.Error()
 			}
 
+			// Copy preceding tools slice for this trace entry
+			ptCopy := make([]string, len(precedingTools))
+			copy(ptCopy, precedingTools)
+
 			trace = append(trace, ToolExecutionTrace{
-				Iteration:  iteration,
-				ToolName:   tc.Name,
-				Arguments:  tc.Arguments,
-				Result:     contentForLLM,
-				IsError:    toolResult.IsError,
-				DurationMS: executed.DurationMS,
-				ToolCallID: tc.ID,
+				Iteration:      iteration,
+				ToolName:       tc.Name,
+				Arguments:      tc.Arguments,
+				Result:         contentForLLM,
+				IsError:        toolResult.IsError,
+				DurationMS:     executed.DurationMS,
+				ToolCallID:     tc.ID,
+				LLMReasoning:   response.Content, // LLM text that accompanied tool calls
+				PrecedingTools: ptCopy,
 			})
+			precedingTools = append(precedingTools, tc.Name)
 
 			// Add tool result message
 			toolResultMsg := providers.Message{
