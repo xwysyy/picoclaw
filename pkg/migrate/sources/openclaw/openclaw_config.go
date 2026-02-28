@@ -1039,36 +1039,65 @@ func (c GatewayConfig) ToStandardGateway() config.GatewayConfig {
 }
 
 func (c ToolsConfig) ToStandardTools() config.ToolsConfig {
-	return config.ToolsConfig{
-		Web: config.WebToolsConfig{
-			Brave: config.BraveConfig{
-				Enabled:    c.Web.Brave.Enabled,
-				APIKey:     c.Web.Brave.APIKey,
-				MaxResults: c.Web.Brave.MaxResults,
-			},
-			Tavily: config.TavilyConfig{
-				Enabled:    c.Web.Tavily.Enabled,
-				APIKey:     c.Web.Tavily.APIKey,
-				BaseURL:    c.Web.Tavily.BaseURL,
-				MaxResults: c.Web.Tavily.MaxResults,
-			},
-			DuckDuckGo: config.DuckDuckGoConfig{
-				Enabled:    c.Web.DuckDuckGo.Enabled,
-				MaxResults: c.Web.DuckDuckGo.MaxResults,
-			},
-			Perplexity: config.PerplexityConfig{
-				Enabled:    c.Web.Perplexity.Enabled,
-				APIKey:     c.Web.Perplexity.APIKey,
-				MaxResults: c.Web.Perplexity.MaxResults,
-			},
-			Proxy: c.Web.Proxy,
-		},
-		Cron: config.CronToolsConfig{
-			ExecTimeoutMinutes: c.Cron.ExecTimeoutMinutes,
-		},
-		Exec: config.ExecConfig{
-			EnableDenyPatterns: c.Exec.EnableDenyPatterns,
-			CustomDenyPatterns: c.Exec.CustomDenyPatterns,
-		},
+	out := config.DefaultConfig().Tools
+
+	// Note: OpenClaw's `tools` config is primarily allow/deny lists. PicoClaw's
+	// ToolsConfig currently focuses on first-party tool providers and local
+	// controls. We preserve PicoClaw defaults and only apply non-zero values from
+	// the intermediate config.
+
+	if c.Web.Proxy != "" {
+		out.Web.Proxy = c.Web.Proxy
 	}
+
+	if c.Web.Brave.Enabled || c.Web.Brave.APIKey != "" || c.Web.Brave.MaxResults != 0 {
+		maxResults := c.Web.Brave.MaxResults
+		if maxResults == 0 {
+			maxResults = out.Web.Brave.MaxResults
+		}
+		out.Web.Brave = config.BraveConfig{
+			Enabled:    c.Web.Brave.Enabled,
+			APIKey:     c.Web.Brave.APIKey,
+			MaxResults: maxResults,
+		}
+	}
+
+	if c.Web.Tavily.Enabled || c.Web.Tavily.APIKey != "" || c.Web.Tavily.BaseURL != "" || c.Web.Tavily.MaxResults != 0 {
+		maxResults := c.Web.Tavily.MaxResults
+		if maxResults == 0 {
+			maxResults = out.Web.Tavily.MaxResults
+		}
+		out.Web.Tavily = config.TavilyConfig{
+			Enabled:    c.Web.Tavily.Enabled,
+			APIKey:     c.Web.Tavily.APIKey,
+			BaseURL:    c.Web.Tavily.BaseURL,
+			MaxResults: maxResults,
+		}
+	}
+
+	if c.Web.DuckDuckGo.Enabled || c.Web.DuckDuckGo.MaxResults != 0 {
+		maxResults := c.Web.DuckDuckGo.MaxResults
+		if maxResults == 0 {
+			maxResults = out.Web.DuckDuckGo.MaxResults
+		}
+		out.Web.DuckDuckGo = config.DuckDuckGoConfig{
+			Enabled:    c.Web.DuckDuckGo.Enabled,
+			MaxResults: maxResults,
+		}
+	}
+
+	// Perplexity is present in OpenClaw configs but PicoClaw's standard config
+	// doesn't currently expose a Perplexity web tools provider. We intentionally
+	// ignore it here to keep migration builds working and defaults intact.
+
+	if c.Cron.ExecTimeoutMinutes != 0 {
+		out.Cron.ExecTimeoutMinutes = c.Cron.ExecTimeoutMinutes
+	}
+
+	if c.Exec.EnableDenyPatterns || len(c.Exec.CustomDenyPatterns) > 0 {
+		out.Exec.EnableDenyPatterns = c.Exec.EnableDenyPatterns
+		out.Exec.CustomDenyPatterns = c.Exec.CustomDenyPatterns
+	}
+
+	return out
 }
