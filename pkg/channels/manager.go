@@ -29,13 +29,18 @@ const (
 	defaultChannelQueueSize = 16
 	defaultRateLimit        = 10 // default 10 msg/s
 	maxRetries              = 3
-	rateLimitDelay          = 1 * time.Second
-	baseBackoff             = 500 * time.Millisecond
-	maxBackoff              = 8 * time.Second
 
 	janitorInterval = 10 * time.Second
 	typingStopTTL   = 5 * time.Minute
 	placeholderTTL  = 10 * time.Minute
+)
+
+// Retry timing defaults. These are variables (not const) so tests can override
+// them to run quickly without waiting multiple real seconds.
+var (
+	rateLimitDelay = 1 * time.Second
+	baseBackoff    = 500 * time.Millisecond
+	maxBackoff     = 8 * time.Second
 )
 
 // typingEntry wraps a typing stop function with a creation timestamp for TTL eviction.

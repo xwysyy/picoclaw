@@ -35,6 +35,26 @@ func newTestManager() *Manager {
 	}
 }
 
+func setRetryTimingForTest(t *testing.T) {
+	t.Helper()
+
+	oldRateLimitDelay := rateLimitDelay
+	oldBaseBackoff := baseBackoff
+	oldMaxBackoff := maxBackoff
+
+	// Keep tests fast and reduce the chance of external watchdogs killing
+	// long-sleeping test binaries.
+	rateLimitDelay = 20 * time.Millisecond
+	baseBackoff = 10 * time.Millisecond
+	maxBackoff = 80 * time.Millisecond
+
+	t.Cleanup(func() {
+		rateLimitDelay = oldRateLimitDelay
+		baseBackoff = oldBaseBackoff
+		maxBackoff = oldMaxBackoff
+	})
+}
+
 func TestSendWithRetry_Success(t *testing.T) {
 	m := newTestManager()
 	var callCount int
@@ -60,6 +80,8 @@ func TestSendWithRetry_Success(t *testing.T) {
 }
 
 func TestSendWithRetry_TemporaryThenSuccess(t *testing.T) {
+	setRetryTimingForTest(t)
+
 	m := newTestManager()
 	var callCount int
 	ch := &mockChannel{
@@ -135,6 +157,8 @@ func TestSendWithRetry_NotRunning(t *testing.T) {
 }
 
 func TestSendWithRetry_RateLimitRetry(t *testing.T) {
+	setRetryTimingForTest(t)
+
 	m := newTestManager()
 	var callCount int
 	ch := &mockChannel{
@@ -161,13 +185,15 @@ func TestSendWithRetry_RateLimitRetry(t *testing.T) {
 	if callCount != 2 {
 		t.Fatalf("expected 2 Send calls (1 rate limit + 1 success), got %d", callCount)
 	}
-	// Should have waited at least rateLimitDelay (1s) but allow some slack
-	if elapsed < 900*time.Millisecond {
-		t.Fatalf("expected at least ~1s delay for rate limit retry, got %v", elapsed)
+	// Should have waited at least rateLimitDelay but allow some slack
+	if min := rateLimitDelay - rateLimitDelay/4; elapsed < min {
+		t.Fatalf("expected at least %v delay for rate limit retry, got %v", min, elapsed)
 	}
 }
 
 func TestSendWithRetry_MaxRetriesExhausted(t *testing.T) {
+	setRetryTimingForTest(t)
+
 	m := newTestManager()
 	var callCount int
 	ch := &mockChannel{
@@ -193,6 +219,8 @@ func TestSendWithRetry_MaxRetriesExhausted(t *testing.T) {
 }
 
 func TestSendWithRetry_UnknownError(t *testing.T) {
+	setRetryTimingForTest(t)
+
 	m := newTestManager()
 	var callCount int
 	ch := &mockChannel{
@@ -220,6 +248,8 @@ func TestSendWithRetry_UnknownError(t *testing.T) {
 }
 
 func TestSendWithRetry_ContextCancelled(t *testing.T) {
+	setRetryTimingForTest(t)
+
 	m := newTestManager()
 	var callCount int
 	ch := &mockChannel{
@@ -256,22 +286,25 @@ func TestWorkerRateLimiter(t *testing.T) {
 
 	var mu sync.Mutex
 	var sendTimes []time.Time
+	var wg sync.WaitGroup
+	wg.Add(4)
 
 	ch := &mockChannel{
 		sendFn: func(_ context.Context, _ bus.OutboundMessage) error {
 			mu.Lock()
 			sendTimes = append(sendTimes, time.Now())
 			mu.Unlock()
+			wg.Done()
 			return nil
 		},
 	}
 
-	// Create a worker with a low rate: 2 msg/s, burst 1
+	// Create a worker with a low rate: 10 msg/s, burst 1
 	w := &channelWorker{
 		ch:      ch,
 		queue:   make(chan bus.OutboundMessage, 10),
 		done:    make(chan struct{}),
-		limiter: rate.NewLimiter(2, 1),
+		limiter: rate.NewLimiter(10, 1),
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -284,8 +317,16 @@ func TestWorkerRateLimiter(t *testing.T) {
 		w.queue <- bus.OutboundMessage{Channel: "test", ChatID: "1", Content: fmt.Sprintf("msg%d", i)}
 	}
 
-	// Wait enough time for all messages to be sent (4 msgs at 2/s = ~2s, give extra margin)
-	time.Sleep(3 * time.Second)
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout waiting for worker to send messages")
+	}
 
 	mu.Lock()
 	times := make([]time.Time, len(sendTimes))
@@ -297,10 +338,10 @@ func TestWorkerRateLimiter(t *testing.T) {
 	}
 
 	// Verify rate limiting: total duration should be at least 1s
-	// (first message immediate, then ~500ms between each subsequent one at 2/s)
+	// (first message immediate, then ~100ms between each subsequent one at 10/s)
 	totalDuration := times[len(times)-1].Sub(times[0])
-	if totalDuration < 1*time.Second {
-		t.Fatalf("expected total duration >= 1s for 4 msgs at 2/s rate, got %v", totalDuration)
+	if totalDuration < 200*time.Millisecond {
+		t.Fatalf("expected total duration >= 200ms for 4 msgs at 10/s rate, got %v", totalDuration)
 	}
 }
 
@@ -382,6 +423,8 @@ func (m *mockChannelWithLength) MaxMessageLength() int {
 }
 
 func TestSendWithRetry_ExponentialBackoff(t *testing.T) {
+	setRetryTimingForTest(t)
+
 	m := newTestManager()
 
 	var callTimes []time.Time
@@ -405,11 +448,12 @@ func TestSendWithRetry_ExponentialBackoff(t *testing.T) {
 	m.sendWithRetry(ctx, "test", w, msg)
 	totalElapsed := time.Since(start)
 
-	// With maxRetries=3: attempts at 0, ~500ms, ~1.5s, ~3.5s
-	// Total backoff: 500ms + 1s + 2s = 3.5s
+	// With maxRetries=3: attempts at 0, ~10ms, ~30ms, ~70ms
+	// Total backoff: 10ms + 20ms + 40ms = 70ms
 	// Allow some margin
-	if totalElapsed < 3*time.Second {
-		t.Fatalf("expected total elapsed >= 3s for exponential backoff, got %v", totalElapsed)
+	expectedBackoff := baseBackoff + min(2*baseBackoff, maxBackoff) + min(4*baseBackoff, maxBackoff)
+	if minExpected := expectedBackoff - baseBackoff/2; totalElapsed < minExpected {
+		t.Fatalf("expected total elapsed >= %v for exponential backoff, got %v", minExpected, totalElapsed)
 	}
 
 	if int(callCount.Load()) != maxRetries+1 {
