@@ -1,5 +1,6 @@
 .git
 .gitignore
+.cache/
 build/
 .picoclaw/
 config/
@@ -8,3 +9,7 @@ config/
 *.md
 LICENSE
 assets/
+coverage.out
+coverage.html
+ref/
+workspace/
