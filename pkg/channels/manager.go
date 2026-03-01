@@ -488,28 +488,18 @@ func (m *Manager) runWorker(ctx context.Context, name string, w *channelWorker) 
 	}
 }
 
-// sendWithRetry sends a message through the channel with rate limiting and
-// retry logic. It classifies errors to determine the retry strategy:
+// retryWithBackoff executes sendFn with retry logic.
+// Callers are responsible for rate limiting before calling this function.
+// Error classification determines the retry strategy:
 //   - ErrNotRunning / ErrSendFailed: permanent, no retry
 //   - ErrRateLimit: fixed delay retry
 //   - ErrTemporary / unknown: exponential backoff retry
-func (m *Manager) sendWithRetry(ctx context.Context, name string, w *channelWorker, msg bus.OutboundMessage) {
-	// Rate limit: wait for token
-	if err := w.limiter.Wait(ctx); err != nil {
-		// ctx canceled, shutting down
-		return
-	}
-
-	// Pre-send: stop typing and try to edit placeholder
-	if m.preSend(ctx, name, msg, w.ch) {
-		return // placeholder was edited successfully, skip Send
-	}
-
+func (m *Manager) retryWithBackoff(ctx context.Context, w *channelWorker, sendFn func() error) error {
 	var lastErr error
 	for attempt := 0; attempt <= maxRetries; attempt++ {
-		lastErr = w.ch.Send(ctx, msg)
+		lastErr = sendFn()
 		if lastErr == nil {
-			return
+			return nil
 		}
 
 		// Permanent failures — don't retry
@@ -528,7 +518,7 @@ func (m *Manager) sendWithRetry(ctx context.Context, name string, w *channelWork
 			case <-time.After(rateLimitDelay):
 				continue
 			case <-ctx.Done():
-				return
+				return ctx.Err()
 			}
 		}
 
@@ -537,17 +527,64 @@ func (m *Manager) sendWithRetry(ctx context.Context, name string, w *channelWork
 		select {
 		case <-time.After(backoff):
 		case <-ctx.Done():
-			return
+			return ctx.Err()
 		}
 	}
 
-	// All retries exhausted or permanent failure
-	logger.ErrorCF("channels", "Send failed", map[string]any{
-		"channel": name,
-		"chat_id": msg.ChatID,
-		"error":   lastErr.Error(),
-		"retries": maxRetries,
+	return lastErr
+}
+
+// sendWithRetry sends a message through the channel with rate limiting and retry logic.
+func (m *Manager) sendWithRetry(ctx context.Context, name string, w *channelWorker, msg bus.OutboundMessage) {
+	// Rate limit: wait for token before preSend (preserves original ordering)
+	if err := w.limiter.Wait(ctx); err != nil {
+		return
+	}
+
+	// Pre-send: stop typing and try to edit placeholder
+	if m.preSend(ctx, name, msg, w.ch) {
+		return // placeholder was edited successfully, skip Send
+	}
+
+	err := m.retryWithBackoff(ctx, w, func() error {
+		return w.ch.Send(ctx, msg)
 	})
+	if err != nil && ctx.Err() == nil {
+		logger.ErrorCF("channels", "Send failed", map[string]any{
+			"channel": name,
+			"chat_id": msg.ChatID,
+			"error":   err.Error(),
+			"retries": maxRetries,
+		})
+	}
+}
+
+// sendMediaWithRetry sends a media message through the channel with rate limiting and retry logic.
+func (m *Manager) sendMediaWithRetry(ctx context.Context, name string, w *channelWorker, msg bus.OutboundMediaMessage) {
+	ms, ok := w.ch.(MediaSender)
+	if !ok {
+		logger.DebugCF("channels", "Channel does not support MediaSender, skipping media", map[string]any{
+			"channel": name,
+		})
+		return
+	}
+
+	// Rate limit: wait for token
+	if err := w.limiter.Wait(ctx); err != nil {
+		return
+	}
+
+	err := m.retryWithBackoff(ctx, w, func() error {
+		return ms.SendMedia(ctx, msg)
+	})
+	if err != nil && ctx.Err() == nil {
+		logger.ErrorCF("channels", "SendMedia failed", map[string]any{
+			"channel": name,
+			"chat_id": msg.ChatID,
+			"error":   err.Error(),
+			"retries": maxRetries,
+		})
+	}
 }
 
 func (m *Manager) dispatchOutbound(ctx context.Context) {
@@ -560,33 +597,17 @@ func (m *Manager) dispatchOutbound(ctx context.Context) {
 			return
 		}
 
-		// Silently skip internal channels
 		if constants.IsInternalChannel(msg.Channel) {
 			continue
 		}
 
-		m.mu.RLock()
-		_, exists := m.channels[msg.Channel]
-		w, wExists := m.workers[msg.Channel]
-		m.mu.RUnlock()
-
-		if !exists {
-			logger.WarnCF("channels", "Unknown channel for outbound message", map[string]any{
-				"channel": msg.Channel,
-			})
-			continue
-		}
-
-		if wExists && w != nil {
+		w := m.lookupWorker(msg.Channel, "outbound")
+		if w != nil {
 			select {
 			case w.queue <- msg:
 			case <-ctx.Done():
 				return
 			}
-		} else if exists {
-			logger.WarnCF("channels", "Channel has no active worker, skipping message", map[string]any{
-				"channel": msg.Channel,
-			})
 		}
 	}
 }
@@ -601,35 +622,41 @@ func (m *Manager) dispatchOutboundMedia(ctx context.Context) {
 			return
 		}
 
-		// Silently skip internal channels
 		if constants.IsInternalChannel(msg.Channel) {
 			continue
 		}
 
-		m.mu.RLock()
-		_, exists := m.channels[msg.Channel]
-		w, wExists := m.workers[msg.Channel]
-		m.mu.RUnlock()
-
-		if !exists {
-			logger.WarnCF("channels", "Unknown channel for outbound media message", map[string]any{
-				"channel": msg.Channel,
-			})
-			continue
-		}
-
-		if wExists && w != nil {
+		w := m.lookupWorker(msg.Channel, "outbound media")
+		if w != nil {
 			select {
 			case w.mediaQueue <- msg:
 			case <-ctx.Done():
 				return
 			}
-		} else if exists {
-			logger.WarnCF("channels", "Channel has no active worker, skipping media message", map[string]any{
-				"channel": msg.Channel,
-			})
 		}
 	}
+}
+
+// lookupWorker finds the active worker for a channel, logging warnings for unknown or inactive channels.
+func (m *Manager) lookupWorker(channel, label string) *channelWorker {
+	m.mu.RLock()
+	_, exists := m.channels[channel]
+	w, wExists := m.workers[channel]
+	m.mu.RUnlock()
+
+	if !exists {
+		logger.WarnCF("channels", "Unknown channel for "+label+" message", map[string]any{
+			"channel": channel,
+		})
+		return nil
+	}
+	if !wExists || w == nil {
+		logger.WarnCF("channels", "Channel has no active worker, skipping "+label+" message", map[string]any{
+			"channel": channel,
+		})
+		return nil
+	}
+	return w
 }
 
 // runMediaWorker processes outbound media messages for a single channel.
@@ -648,70 +675,8 @@ func (m *Manager) runMediaWorker(ctx context.Context, name string, w *channelWor
 	}
 }
 
-// sendMediaWithRetry sends a media message through the channel with rate limiting and
-// retry logic. If the channel does not implement MediaSender, it silently skips.
-func (m *Manager) sendMediaWithRetry(ctx context.Context, name string, w *channelWorker, msg bus.OutboundMediaMessage) {
-	ms, ok := w.ch.(MediaSender)
-	if !ok {
-		logger.DebugCF("channels", "Channel does not support MediaSender, skipping media", map[string]any{
-			"channel": name,
-		})
-		return
-	}
-
-	// Rate limit: wait for token
-	if err := w.limiter.Wait(ctx); err != nil {
-		return
-	}
-
-	var lastErr error
-	for attempt := 0; attempt <= maxRetries; attempt++ {
-		lastErr = ms.SendMedia(ctx, msg)
-		if lastErr == nil {
-			return
-		}
-
-		// Permanent failures — don't retry
-		if errors.Is(lastErr, ErrNotRunning) || errors.Is(lastErr, ErrSendFailed) {
-			break
-		}
-
-		// Last attempt exhausted — don't sleep
-		if attempt == maxRetries {
-			break
-		}
-
-		// Rate limit error — fixed delay
-		if errors.Is(lastErr, ErrRateLimit) {
-			select {
-			case <-time.After(rateLimitDelay):
-				continue
-			case <-ctx.Done():
-				return
-			}
-		}
-
-		// ErrTemporary or unknown error — exponential backoff
-		backoff := min(time.Duration(float64(baseBackoff)*math.Pow(2, float64(attempt))), maxBackoff)
-		select {
-		case <-time.After(backoff):
-		case <-ctx.Done():
-			return
-		}
-	}
-
-	// All retries exhausted or permanent failure
-	logger.ErrorCF("channels", "SendMedia failed", map[string]any{
-		"channel": name,
-		"chat_id": msg.ChatID,
-		"error":   lastErr.Error(),
-		"retries": maxRetries,
-	})
-}
-
-// runTTLJanitor periodically scans the typingStops and placeholders maps
-// and evicts entries that have exceeded their TTL. This prevents memory
-// accumulation when outbound paths fail to trigger preSend (e.g. LLM errors).
+// runTTLJanitor periodically scans the typingStops, reactionUndos, and placeholders maps
+// and evicts entries that have exceeded their TTL.
 func (m *Manager) runTTLJanitor(ctx context.Context) {
 	ticker := time.NewTicker(janitorInterval)
 	defer ticker.Stop()
@@ -721,36 +686,41 @@ func (m *Manager) runTTLJanitor(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case now := <-ticker.C:
-			m.typingStops.Range(func(key, value any) bool {
-				if entry, ok := value.(typingEntry); ok {
-					if now.Sub(entry.createdAt) > typingStopTTL {
-						if _, loaded := m.typingStops.LoadAndDelete(key); loaded {
-							entry.stop() // idempotent, safe
-						}
-					}
-				}
-				return true
-			})
-			m.reactionUndos.Range(func(key, value any) bool {
-				if entry, ok := value.(reactionEntry); ok {
-					if now.Sub(entry.createdAt) > typingStopTTL {
-						if _, loaded := m.reactionUndos.LoadAndDelete(key); loaded {
-							entry.undo() // idempotent, safe
-						}
-					}
-				}
-				return true
-			})
-			m.placeholders.Range(func(key, value any) bool {
-				if entry, ok := value.(placeholderEntry); ok {
-					if now.Sub(entry.createdAt) > placeholderTTL {
-						m.placeholders.Delete(key)
-					}
-				}
-				return true
-			})
+			m.evictStaleEntries(now)
 		}
 	}
+}
+
+// evictStaleEntries removes expired typing stops, reactions, and placeholders.
+func (m *Manager) evictStaleEntries(now time.Time) {
+	m.typingStops.Range(func(key, value any) bool {
+		if entry, ok := value.(typingEntry); ok {
+			if now.Sub(entry.createdAt) > typingStopTTL {
+				if _, loaded := m.typingStops.LoadAndDelete(key); loaded {
+					entry.stop()
+				}
+			}
+		}
+		return true
+	})
+	m.reactionUndos.Range(func(key, value any) bool {
+		if entry, ok := value.(reactionEntry); ok {
+			if now.Sub(entry.createdAt) > typingStopTTL {
+				if _, loaded := m.reactionUndos.LoadAndDelete(key); loaded {
+					entry.undo()
+				}
+			}
+		}
+		return true
+	})
+	m.placeholders.Range(func(key, value any) bool {
+		if entry, ok := value.(placeholderEntry); ok {
+			if now.Sub(entry.createdAt) > placeholderTTL {
+				m.placeholders.Delete(key)
+			}
+		}
+		return true
+	})
 }
 
 func (m *Manager) GetChannel(name string) (Channel, bool) {

@@ -51,7 +51,6 @@ func agentCmd(message, sessionKey, model string, debug bool) error {
 	defer msgBus.Close()
 	agentLoop := agent.NewAgentLoop(cfg, msgBus, provider)
 
-	// Print agent startup info (only for interactive mode)
 	startupInfo := agentLoop.GetStartupInfo()
 	logger.InfoCF("agent", "Agent initialized",
 		map[string]any{
@@ -76,9 +75,35 @@ func agentCmd(message, sessionKey, model string, debug bool) error {
 	return nil
 }
 
+// inputReader abstracts readline vs simple bufio input so both modes
+// can share a single REPL loop instead of duplicating ~40 lines.
+type inputReader interface {
+	ReadLine() (string, error)
+	Close()
+}
+
+type readlineReader struct {
+	rl *readline.Instance
+}
+
+func (r *readlineReader) ReadLine() (string, error) { return r.rl.Readline() }
+func (r *readlineReader) Close()                     { r.rl.Close() }
+
+type bufioReader struct {
+	reader *bufio.Reader
+	prompt string
+}
+
+func (r *bufioReader) ReadLine() (string, error) {
+	fmt.Print(r.prompt)
+	return r.reader.ReadString('\n')
+}
+func (r *bufioReader) Close() {}
+
 func interactiveMode(agentLoop *agent.AgentLoop, sessionKey string) {
 	prompt := fmt.Sprintf("%s You: ", internal.Logo)
 
+	var reader inputReader
 	rl, err := readline.NewEx(&readline.Config{
 		Prompt:          prompt,
 		HistoryFile:     filepath.Join(os.TempDir(), ".picoclaw_history"),
@@ -89,13 +114,14 @@ func interactiveMode(agentLoop *agent.AgentLoop, sessionKey string) {
 	if err != nil {
 		fmt.Printf("Error initializing readline: %v\n", err)
 		fmt.Println("Falling back to simple input mode...")
-		simpleInteractiveMode(agentLoop, sessionKey)
-		return
+		reader = &bufioReader{reader: bufio.NewReader(os.Stdin), prompt: prompt}
+	} else {
+		reader = &readlineReader{rl: rl}
 	}
-	defer rl.Close()
+	defer reader.Close()
 
 	for {
-		line, err := rl.Readline()
+		line, err := reader.ReadLine()
 		if err != nil {
 			if err == readline.ErrInterrupt || err == io.EOF {
 				fmt.Println("\nGoodbye!")
@@ -109,42 +135,6 @@ func interactiveMode(agentLoop *agent.AgentLoop, sessionKey string) {
 		if input == "" {
 			continue
 		}
-
-		if input == "exit" || input == "quit" {
-			fmt.Println("Goodbye!")
-			return
-		}
-
-		ctx := context.Background()
-		response, err := agentLoop.ProcessDirect(ctx, input, sessionKey)
-		if err != nil {
-			fmt.Printf("Error: %v\n", err)
-			continue
-		}
-
-		fmt.Printf("\n%s %s\n\n", internal.Logo, response)
-	}
-}
-
-func simpleInteractiveMode(agentLoop *agent.AgentLoop, sessionKey string) {
-	reader := bufio.NewReader(os.Stdin)
-	for {
-		fmt.Print(fmt.Sprintf("%s You: ", internal.Logo))
-		line, err := reader.ReadString('\n')
-		if err != nil {
-			if err == io.EOF {
-				fmt.Println("\nGoodbye!")
-				return
-			}
-			fmt.Printf("Error reading input: %v\n", err)
-			continue
-		}
-
-		input := strings.TrimSpace(line)
-		if input == "" {
-			continue
-		}
-
 		if input == "exit" || input == "quit" {
 			fmt.Println("Goodbye!")
 			return

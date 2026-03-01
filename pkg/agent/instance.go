@@ -16,41 +16,112 @@ import (
 // AgentInstance represents a fully configured agent with its own workspace,
 // session manager, context builder, and tool registry.
 type AgentInstance struct {
-	ID                            string
-	Name                          string
-	Model                         string
-	Fallbacks                     []string
-	Workspace                     string
-	MaxIterations                 int
-	MaxTokens                     int
-	Temperature                   float64
-	ContextWindow                 int
-	Provider                      providers.LLMProvider
-	Sessions                      *session.SessionManager
-	ContextBuilder                *ContextBuilder
-	Tools                         *tools.ToolRegistry
-	SubagentManager               *tools.SubagentManager
-	Subagents                     *config.SubagentsConfig
-	SkillsFilter                  []string
-	Candidates                    []providers.FallbackCandidate
-	CompactionMode                string
-	CompactionReserveTokens       int
-	CompactionKeepRecentTokens    int
-	CompactionMaxHistoryShare     float64
-	MemoryFlushEnabled            bool
-	MemoryFlushSoftThreshold      int
-	ContextPruningMode            string
-	ContextPruningIncludeChitChat bool
-	ContextPruningSoftToolChars   int
-	ContextPruningHardToolChars   int
-	ContextPruningTriggerRatio    float64
-	BootstrapSnapshotEnabled      bool
-	MemoryVectorEnabled           bool
-	MemoryVectorDimensions        int
-	MemoryVectorTopK              int
-	MemoryVectorMinScore          float64
-	MemoryVectorMaxContextChars   int
-	MemoryVectorRecentDailyDays   int
+	ID             string
+	Name           string
+	Model          string
+	Fallbacks      []string
+	Workspace      string
+	MaxIterations  int
+	MaxTokens      int
+	Temperature    float64
+	ContextWindow  int
+	Provider       providers.LLMProvider
+	Sessions       *session.SessionManager
+	ContextBuilder *ContextBuilder
+	Tools          *tools.ToolRegistry
+	SubagentManager *tools.SubagentManager
+	Subagents      *config.SubagentsConfig
+	SkillsFilter   []string
+	Candidates     []providers.FallbackCandidate
+
+	Compaction     CompactionSettings
+	ContextPruning ContextPruningSettings
+	MemoryVector   MemoryVectorSettings
+}
+
+// CompactionSettings groups all compaction-related parameters.
+type CompactionSettings struct {
+	Mode               string
+	ReserveTokens      int
+	KeepRecentTokens   int
+	MaxHistoryShare    float64
+	MemoryFlushEnabled bool
+	MemoryFlushSoftThreshold int
+}
+
+// ContextPruningSettings groups all context pruning parameters.
+type ContextPruningSettings struct {
+	Mode              string
+	IncludeChitChat   bool
+	SoftToolChars     int
+	HardToolChars     int
+	TriggerRatio      float64
+	BootstrapSnapshot bool
+}
+
+// resolveCompaction resolves compaction settings from config with defaults.
+func resolveCompaction(c config.CompactionConfig) CompactionSettings {
+	mode := strings.TrimSpace(c.Mode)
+	if mode == "" {
+		mode = "safeguard"
+	}
+
+	flushEnabled := c.MemoryFlush.Enabled
+	if !c.MemoryFlush.Enabled && c.MemoryFlush.SoftThresholdTokens == 0 {
+		flushEnabled = true
+	}
+
+	return CompactionSettings{
+		Mode:                     mode,
+		ReserveTokens:            intDefault(c.ReserveTokens, 2048),
+		KeepRecentTokens:         intDefault(c.KeepRecentTokens, 2048),
+		MaxHistoryShare:          floatRangeDefault(c.MaxHistoryShare, 0, 0.9, 0.5),
+		MemoryFlushEnabled:       flushEnabled,
+		MemoryFlushSoftThreshold: intDefault(c.MemoryFlush.SoftThresholdTokens, 1500),
+	}
+}
+
+// resolveContextPruning resolves context pruning settings from config with defaults.
+func resolveContextPruning(c config.ContextPruningConfig) ContextPruningSettings {
+	mode := strings.TrimSpace(c.Mode)
+	if mode == "" {
+		mode = "tools_only"
+	}
+	return ContextPruningSettings{
+		Mode:          mode,
+		IncludeChitChat: c.IncludeOldChitChat,
+		SoftToolChars: intDefault(c.SoftToolResultChars, 2000),
+		HardToolChars: intDefault(c.HardToolResultChars, 350),
+		TriggerRatio:  floatRangeDefault(c.TriggerRatio, 0, 1, 0.8),
+	}
+}
+
+// resolveMemoryVector resolves memory vector settings from config with defaults.
+func resolveMemoryVector(c config.MemoryVectorConfig) MemoryVectorSettings {
+	return MemoryVectorSettings{
+		Enabled:        c.Enabled,
+		Dimensions:     intDefault(c.Dimensions, defaultMemoryVectorDimensions),
+		TopK:           intDefault(c.TopK, defaultMemoryVectorTopK),
+		MinScore:       floatRangeDefault(c.MinScore, 0, 1, defaultMemoryVectorMinScore),
+		MaxContextChars: intDefault(c.MaxContextChars, defaultMemoryVectorMaxContextChars),
+		RecentDailyDays: intDefault(c.RecentDailyDays, defaultMemoryVectorRecentDailyDays),
+	}
+}
+
+// intDefault returns v if positive, otherwise fallback.
+func intDefault(v, fallback int) int {
+	if v <= 0 {
+		return fallback
+	}
+	return v
+}
+
+// floatRangeDefault returns v if within (lo, hi) exclusive, otherwise fallback.
+func floatRangeDefault(v, lo, hi, fallback float64) float64 {
+	if v <= lo || v >= hi {
+		return fallback
+	}
+	return v
 }
 
 // NewAgentInstance creates an agent instance from config.
@@ -66,242 +137,141 @@ func NewAgentInstance(
 	model := resolveAgentModel(agentCfg, defaults)
 	fallbacks := resolveAgentFallbacks(agentCfg, defaults)
 
-	restrict := defaults.RestrictToWorkspace
-	toolsRegistry := tools.NewToolRegistry()
-	toolsRegistry.Register(tools.NewReadFileTool(workspace, restrict))
-	toolsRegistry.Register(tools.NewDocumentTextTool(workspace, restrict))
-	toolsRegistry.Register(tools.NewWriteFileTool(workspace, restrict))
-	toolsRegistry.Register(tools.NewListDirTool(workspace, restrict))
-	execTool, err := tools.NewExecToolWithConfig(workspace, restrict, cfg)
-	if err != nil {
-		log.Fatalf("Critical error: unable to initialize exec tool: %v", err)
-	}
-	toolsRegistry.Register(execTool)
-	toolsRegistry.Register(tools.NewProcessTool(execTool.ProcessManager()))
-	toolsRegistry.Register(tools.NewEditFileTool(workspace, restrict))
-	toolsRegistry.Register(tools.NewAppendFileTool(workspace, restrict))
-
-	sessionsDir := filepath.Join(workspace, "sessions")
-	sessionsManager := session.NewSessionManager(sessionsDir)
+	toolsRegistry := registerCoreTools(workspace, defaults.RestrictToWorkspace, cfg)
+	sessionsManager := session.NewSessionManager(filepath.Join(workspace, "sessions"))
 	toolsRegistry.Register(tools.NewSessionsListTool(sessionsManager))
 	toolsRegistry.Register(tools.NewSessionsHistoryTool(sessionsManager))
 
 	contextBuilder := NewContextBuilder(workspace)
 
-	agentID := routing.DefaultAgentID
-	agentName := ""
-	var subagents *config.SubagentsConfig
-	var skillsFilter []string
+	agentID, agentName, subagents, skillsFilter := resolveAgentIdentity(agentCfg)
 
-	if agentCfg != nil {
-		agentID = routing.NormalizeAgentID(agentCfg.ID)
-		agentName = agentCfg.Name
-		subagents = agentCfg.Subagents
-		skillsFilter = agentCfg.Skills
-	}
-
-	maxIter := defaults.MaxToolIterations
-	if maxIter == 0 {
-		maxIter = 20
-	}
-
-	maxTokens := defaults.MaxTokens
-	if maxTokens == 0 {
-		maxTokens = 8192
-	}
+	maxIter := intDefault(defaults.MaxToolIterations, 20)
+	maxTokens := intDefault(defaults.MaxTokens, 8192)
 
 	temperature := 0.7
 	if defaults.Temperature != nil {
 		temperature = *defaults.Temperature
 	}
 
-	compactionMode := strings.TrimSpace(defaults.Compaction.Mode)
-	if compactionMode == "" {
-		compactionMode = "safeguard"
-	}
-
-	compactionReserveTokens := defaults.Compaction.ReserveTokens
-	if compactionReserveTokens <= 0 {
-		compactionReserveTokens = 2048
-	}
-
-	compactionKeepRecentTokens := defaults.Compaction.KeepRecentTokens
-	if compactionKeepRecentTokens <= 0 {
-		compactionKeepRecentTokens = 2048
-	}
-
-	compactionMaxHistoryShare := defaults.Compaction.MaxHistoryShare
-	if compactionMaxHistoryShare <= 0 || compactionMaxHistoryShare > 0.9 {
-		compactionMaxHistoryShare = 0.5
-	}
-
-	memoryFlushEnabled := defaults.Compaction.MemoryFlush.Enabled
-	// Preserve default behavior if omitted from config.
-	if !defaults.Compaction.MemoryFlush.Enabled && defaults.Compaction.MemoryFlush.SoftThresholdTokens == 0 {
-		memoryFlushEnabled = true
-	}
-
-	memoryFlushSoftThreshold := defaults.Compaction.MemoryFlush.SoftThresholdTokens
-	if memoryFlushSoftThreshold <= 0 {
-		memoryFlushSoftThreshold = 1500
-	}
-
-	contextPruningMode := strings.TrimSpace(defaults.ContextPruning.Mode)
-	if contextPruningMode == "" {
-		contextPruningMode = "tools_only"
-	}
-
-	contextPruningSoftToolChars := defaults.ContextPruning.SoftToolResultChars
-	if contextPruningSoftToolChars <= 0 {
-		contextPruningSoftToolChars = 2000
-	}
-
-	contextPruningHardToolChars := defaults.ContextPruning.HardToolResultChars
-	if contextPruningHardToolChars <= 0 {
-		contextPruningHardToolChars = 350
-	}
-
-	contextPruningTriggerRatio := defaults.ContextPruning.TriggerRatio
-	if contextPruningTriggerRatio <= 0 || contextPruningTriggerRatio >= 1 {
-		contextPruningTriggerRatio = 0.8
-	}
-
-	bootstrapSnapshotEnabled := defaults.BootstrapSnapshot.Enabled
-
-	memoryVectorEnabled := defaults.MemoryVector.Enabled
-	memoryVectorDimensions := defaults.MemoryVector.Dimensions
-	if memoryVectorDimensions <= 0 {
-		memoryVectorDimensions = defaultMemoryVectorDimensions
-	}
-
-	memoryVectorTopK := defaults.MemoryVector.TopK
-	if memoryVectorTopK <= 0 {
-		memoryVectorTopK = defaultMemoryVectorTopK
-	}
-
-	memoryVectorMinScore := defaults.MemoryVector.MinScore
-	if memoryVectorMinScore < 0 || memoryVectorMinScore >= 1 {
-		memoryVectorMinScore = defaultMemoryVectorMinScore
-	}
-
-	memoryVectorMaxContextChars := defaults.MemoryVector.MaxContextChars
-	if memoryVectorMaxContextChars <= 0 {
-		memoryVectorMaxContextChars = defaultMemoryVectorMaxContextChars
-	}
-
-	memoryVectorRecentDailyDays := defaults.MemoryVector.RecentDailyDays
-	if memoryVectorRecentDailyDays <= 0 {
-		memoryVectorRecentDailyDays = defaultMemoryVectorRecentDailyDays
-	}
+	compaction := resolveCompaction(defaults.Compaction)
+	pruning := resolveContextPruning(defaults.ContextPruning)
+	pruning.BootstrapSnapshot = defaults.BootstrapSnapshot.Enabled
+	memVec := resolveMemoryVector(defaults.MemoryVector)
 
 	contextBuilder.SetRuntimeSettings(ContextRuntimeSettings{
 		ContextWindowTokens:      maxTokens,
-		PruningMode:              contextPruningMode,
-		IncludeOldChitChat:       defaults.ContextPruning.IncludeOldChitChat,
-		SoftToolResultChars:      contextPruningSoftToolChars,
-		HardToolResultChars:      contextPruningHardToolChars,
-		TriggerRatio:             contextPruningTriggerRatio,
-		BootstrapSnapshotEnabled: bootstrapSnapshotEnabled,
-		MemoryVectorEnabled:      memoryVectorEnabled,
-		MemoryVectorDimensions:   memoryVectorDimensions,
-		MemoryVectorTopK:         memoryVectorTopK,
-		MemoryVectorMinScore:     memoryVectorMinScore,
-		MemoryVectorMaxChars:     memoryVectorMaxContextChars,
-		MemoryVectorRecentDays:   memoryVectorRecentDailyDays,
+		PruningMode:              pruning.Mode,
+		IncludeOldChitChat:       pruning.IncludeChitChat,
+		SoftToolResultChars:      pruning.SoftToolChars,
+		HardToolResultChars:      pruning.HardToolChars,
+		TriggerRatio:             pruning.TriggerRatio,
+		BootstrapSnapshotEnabled: pruning.BootstrapSnapshot,
+		MemoryVectorEnabled:      memVec.Enabled,
+		MemoryVectorDimensions:   memVec.Dimensions,
+		MemoryVectorTopK:         memVec.TopK,
+		MemoryVectorMinScore:     memVec.MinScore,
+		MemoryVectorMaxChars:     memVec.MaxContextChars,
+		MemoryVectorRecentDays:   memVec.RecentDailyDays,
 	})
 
-	if memoryVectorEnabled {
+	if memVec.Enabled {
 		toolsRegistry.Register(NewMemorySearchTool(
-			contextBuilder.memory,
-			memoryVectorTopK,
-			memoryVectorMinScore,
+			contextBuilder.memory, memVec.TopK, memVec.MinScore,
 		))
 		toolsRegistry.Register(NewMemoryGetTool(contextBuilder.memory))
 	}
 
-	// Resolve fallback candidates
+	candidates := resolveFallbackCandidates(model, fallbacks, defaults.Provider, cfg)
+
+	return &AgentInstance{
+		ID:             agentID,
+		Name:           agentName,
+		Model:          model,
+		Fallbacks:      fallbacks,
+		Workspace:      workspace,
+		MaxIterations:  maxIter,
+		MaxTokens:      maxTokens,
+		Temperature:    temperature,
+		ContextWindow:  maxTokens,
+		Provider:       provider,
+		Sessions:       sessionsManager,
+		ContextBuilder: contextBuilder,
+		Tools:          toolsRegistry,
+		Subagents:      subagents,
+		SkillsFilter:   skillsFilter,
+		Candidates:     candidates,
+		Compaction:     compaction,
+		ContextPruning: pruning,
+		MemoryVector:   memVec,
+	}
+}
+
+// registerCoreTools creates a ToolRegistry with all built-in tools.
+func registerCoreTools(workspace string, restrict bool, cfg *config.Config) *tools.ToolRegistry {
+	reg := tools.NewToolRegistry()
+	reg.Register(tools.NewReadFileTool(workspace, restrict))
+	reg.Register(tools.NewDocumentTextTool(workspace, restrict))
+	reg.Register(tools.NewWriteFileTool(workspace, restrict))
+	reg.Register(tools.NewListDirTool(workspace, restrict))
+
+	execTool, err := tools.NewExecToolWithConfig(workspace, restrict, cfg)
+	if err != nil {
+		log.Fatalf("Critical error: unable to initialize exec tool: %v", err)
+	}
+	reg.Register(execTool)
+	reg.Register(tools.NewProcessTool(execTool.ProcessManager()))
+	reg.Register(tools.NewEditFileTool(workspace, restrict))
+	reg.Register(tools.NewAppendFileTool(workspace, restrict))
+	return reg
+}
+
+// resolveAgentIdentity extracts identity fields from agent config.
+func resolveAgentIdentity(agentCfg *config.AgentConfig) (id, name string, subagents *config.SubagentsConfig, skills []string) {
+	if agentCfg == nil {
+		return routing.DefaultAgentID, "", nil, nil
+	}
+	return routing.NormalizeAgentID(agentCfg.ID), agentCfg.Name, agentCfg.Subagents, agentCfg.Skills
+}
+
+// resolveFallbackCandidates builds the fallback candidate list from model config.
+func resolveFallbackCandidates(model string, fallbacks []string, defaultProvider string, cfg *config.Config) []providers.FallbackCandidate {
 	modelCfg := providers.ModelConfig{
 		Primary:   model,
 		Fallbacks: fallbacks,
 	}
-	resolveFromModelList := func(raw string) (string, bool) {
-		ensureProtocol := func(model string) string {
-			model = strings.TrimSpace(model)
-			if model == "" {
-				return ""
-			}
-			if strings.Contains(model, "/") {
-				return model
-			}
-			return "openai/" + model
-		}
-
+	lookup := func(raw string) (string, bool) {
 		raw = strings.TrimSpace(raw)
-		if raw == "" {
+		if raw == "" || cfg == nil {
 			return "", false
 		}
-
-		if cfg != nil {
-			if mc, err := cfg.GetModelConfig(raw); err == nil && mc != nil && strings.TrimSpace(mc.Model) != "" {
-				return ensureProtocol(mc.Model), true
+		if mc, err := cfg.GetModelConfig(raw); err == nil && mc != nil && strings.TrimSpace(mc.Model) != "" {
+			return ensureProtocol(mc.Model), true
+		}
+		for i := range cfg.ModelList {
+			fullModel := strings.TrimSpace(cfg.ModelList[i].Model)
+			if fullModel == "" {
+				continue
 			}
-
-			for i := range cfg.ModelList {
-				fullModel := strings.TrimSpace(cfg.ModelList[i].Model)
-				if fullModel == "" {
-					continue
-				}
-				if fullModel == raw {
-					return ensureProtocol(fullModel), true
-				}
-				_, modelID := providers.ExtractProtocol(fullModel)
-				if modelID == raw {
-					return ensureProtocol(fullModel), true
-				}
+			if fullModel == raw {
+				return ensureProtocol(fullModel), true
+			}
+			if _, modelID := providers.ExtractProtocol(fullModel); modelID == raw {
+				return ensureProtocol(fullModel), true
 			}
 		}
-
 		return "", false
 	}
+	return providers.ResolveCandidatesWithLookup(modelCfg, defaultProvider, lookup)
+}
 
-	candidates := providers.ResolveCandidatesWithLookup(modelCfg, defaults.Provider, resolveFromModelList)
-
-	return &AgentInstance{
-		ID:                            agentID,
-		Name:                          agentName,
-		Model:                         model,
-		Fallbacks:                     fallbacks,
-		Workspace:                     workspace,
-		MaxIterations:                 maxIter,
-		MaxTokens:                     maxTokens,
-		Temperature:                   temperature,
-		ContextWindow:                 maxTokens,
-		Provider:                      provider,
-		Sessions:                      sessionsManager,
-		ContextBuilder:                contextBuilder,
-		Tools:                         toolsRegistry,
-		Subagents:                     subagents,
-		SkillsFilter:                  skillsFilter,
-		Candidates:                    candidates,
-		CompactionMode:                compactionMode,
-		CompactionReserveTokens:       compactionReserveTokens,
-		CompactionKeepRecentTokens:    compactionKeepRecentTokens,
-		CompactionMaxHistoryShare:     compactionMaxHistoryShare,
-		MemoryFlushEnabled:            memoryFlushEnabled,
-		MemoryFlushSoftThreshold:      memoryFlushSoftThreshold,
-		ContextPruningMode:            contextPruningMode,
-		ContextPruningIncludeChitChat: defaults.ContextPruning.IncludeOldChitChat,
-		ContextPruningSoftToolChars:   contextPruningSoftToolChars,
-		ContextPruningHardToolChars:   contextPruningHardToolChars,
-		ContextPruningTriggerRatio:    contextPruningTriggerRatio,
-		BootstrapSnapshotEnabled:      bootstrapSnapshotEnabled,
-		MemoryVectorEnabled:           memoryVectorEnabled,
-		MemoryVectorDimensions:        memoryVectorDimensions,
-		MemoryVectorTopK:              memoryVectorTopK,
-		MemoryVectorMinScore:          memoryVectorMinScore,
-		MemoryVectorMaxContextChars:   memoryVectorMaxContextChars,
-		MemoryVectorRecentDailyDays:   memoryVectorRecentDailyDays,
+// ensureProtocol adds "openai/" prefix to bare model names.
+func ensureProtocol(model string) string {
+	model = strings.TrimSpace(model)
+	if model == "" || strings.Contains(model, "/") {
+		return model
 	}
+	return "openai/" + model
 }
 
 // resolveAgentWorkspace determines the workspace directory for an agent.
