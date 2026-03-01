@@ -76,6 +76,8 @@ func DefaultConfig() *Config {
 				EncryptKey:        "",
 				VerificationToken: "",
 				AllowFrom:         FlexibleStringSlice{},
+				Typing:            TypingConfig{Enabled: false},
+				Placeholder:       PlaceholderConfig{Enabled: false},
 			},
 			Discord: DiscordConfig{
 				Enabled:     false,

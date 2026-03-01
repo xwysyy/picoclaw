@@ -6,9 +6,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"html"
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -27,6 +30,19 @@ import (
 	"github.com/sipeed/picoclaw/pkg/logger"
 	"github.com/sipeed/picoclaw/pkg/media"
 	"github.com/sipeed/picoclaw/pkg/utils"
+)
+
+const feishuMaxPostImageAttachments = 4
+
+var (
+	feishuBRTagRe          = regexp.MustCompile(`(?i)<\s*br\s*/?>`)
+	feishuParagraphJoinRe  = regexp.MustCompile(`(?i)<\s*/p\s*>\s*<\s*p\s*>`)
+	feishuParagraphOpenRe  = regexp.MustCompile(`(?i)<\s*p\s*>`)
+	feishuParagraphCloseRe = regexp.MustCompile(`(?i)<\s*/p\s*>`)
+	feishuAnyTagRe         = regexp.MustCompile(`<[^>]+>`)
+	feishuMultiNewlineRe   = regexp.MustCompile(`\n{3,}`)
+	feishuBrokenBulletRe   = regexp.MustCompile(`(?m)(^|\n)([-*•])\n([^\s])`)
+	feishuBrokenNumberedRe = regexp.MustCompile(`(?m)(^|\n)([0-9]+[.)])\n([^\s])`)
 )
 
 type FeishuChannel struct {
@@ -188,6 +204,93 @@ func (c *FeishuChannel) Send(ctx context.Context, msg bus.OutboundMessage) error
 	return nil
 }
 
+// EditMessage implements channels.MessageEditor.
+func (c *FeishuChannel) EditMessage(ctx context.Context, chatID string, messageID string, content string) error {
+	if !c.IsRunning() {
+		return channels.ErrNotRunning
+	}
+	if strings.TrimSpace(messageID) == "" {
+		return fmt.Errorf("message ID is empty")
+	}
+	if strings.TrimSpace(content) == "" {
+		content = " "
+	}
+
+	payload, _ := json.Marshal(map[string]string{"text": content})
+	req := larkim.NewUpdateMessageReqBuilder().
+		MessageId(messageID).
+		Body(larkim.NewUpdateMessageReqBodyBuilder().
+			MsgType("text").
+			Content(string(payload)).
+			Build()).
+		Build()
+
+	resp, err := c.client.Im.V1.Message.Update(ctx, req)
+	if err != nil {
+		return fmt.Errorf("%w: feishu edit message: %v", channels.ErrTemporary, err)
+	}
+	if resp == nil || !resp.Success() {
+		code := 0
+		msgText := ""
+		if resp != nil {
+			code = resp.Code
+			msgText = resp.Msg
+		}
+		errKind := channels.ErrTemporary
+		if code == 99991672 {
+			errKind = channels.ErrSendFailed
+		}
+		return fmt.Errorf("%w: feishu edit message rejected: code=%d msg=%s", errKind, code, msgText)
+	}
+	return nil
+}
+
+// SendPlaceholder implements channels.PlaceholderCapable.
+func (c *FeishuChannel) SendPlaceholder(ctx context.Context, chatID string) (string, error) {
+	if !c.config.Placeholder.Enabled {
+		return "", nil
+	}
+	if strings.TrimSpace(chatID) == "" {
+		return "", nil
+	}
+
+	text := strings.TrimSpace(c.config.Placeholder.Text)
+	if text == "" {
+		text = "正在思考..."
+	}
+
+	payload, _ := json.Marshal(map[string]string{"text": text})
+	req := larkim.NewCreateMessageReqBuilder().
+		ReceiveIdType(larkim.ReceiveIdTypeChatId).
+		Body(larkim.NewCreateMessageReqBodyBuilder().
+			ReceiveId(chatID).
+			MsgType("text").
+			Content(string(payload)).
+			Uuid("picoclaw-ph-" + uuid.NewString()).
+			Build()).
+		Build()
+
+	resp, err := c.client.Im.V1.Message.Create(ctx, req)
+	if err != nil {
+		return "", fmt.Errorf("%w: feishu send placeholder: %v", channels.ErrTemporary, err)
+	}
+	if resp == nil || !resp.Success() || resp.Data == nil || resp.Data.MessageId == nil || strings.TrimSpace(*resp.Data.MessageId) == "" {
+		code := 0
+		msgText := ""
+		if resp != nil {
+			code = resp.Code
+			msgText = resp.Msg
+		}
+		errKind := channels.ErrTemporary
+		if code == 99991672 {
+			errKind = channels.ErrSendFailed
+		}
+		return "", fmt.Errorf("%w: feishu send placeholder rejected: code=%d msg=%s", errKind, code, msgText)
+	}
+
+	return strings.TrimSpace(*resp.Data.MessageId), nil
+}
+
 // SendMedia implements channels.MediaSender.
 // It uploads files/images to Feishu and then sends them as native attachments.
 func (c *FeishuChannel) SendMedia(ctx context.Context, msg bus.OutboundMediaMessage) error {
@@ -331,10 +434,7 @@ func (c *FeishuChannel) SendMedia(ctx context.Context, msg bus.OutboundMediaMess
 				return fmt.Errorf("feishu open file: %w", err)
 			}
 
-			fileType := strings.TrimPrefix(strings.ToLower(filepath.Ext(filename)), ".")
-			if fileType == "" {
-				fileType = "file"
-			}
+			fileType, msgType := resolveFeishuFileUploadTypes(mediaType, filename, contentType)
 
 			fileReq := larkim.NewCreateFileReqBuilder().
 				Body(larkim.NewCreateFileReqBodyBuilder().
@@ -371,7 +471,7 @@ func (c *FeishuChannel) SendMedia(ctx context.Context, msg bus.OutboundMediaMess
 				ReceiveIdType(larkim.ReceiveIdTypeChatId).
 				Body(larkim.NewCreateMessageReqBodyBuilder().
 					ReceiveId(msg.ChatID).
-					MsgType("file").
+					MsgType(msgType).
 					Content(string(payload)).
 					Uuid(fmt.Sprintf("picoclaw-media-%d-%d", sendID, partIdx)).
 					Build()).
@@ -379,7 +479,7 @@ func (c *FeishuChannel) SendMedia(ctx context.Context, msg bus.OutboundMediaMess
 
 			resp, err := c.client.Im.V1.Message.Create(ctx, createReq)
 			if err != nil {
-				return fmt.Errorf("%w: feishu send file: %v", channels.ErrTemporary, err)
+				return fmt.Errorf("%w: feishu send %s: %v", channels.ErrTemporary, msgType, err)
 			}
 			if resp == nil || !resp.Success() {
 				code := 0
@@ -392,7 +492,7 @@ func (c *FeishuChannel) SendMedia(ctx context.Context, msg bus.OutboundMediaMess
 				if code == 99991672 {
 					errKind = channels.ErrSendFailed
 				}
-				return fmt.Errorf("%w: feishu send file rejected: code=%d msg=%s", errKind, code, msgText)
+				return fmt.Errorf("%w: feishu send %s rejected: code=%d msg=%s", errKind, msgType, code, msgText)
 			}
 		}
 
@@ -489,6 +589,27 @@ func (c *FeishuChannel) handleMessageReceive(ctx context.Context, event *larkim.
 		}
 
 		switch messageType {
+		case "post":
+			imageKeys := extractFeishuPostImageKeys(rawContent)
+			for _, imageKey := range imageKeys {
+				if len(mediaRefs) >= feishuMaxPostImageAttachments {
+					break
+				}
+				localPath, filename, contentType, err := c.downloadMessageResource(ctx, messageID, imageKey, "image")
+				if err != nil {
+					logger.WarnCF("feishu", "Failed to download post image resource", map[string]any{
+						"message_id": messageID,
+						"image_key":  imageKey,
+						"error":      err.Error(),
+					})
+					continue
+				}
+				mediaRefs = append(mediaRefs, storeMedia(localPath, media.MediaMeta{
+					Filename:    filename,
+					ContentType: contentType,
+					Source:      "feishu",
+				}))
+			}
 		case "image":
 			imageKey := feishuExtractJSONString(rawContent, "image_key", "file_key", "imageKey", "fileKey")
 			if imageKey != "" {
@@ -539,6 +660,8 @@ func (c *FeishuChannel) handleMessageReceive(ctx context.Context, event *larkim.
 				label = "[video]"
 			case "file":
 				label = "[file]"
+			case "post":
+				label = "[image]"
 			}
 
 			// Replace placeholder-only content like "<media:image>" with a cleaner marker.
@@ -718,7 +841,7 @@ func extractFeishuMessageContent(message *larkim.EventMessage) string {
 			Text string `json:"text"`
 		}
 		if err := json.Unmarshal([]byte(raw), &textPayload); err == nil {
-			return textPayload.Text
+			return normalizeFeishuText(textPayload.Text)
 		}
 	case "post":
 		if extracted := extractFeishuPostContent(raw); extracted != "" {
@@ -738,6 +861,31 @@ func extractFeishuMessageContent(message *larkim.EventMessage) string {
 	}
 
 	return raw
+}
+
+func normalizeFeishuText(raw string) string {
+	t := strings.TrimSpace(raw)
+	if t == "" {
+		return ""
+	}
+
+	t = feishuBRTagRe.ReplaceAllString(t, "\n")
+	t = feishuParagraphJoinRe.ReplaceAllString(t, "\n")
+	t = feishuParagraphOpenRe.ReplaceAllString(t, "")
+	t = feishuParagraphCloseRe.ReplaceAllString(t, "")
+	t = feishuAnyTagRe.ReplaceAllString(t, "")
+	t = html.UnescapeString(t)
+	t = strings.ReplaceAll(t, "\u00a0", " ")
+
+	t = strings.ReplaceAll(t, "\r\n", "\n")
+	t = strings.ReplaceAll(t, "\r", "\n")
+	t = feishuMultiNewlineRe.ReplaceAllString(t, "\n\n")
+
+	// Fix Feishu list quirk: "-" or "1." marker and content split across lines.
+	t = feishuBrokenBulletRe.ReplaceAllString(t, "$1$2 $3")
+	t = feishuBrokenNumberedRe.ReplaceAllString(t, "$1$2 $3")
+
+	return strings.TrimSpace(t)
 }
 
 func feishuDetectAndStripBotMention(message *larkim.EventMessage, extractedContent, botID string) (isMentioned bool, cleaned string) {
@@ -911,6 +1059,76 @@ func feishuExtractJSONString(rawJSON string, keys ...string) string {
 	return ""
 }
 
+func extractFeishuPostImageKeys(rawJSON string) []string {
+	rawJSON = strings.TrimSpace(rawJSON)
+	if rawJSON == "" {
+		return nil
+	}
+
+	var payload any
+	if err := json.Unmarshal([]byte(rawJSON), &payload); err != nil {
+		return nil
+	}
+
+	keys := map[string]struct{}{}
+	var walk func(v any)
+	walk = func(v any) {
+		switch n := v.(type) {
+		case map[string]any:
+			if imageKey, ok := n["image_key"].(string); ok && strings.TrimSpace(imageKey) != "" {
+				keys[strings.TrimSpace(imageKey)] = struct{}{}
+			}
+			if imageKey, ok := n["imageKey"].(string); ok && strings.TrimSpace(imageKey) != "" {
+				keys[strings.TrimSpace(imageKey)] = struct{}{}
+			}
+			for _, child := range n {
+				walk(child)
+			}
+		case []any:
+			for _, child := range n {
+				walk(child)
+			}
+		}
+	}
+	walk(payload)
+
+	out := make([]string, 0, len(keys))
+	for k := range keys {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func resolveFeishuFileUploadTypes(mediaType, filename, contentType string) (fileType, messageType string) {
+	ext := strings.TrimPrefix(strings.ToLower(filepath.Ext(filename)), ".")
+	if ext == "" {
+		ct := strings.ToLower(strings.TrimSpace(contentType))
+		switch {
+		case strings.HasPrefix(ct, "video/mp4"):
+			ext = "mp4"
+		case strings.Contains(ct, "opus"):
+			ext = "opus"
+		}
+	}
+	if ext == "" {
+		ext = "file"
+	}
+
+	messageType = "file"
+	switch strings.ToLower(strings.TrimSpace(mediaType)) {
+	case "video":
+		if ext == "mp4" {
+			messageType = "media"
+		}
+	case "audio":
+		if ext == "opus" {
+			messageType = "audio"
+		}
+	}
+	return ext, messageType
+}
+
 func (c *FeishuChannel) downloadMessageResource(ctx context.Context, messageID, fileKey, resourceType string) (localPath, filename, contentType string, err error) {
 	if messageID == "" {
 		return "", "", "", fmt.Errorf("feishu resource download: message_id is empty")
@@ -981,6 +1199,7 @@ func extractFeishuPostContent(rawJSON string) string {
 	}
 
 	title, _ := payload["title"].(string)
+	title = normalizeFeishuText(title)
 
 	var content any
 	if zh, ok := payload["zh_cn"].(map[string]any); ok {
@@ -1020,7 +1239,7 @@ func extractFeishuPostLines(content any) []string {
 			}
 			appendFeishuPostNodeText(&sb, obj)
 		}
-		line := strings.TrimSpace(sb.String())
+		line := normalizeFeishuText(sb.String())
 		if line != "" {
 			lines = append(lines, line)
 		}
