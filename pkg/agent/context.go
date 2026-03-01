@@ -439,6 +439,13 @@ func (cb *ContextBuilder) SetWorkingState(ws *WorkingState) {
 	cb.workingState = ws
 }
 
+// GetWorkingState returns the current working state, or nil if unset.
+func (cb *ContextBuilder) GetWorkingState() *WorkingState {
+	cb.workingStateMu.RLock()
+	defer cb.workingStateMu.RUnlock()
+	return cb.workingState
+}
+
 func (cb *ContextBuilder) buildDynamicContext(channel, chatID string) string {
 	now := time.Now().Format("2006-01-02 15:04 (Monday)")
 	rt := fmt.Sprintf("%s %s, Go %s", runtime.GOOS, runtime.GOARCH, runtime.Version())
@@ -450,10 +457,7 @@ func (cb *ContextBuilder) buildDynamicContext(channel, chatID string) string {
 	}
 
 	// Inject working state if available
-	cb.workingStateMu.RLock()
-	ws := cb.workingState
-	cb.workingStateMu.RUnlock()
-	if ws != nil {
+	if ws := cb.GetWorkingState(); ws != nil {
 		if wsCtx := ws.FormatForContext(); wsCtx != "" {
 			fmt.Fprintf(&sb, "\n\n%s", wsCtx)
 		}
@@ -616,25 +620,7 @@ func (cb *ContextBuilder) pruneHistoryForContext(
 		return history
 	}
 
-	estimateTokens := func(msg providers.Message) int {
-		chars := utf8.RuneCountInString(msg.Content)
-		for _, tc := range msg.ToolCalls {
-			chars += utf8.RuneCountInString(tc.Name)
-			if tc.Function != nil {
-				chars += utf8.RuneCountInString(tc.Function.Name)
-				chars += utf8.RuneCountInString(tc.Function.Arguments)
-			}
-		}
-		if chars == 0 {
-			return 0
-		}
-		return chars * 2 / 5
-	}
-
-	totalTokens := utf8.RuneCountInString(systemPrompt) * 2 / 5
-	for _, msg := range history {
-		totalTokens += estimateTokens(msg)
-	}
+	totalTokens := estimateTotalTokens(systemPrompt, history)
 
 	ratio := float64(totalTokens) / float64(cb.settings.ContextWindowTokens)
 	if ratio < cb.settings.TriggerRatio {
@@ -673,10 +659,7 @@ func (cb *ContextBuilder) pruneHistoryForContext(
 		pruned = compactOldChitChat(pruned, cutoff)
 	}
 
-	totalTokens = utf8.RuneCountInString(systemPrompt) * 2 / 5
-	for _, msg := range pruned {
-		totalTokens += estimateTokens(msg)
-	}
+	totalTokens = estimateTotalTokens(systemPrompt, pruned)
 	ratio = float64(totalTokens) / float64(cb.settings.ContextWindowTokens)
 	if ratio < cb.settings.TriggerRatio || cb.settings.HardToolResultChars <= 0 {
 		return pruned
@@ -692,10 +675,7 @@ func (cb *ContextBuilder) pruneHistoryForContext(
 			continue
 		}
 		pruned[i].Content = "[tool result omitted for context stability; details preserved in session history]"
-		totalTokens = utf8.RuneCountInString(systemPrompt) * 2 / 5
-		for _, m := range pruned {
-			totalTokens += estimateTokens(m)
-		}
+		totalTokens = estimateTotalTokens(systemPrompt, pruned)
 		ratio = float64(totalTokens) / float64(cb.settings.ContextWindowTokens)
 	}
 
@@ -879,6 +859,33 @@ func (cb *ContextBuilder) AddAssistantMessage(
 	// Always add assistant message, whether or not it has tool calls
 	messages = append(messages, msg)
 	return messages
+}
+
+// estimateMessageTokens estimates the token count of a single message using a
+// 2.5 chars/token heuristic (chars * 2 / 5).
+func estimateMessageTokens(msg providers.Message) int {
+	chars := utf8.RuneCountInString(msg.Content)
+	for _, tc := range msg.ToolCalls {
+		chars += utf8.RuneCountInString(tc.Name)
+		if tc.Function != nil {
+			chars += utf8.RuneCountInString(tc.Function.Name)
+			chars += utf8.RuneCountInString(tc.Function.Arguments)
+		}
+	}
+	if chars == 0 {
+		return 0
+	}
+	return chars * 2 / 5
+}
+
+// estimateTotalTokens estimates the combined token count for a system prompt and
+// a slice of messages.
+func estimateTotalTokens(systemPrompt string, messages []providers.Message) int {
+	total := utf8.RuneCountInString(systemPrompt) * 2 / 5
+	for _, msg := range messages {
+		total += estimateMessageTokens(msg)
+	}
+	return total
 }
 
 // GetSkillsInfo returns information about loaded skills.

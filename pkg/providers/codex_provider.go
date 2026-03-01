@@ -27,8 +27,6 @@ type CodexProvider struct {
 	enableWebSearch bool
 }
 
-const defaultCodexInstructions = "You are Codex, a coding assistant."
-
 func NewCodexProvider(token, accountID string) *CodexProvider {
 	opts := []option.RequestOption{
 		option.WithBaseURL("https://chatgpt.com/backend-api/codex"),
@@ -291,7 +289,7 @@ func buildCodexParams(
 		params.Instructions = openai.Opt(instructions)
 	} else {
 		// ChatGPT Codex backend requires instructions to be present.
-		params.Instructions = openai.Opt(defaultCodexInstructions)
+		params.Instructions = openai.Opt(codexDefaultInstructions)
 	}
 
 	// Prompt caching: pass a stable cache key so OpenAI can bucket requests

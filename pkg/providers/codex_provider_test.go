@@ -26,8 +26,8 @@ func TestBuildCodexParams_BasicMessage(t *testing.T) {
 	if !params.Instructions.Valid() {
 		t.Fatal("Instructions should be set")
 	}
-	if params.Instructions.Or("") != defaultCodexInstructions {
-		t.Errorf("Instructions = %q, want %q", params.Instructions.Or(""), defaultCodexInstructions)
+	if params.Instructions.Or("") != codexDefaultInstructions {
+		t.Errorf("Instructions = %q, want %q", params.Instructions.Or(""), codexDefaultInstructions)
 	}
 	if params.MaxOutputTokens.Valid() {
 		t.Fatalf("MaxOutputTokens should not be set for Codex backend")

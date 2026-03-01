@@ -1,7 +1,6 @@
 package agent
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
@@ -136,9 +135,3 @@ func (ws *WorkingState) FormatForContext() string {
 	return sb.String()
 }
 
-// ToJSON serializes the working state for persistence.
-func (ws *WorkingState) ToJSON() ([]byte, error) {
-	ws.mu.RLock()
-	defer ws.mu.RUnlock()
-	return json.Marshal(ws)
-}

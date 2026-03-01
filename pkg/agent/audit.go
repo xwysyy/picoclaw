@@ -165,64 +165,51 @@ func (al *AgentLoop) RunTaskAudit(ctx context.Context) (*AuditReport, error) {
 		inconsistencyPolicy = "strict"
 	}
 
+	addFinding := func(taskID, category, severity, message, recommendation string) {
+		report.Findings = append(report.Findings, AuditFinding{
+			TaskID:         taskID,
+			Category:       category,
+			Severity:       severity,
+			Message:        message,
+			Recommendation: recommendation,
+		})
+	}
+
+	isOverdue := func(record tools.TaskLedgerEntry) bool {
+		return (record.DeadlineAtMS != nil && nowMS > *record.DeadlineAtMS) ||
+			nowMS-record.CreatedAtMS > timeoutMS
+	}
+
 	for _, record := range records {
 		switch record.Status {
 		case tools.TaskStatusPlanned:
-			overdue := false
-			if record.DeadlineAtMS != nil && nowMS > *record.DeadlineAtMS {
-				overdue = true
-			}
-			if !overdue && nowMS-record.CreatedAtMS > timeoutMS {
-				overdue = true
-			}
-			if overdue {
-				report.Findings = append(report.Findings, AuditFinding{
-					TaskID:         record.ID,
-					Category:       "missed",
-					Severity:       "high",
-					Message:        "Task is still planned but appears overdue.",
-					Recommendation: "Rerun or escalate this task.",
-				})
+			if isOverdue(record) {
+				addFinding(record.ID, "missed", "high",
+					"Task is still planned but appears overdue.",
+					"Rerun or escalate this task.")
 			}
 		case tools.TaskStatusRunning:
 			if nowMS-record.UpdatedAtMS > timeoutMS {
-				report.Findings = append(report.Findings, AuditFinding{
-					TaskID:         record.ID,
-					Category:       "missed",
-					Severity:       "high",
-					Message:        "Task is running past expected timeout.",
-					Recommendation: "Cancel and retry with a narrower scope.",
-				})
+				addFinding(record.ID, "missed", "high",
+					"Task is running past expected timeout.",
+					"Cancel and retry with a narrower scope.")
 			}
 		case tools.TaskStatusCompleted:
 			if strings.TrimSpace(record.Result) == "" {
-				report.Findings = append(report.Findings, AuditFinding{
-					TaskID:         record.ID,
-					Category:       "quality",
-					Severity:       "medium",
-					Message:        "Task completed but produced an empty result.",
-					Recommendation: "Re-run task and require explicit output fields.",
-				})
+				addFinding(record.ID, "quality", "medium",
+					"Task completed but produced an empty result.",
+					"Re-run task and require explicit output fields.")
 			}
-
 			if len(record.Evidence) == 0 && inconsistencyPolicy == "strict" {
-				report.Findings = append(report.Findings, AuditFinding{
-					TaskID:         record.ID,
-					Category:       "inconsistency",
-					Severity:       "medium",
-					Message:        "No execution evidence was captured for a completed task.",
-					Recommendation: "Re-run with trace capture enabled.",
-				})
+				addFinding(record.ID, "inconsistency", "medium",
+					"No execution evidence was captured for a completed task.",
+					"Re-run with trace capture enabled.")
 			}
 		case tools.TaskStatusFailed:
 			if record.RetryCount < retryLimit {
-				report.Findings = append(report.Findings, AuditFinding{
-					TaskID:         record.ID,
-					Category:       "missed",
-					Severity:       "medium",
-					Message:        "Task failed and still has retry budget.",
-					Recommendation: "Retry this task automatically or manually.",
-				})
+				addFinding(record.ID, "missed", "medium",
+					"Task failed and still has retry budget.",
+					"Retry this task automatically or manually.")
 			}
 		}
 	}

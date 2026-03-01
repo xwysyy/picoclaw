@@ -16,7 +16,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-	"unicode/utf8"
 
 	"github.com/sipeed/picoclaw/pkg/bus"
 	"github.com/sipeed/picoclaw/pkg/channels"
@@ -59,6 +58,35 @@ type processOptions struct {
 }
 
 const defaultResponse = "I've completed processing but have no response to give. Increase `max_tool_iterations` in config.json."
+
+// isLLMTimeoutError checks if an error is a network/HTTP timeout (not a context window error).
+func isLLMTimeoutError(err error) bool {
+	if errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "deadline exceeded") ||
+		strings.Contains(msg, "client.timeout") ||
+		strings.Contains(msg, "timed out") ||
+		strings.Contains(msg, "timeout exceeded")
+}
+
+// isContextWindowError detects real context window / token limit errors.
+func isContextWindowError(err error) bool {
+	if isLLMTimeoutError(err) {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "context_length_exceeded") ||
+		strings.Contains(msg, "context window") ||
+		strings.Contains(msg, "maximum context length") ||
+		strings.Contains(msg, "token limit") ||
+		strings.Contains(msg, "too many tokens") ||
+		strings.Contains(msg, "max_tokens") ||
+		strings.Contains(msg, "invalidparameter") ||
+		strings.Contains(msg, "prompt is too long") ||
+		strings.Contains(msg, "request too large")
+}
 
 func NewAgentLoop(cfg *config.Config, msgBus *bus.MessageBus, provider providers.LLMProvider) *AgentLoop {
 	registry := NewAgentRegistry(cfg, provider)
@@ -326,19 +354,6 @@ func (al *AgentLoop) Run(ctx context.Context) error {
 
 			// Process message
 			func() {
-				// TODO: Re-enable media cleanup after inbound media is properly consumed by the agent.
-				// Currently disabled because files are deleted before the LLM can access their content.
-				// defer func() {
-				// 	if al.mediaStore != nil && msg.MediaScope != "" {
-				// 		if releaseErr := al.mediaStore.ReleaseAll(msg.MediaScope); releaseErr != nil {
-				// 			logger.WarnCF("agent", "Failed to release media", map[string]any{
-				// 				"scope": msg.MediaScope,
-				// 				"error": releaseErr.Error(),
-				// 			})
-				// 		}
-				// 	}
-				// }()
-
 				response, err := al.processMessage(ctx, msg)
 				if err != nil {
 					response = fmt.Sprintf("Error processing message: %v", err)
@@ -930,27 +945,7 @@ func (al *AgentLoop) runLLMIteration(
 				break
 			}
 
-			errMsg := strings.ToLower(err.Error())
-
-			// Check if this is a network/HTTP timeout — not a context window error.
-			isTimeoutError := errors.Is(err, context.DeadlineExceeded) ||
-				strings.Contains(errMsg, "deadline exceeded") ||
-				strings.Contains(errMsg, "client.timeout") ||
-				strings.Contains(errMsg, "timed out") ||
-				strings.Contains(errMsg, "timeout exceeded")
-
-			// Detect real context window / token limit errors, excluding network timeouts.
-			isContextError := !isTimeoutError && (strings.Contains(errMsg, "context_length_exceeded") ||
-				strings.Contains(errMsg, "context window") ||
-				strings.Contains(errMsg, "maximum context length") ||
-				strings.Contains(errMsg, "token limit") ||
-				strings.Contains(errMsg, "too many tokens") ||
-				strings.Contains(errMsg, "max_tokens") ||
-				strings.Contains(errMsg, "invalidparameter") ||
-				strings.Contains(errMsg, "prompt is too long") ||
-				strings.Contains(errMsg, "request too large"))
-
-			if isTimeoutError && retry < maxRetries {
+			if isLLMTimeoutError(err) && retry < maxRetries {
 				backoff := time.Duration(retry+1) * 5 * time.Second
 				logger.WarnCF("agent", "Timeout error, retrying after backoff", map[string]any{
 					"error":   err.Error(),
@@ -961,7 +956,7 @@ func (al *AgentLoop) runLLMIteration(
 				continue
 			}
 
-			if isContextError && retry < maxRetries {
+			if isContextWindowError(err) && retry < maxRetries {
 				logger.WarnCF("agent", "Context window error detected, attempting compression", map[string]any{
 					"error": err.Error(),
 					"retry": retry,
@@ -1076,10 +1071,7 @@ func (al *AgentLoop) runLLMIteration(
 
 		// Update working state with LLM's reasoning as next-action hint
 		if reasoning := strings.TrimSpace(response.Content); reasoning != "" {
-			agent.ContextBuilder.workingStateMu.RLock()
-			ws := agent.ContextBuilder.workingState
-			agent.ContextBuilder.workingStateMu.RUnlock()
-			if ws != nil {
+			if ws := agent.ContextBuilder.GetWorkingState(); ws != nil {
 				hint := reasoning
 				if len(hint) > 200 {
 					hint = hint[:200] + "..."
@@ -1225,10 +1217,7 @@ func (al *AgentLoop) runLLMIteration(
 			tc := executed.ToolCall
 
 			// Track tool execution in working state
-			agent.ContextBuilder.workingStateMu.RLock()
-			ws := agent.ContextBuilder.workingState
-			agent.ContextBuilder.workingStateMu.RUnlock()
-			if ws != nil {
+			if ws := agent.ContextBuilder.GetWorkingState(); ws != nil {
 				ws.RecordToolCall(tc.Name, toolResult.IsError)
 				// Record as a completed step with truncated outcome
 				outcome := toolResult.ForLLM
@@ -1311,32 +1300,18 @@ func (al *AgentLoop) runLLMIteration(
 	return finalContent, iteration, nil
 }
 
+// contextualToolNames lists tools that need channel/chatID context updates.
+var contextualToolNames = []string{
+	"message", "spawn", "subagent", "sessions_send", "sessions_spawn",
+}
+
 // updateToolContexts updates the context for tools that need channel/chatID info.
 func (al *AgentLoop) updateToolContexts(agent *AgentInstance, channel, chatID string) {
-	// Use ContextualTool interface instead of type assertions
-	if tool, ok := agent.Tools.Get("message"); ok {
-		if mt, ok := tool.(tools.ContextualTool); ok {
-			mt.SetContext(channel, chatID)
-		}
-	}
-	if tool, ok := agent.Tools.Get("spawn"); ok {
-		if st, ok := tool.(tools.ContextualTool); ok {
-			st.SetContext(channel, chatID)
-		}
-	}
-	if tool, ok := agent.Tools.Get("subagent"); ok {
-		if st, ok := tool.(tools.ContextualTool); ok {
-			st.SetContext(channel, chatID)
-		}
-	}
-	if tool, ok := agent.Tools.Get("sessions_send"); ok {
-		if st, ok := tool.(tools.ContextualTool); ok {
-			st.SetContext(channel, chatID)
-		}
-	}
-	if tool, ok := agent.Tools.Get("sessions_spawn"); ok {
-		if st, ok := tool.(tools.ContextualTool); ok {
-			st.SetContext(channel, chatID)
+	for _, name := range contextualToolNames {
+		if tool, ok := agent.Tools.Get(name); ok {
+			if ct, ok := tool.(tools.ContextualTool); ok {
+				ct.SetContext(channel, chatID)
+			}
 		}
 	}
 }
@@ -1653,29 +1628,9 @@ func (al *AgentLoop) summarizeBatch(
 }
 
 // estimateTokens estimates the number of tokens in a message list.
-// Uses a safe heuristic of 2.5 characters per token to account for CJK and other
-// overheads better than the previous 3 chars/token.
+// Delegates to the shared estimateTotalTokens helper in context.go.
 func (al *AgentLoop) estimateTokens(messages []providers.Message) int {
-	total := 0
-	for _, m := range messages {
-		total += al.estimateMessageTokens(m)
-	}
-	return total
-}
-
-func (al *AgentLoop) estimateMessageTokens(msg providers.Message) int {
-	totalChars := utf8.RuneCountInString(msg.Content)
-	for _, tc := range msg.ToolCalls {
-		totalChars += utf8.RuneCountInString(tc.Name)
-		if tc.Function != nil {
-			totalChars += utf8.RuneCountInString(tc.Function.Name)
-			totalChars += utf8.RuneCountInString(tc.Function.Arguments)
-		}
-	}
-	if totalChars == 0 {
-		return 0
-	}
-	return totalChars * 2 / 5
+	return estimateTotalTokens("", messages)
 }
 
 func (al *AgentLoop) handleCommand(ctx context.Context, msg bus.InboundMessage) (string, bool) {

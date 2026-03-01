@@ -274,16 +274,8 @@ func (sm *SubagentManager) SpawnTask(
 func (sm *SubagentManager) runTask(ctx context.Context, task *SubagentTask, callback AsyncCallback) {
 	defer sm.clearTaskCancel(task.ID)
 
-	sm.mu.Lock()
-	task.Status = "running"
 	task.Created = time.Now().UnixMilli()
-	snapshot := *task
-	sm.mu.Unlock()
-	sm.emitEvent(SubagentTaskEvent{
-		Type:      SubagentTaskRunning,
-		Task:      snapshot,
-		Timestamp: time.Now().UnixMilli(),
-	})
+	sm.updateTaskAndEmit(task, SubagentTaskRunning, "running", task.Result, "")
 
 	// Build system prompt for subagent
 	systemPrompt := fmt.Sprintf(`You are a subagent working under the picoclaw system.
@@ -318,16 +310,7 @@ Working directory: %s`, sm.workspace)
 	// Check if context is already canceled before starting
 	select {
 	case <-ctx.Done():
-		sm.mu.Lock()
-		task.Status = "cancelled"
-		task.Result = "Task cancelled before execution"
-		snapshot = *task
-		sm.mu.Unlock()
-		sm.emitEvent(SubagentTaskEvent{
-			Type:      SubagentTaskCancelled,
-			Task:      snapshot,
-			Timestamp: time.Now().UnixMilli(),
-		})
+		sm.updateTaskAndEmit(task, SubagentTaskCancelled, "cancelled", "Task cancelled before execution", "")
 		sm.cancelTaskTree(task.ID)
 		return
 	default:
@@ -358,17 +341,7 @@ Working directory: %s`, sm.workspace)
 	if resolver != nil {
 		resolved, err := resolver(task.AgentID)
 		if err != nil {
-			sm.mu.Lock()
-			task.Status = "failed"
-			task.Result = fmt.Sprintf("Error: %v", err)
-			snapshot = *task
-			sm.mu.Unlock()
-			sm.emitEvent(SubagentTaskEvent{
-				Type:      SubagentTaskFailed,
-				Task:      snapshot,
-				Err:       err.Error(),
-				Timestamp: time.Now().UnixMilli(),
-			})
+			snapshot := sm.updateTaskAndEmit(task, SubagentTaskFailed, "failed", fmt.Sprintf("Error: %v", err), err.Error())
 			if callback != nil {
 				callback(ctx, &ToolResult{
 					ForLLM:  task.Result,
@@ -421,63 +394,30 @@ Working directory: %s`, sm.workspace)
 	}, messages, task.OriginChannel, task.OriginChatID)
 
 	var result *ToolResult
-	event := SubagentTaskEvent{
-		Task:      *task,
-		Timestamp: time.Now().UnixMilli(),
-	}
+	var snapshot SubagentTask
+	var trace []ToolExecutionTrace
 	if loopResult != nil {
-		event.Trace = loopResult.Trace
+		trace = loopResult.Trace
 	}
 
 	if err != nil {
-		sm.mu.Lock()
-		task.Status = "failed"
-		task.Result = fmt.Sprintf("Error: %v", err)
-		// Check if it was cancelled
+		status, eventType := "failed", SubagentTaskFailed
+		errResult := fmt.Sprintf("Error: %v", err)
 		if ctx.Err() != nil {
-			task.Status = "cancelled"
-			task.Result = "Task cancelled during execution"
+			status, eventType = "cancelled", SubagentTaskCancelled
+			errResult = "Task cancelled during execution"
 		}
-		snapshot = *task
-		sm.mu.Unlock()
-		result = &ToolResult{
-			ForLLM:  task.Result,
-			ForUser: "",
-			Silent:  false,
-			IsError: true,
-			Async:   false,
-			Err:     err,
-		}
-		event.Task = snapshot
-		event.Err = err.Error()
-		if task.Status == "cancelled" {
-			event.Type = SubagentTaskCancelled
-		} else {
-			event.Type = SubagentTaskFailed
-		}
+		snapshot = sm.updateTaskAndEmit(task, eventType, status, errResult, err.Error(), trace)
+		result = &ToolResult{ForLLM: task.Result, IsError: true, Err: err}
 		sm.cancelTaskTree(task.ID)
 	} else {
-		sm.mu.Lock()
-		task.Status = "completed"
-		task.Result = loopResult.Content
-		snapshot = *task
-		sm.mu.Unlock()
+		snapshot = sm.updateTaskAndEmit(task, SubagentTaskCompleted, "completed", loopResult.Content, "", trace)
 		result = &ToolResult{
-			ForLLM: fmt.Sprintf(
-				"Subagent '%s' completed (iterations: %d): %s",
-				task.Label,
-				loopResult.Iterations,
-				loopResult.Content,
-			),
+			ForLLM: fmt.Sprintf("Subagent '%s' completed (iterations: %d): %s",
+				task.Label, loopResult.Iterations, loopResult.Content),
 			ForUser: loopResult.Content,
-			Silent:  false,
-			IsError: false,
-			Async:   false,
 		}
-		event.Type = SubagentTaskCompleted
-		event.Task = snapshot
 	}
-	sm.emitEvent(event)
 
 	// Call callback if provided and result is set.
 	if callback != nil && result != nil {
@@ -521,6 +461,28 @@ func (sm *SubagentManager) emitEvent(event SubagentTaskEvent) {
 		return
 	}
 	handler(event)
+}
+
+// updateTaskAndEmit atomically updates task status/result, takes a snapshot,
+// and emits a lifecycle event. This centralizes the repeated lock-update-emit pattern.
+// The optional trace slice is attached to the event for observability.
+func (sm *SubagentManager) updateTaskAndEmit(task *SubagentTask, eventType SubagentTaskEventType, status, result, errMsg string, trace ...[]ToolExecutionTrace) SubagentTask {
+	sm.mu.Lock()
+	task.Status = status
+	task.Result = result
+	snapshot := *task
+	sm.mu.Unlock()
+	event := SubagentTaskEvent{
+		Type:      eventType,
+		Task:      snapshot,
+		Err:       errMsg,
+		Timestamp: time.Now().UnixMilli(),
+	}
+	if len(trace) > 0 {
+		event.Trace = trace[0]
+	}
+	sm.emitEvent(event)
+	return snapshot
 }
 
 func (sm *SubagentManager) publishTaskAnnouncement(task SubagentTask, status string) {

@@ -721,53 +721,6 @@ func (c *Config) WorkspacePath() string {
 	return expandHome(c.Agents.Defaults.Workspace)
 }
 
-func (c *Config) GetAPIKey() string {
-	if c.Providers.OpenRouter.APIKey != "" {
-		return c.Providers.OpenRouter.APIKey
-	}
-	if c.Providers.Anthropic.APIKey != "" {
-		return c.Providers.Anthropic.APIKey
-	}
-	if c.Providers.OpenAI.APIKey != "" {
-		return c.Providers.OpenAI.APIKey
-	}
-	if c.Providers.Gemini.APIKey != "" {
-		return c.Providers.Gemini.APIKey
-	}
-	if c.Providers.Zhipu.APIKey != "" {
-		return c.Providers.Zhipu.APIKey
-	}
-	if c.Providers.Groq.APIKey != "" {
-		return c.Providers.Groq.APIKey
-	}
-	if c.Providers.VLLM.APIKey != "" {
-		return c.Providers.VLLM.APIKey
-	}
-	if c.Providers.ShengSuanYun.APIKey != "" {
-		return c.Providers.ShengSuanYun.APIKey
-	}
-	if c.Providers.Cerebras.APIKey != "" {
-		return c.Providers.Cerebras.APIKey
-	}
-	return ""
-}
-
-func (c *Config) GetAPIBase() string {
-	if c.Providers.OpenRouter.APIKey != "" {
-		if c.Providers.OpenRouter.APIBase != "" {
-			return c.Providers.OpenRouter.APIBase
-		}
-		return "https://openrouter.ai/api/v1"
-	}
-	if c.Providers.Zhipu.APIKey != "" {
-		return c.Providers.Zhipu.APIBase
-	}
-	if c.Providers.VLLM.APIKey != "" && c.Providers.VLLM.APIBase != "" {
-		return c.Providers.VLLM.APIBase
-	}
-	return ""
-}
-
 func expandHome(path string) string {
 	if path == "" {
 		return path
