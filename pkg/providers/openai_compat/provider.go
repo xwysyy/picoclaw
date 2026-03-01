@@ -84,6 +84,15 @@ func NewProvider(apiKey, apiBase, proxy string, opts ...Option) *Provider {
 	return p
 }
 
+// RequestTimeout returns the effective per-request timeout configured on the underlying HTTP client.
+// This is primarily useful for diagnostics and unit tests that need to verify configuration wiring.
+func (p *Provider) RequestTimeout() time.Duration {
+	if p == nil || p.httpClient == nil {
+		return 0
+	}
+	return p.httpClient.Timeout
+}
+
 func NewProviderWithMaxTokensField(apiKey, apiBase, proxy, maxTokensField string) *Provider {
 	return NewProvider(apiKey, apiBase, proxy, WithMaxTokensField(maxTokensField))
 }

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -57,7 +58,11 @@ func createMockCLI(t *testing.T, stdout, stderr string, exitCode int) string {
 	return script
 }
 
-// createSlowMockCLI creates a script that sleeps before responding (for context cancellation tests).
+// createSlowMockCLI creates a script that blocks before responding (for context cancellation tests).
+//
+// Important: avoid spawning child processes (like `sleep`) here. When the parent shell is
+// killed by context cancellation, child processes can keep stdout/stderr pipes open, which
+// can stall cmd.Wait() and make tests flaky or resource-heavy on small machines.
 func createSlowMockCLI(t *testing.T, sleepSeconds int) string {
 	t.Helper()
 	if runtime.GOOS == "windows" {
@@ -66,7 +71,16 @@ func createSlowMockCLI(t *testing.T, sleepSeconds int) string {
 
 	dir := t.TempDir()
 	script := filepath.Join(dir, "claude")
-	content := fmt.Sprintf("#!/bin/sh\nsleep %d\necho '{\"type\":\"result\",\"result\":\"late\"}'\n", sleepSeconds)
+	fifoPath := filepath.Join(dir, "block.fifo")
+	if err := syscall.Mkfifo(fifoPath, 0o600); err != nil {
+		t.Fatalf("Mkfifo(%s) failed: %v", fifoPath, err)
+	}
+
+	// Block on opening/reading the FIFO. No child processes involved.
+	content := fmt.Sprintf(
+		"#!/bin/bash\nexec 3<%q\nread -r _ <&3\n\necho '{\"type\":\"result\",\"result\":\"late\"}'\n",
+		fifoPath,
+	)
 	if err := os.WriteFile(script, []byte(content), 0o755); err != nil {
 		t.Fatal(err)
 	}

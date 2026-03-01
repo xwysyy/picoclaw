@@ -517,10 +517,10 @@ echo '{"type":"turn.completed"}'`
 }
 
 func TestCodexCliProvider_MockCLI_ContextCancel(t *testing.T) {
-	// Script that sleeps forever
-	tmpDir := t.TempDir()
-	scriptPath := filepath.Join(tmpDir, "codex")
-	script := "#!/bin/bash\nsleep 60"
+		// Script that blocks for a while (no child processes).
+		tmpDir := t.TempDir()
+		scriptPath := filepath.Join(tmpDir, "codex")
+		script := "#!/bin/bash\nread -r -t 60 _ || true\n"
 
 	if err := os.WriteFile(scriptPath, []byte(script), 0o755); err != nil {
 		t.Fatal(err)

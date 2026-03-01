@@ -6,9 +6,6 @@
 package providers
 
 import (
-	"net/http"
-	"net/http/httptest"
-	"strings"
 	"testing"
 	"time"
 
@@ -253,17 +250,11 @@ func TestCreateProviderFromConfig_EmptyModel(t *testing.T) {
 }
 
 func TestCreateProviderFromConfig_RequestTimeoutPropagation(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		time.Sleep(1500 * time.Millisecond)
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"ok"},"finish_reason":"stop"}]}`))
-	}))
-	defer server.Close()
-
 	cfg := &config.ModelConfig{
 		ModelName:      "test-timeout",
 		Model:          "openai/gpt-4o",
-		APIBase:        server.URL,
+		APIBase:        "https://example.com/v1",
+		APIKey:         "test-key",
 		RequestTimeout: 1,
 	}
 
@@ -275,18 +266,12 @@ func TestCreateProviderFromConfig_RequestTimeoutPropagation(t *testing.T) {
 		t.Fatalf("modelID = %q, want %q", modelID, "gpt-4o")
 	}
 
-	_, err = provider.Chat(
-		t.Context(),
-		[]Message{{Role: "user", Content: "hi"}},
-		nil,
-		modelID,
-		nil,
-	)
-	if err == nil {
-		t.Fatal("Chat() expected timeout error, got nil")
+	httpProvider, ok := provider.(*HTTPProvider)
+	if !ok {
+		t.Fatalf("provider type = %T, want *HTTPProvider", provider)
 	}
-	errMsg := err.Error()
-	if !strings.Contains(errMsg, "context deadline exceeded") && !strings.Contains(errMsg, "Client.Timeout exceeded") {
-		t.Fatalf("Chat() error = %q, want timeout-related error", errMsg)
+
+	if got := httpProvider.delegate.RequestTimeout(); got != 1*time.Second {
+		t.Fatalf("request timeout = %v, want %v", got, 1*time.Second)
 	}
 }

@@ -1,4 +1,4 @@
-.PHONY: all build install uninstall clean help test
+.PHONY: all build install uninstall clean help test test-fast
 
 # Build variables
 BINARY_NAME=picoclaw
@@ -173,6 +173,10 @@ vet:
 
 ## test: Test Go code
 test:
+	@CGO_ENABLED=0 ./scripts/test-unit.sh
+
+## test-fast: Run `go test ./...` directly (faster, but may use more memory)
+test-fast:
 	@$(GO) test ./...
 
 ## fmt: Format Go code

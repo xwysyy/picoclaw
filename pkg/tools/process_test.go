@@ -22,7 +22,10 @@ func decodeSessionID(t *testing.T, payload string) string {
 }
 
 func TestExecBackground_WithProcessPoll(t *testing.T) {
-	execTool := NewExecTool(t.TempDir(), false)
+	execTool, err := NewExecTool(t.TempDir(), false)
+	if err != nil {
+		t.Fatalf("unable to configure exec tool: %v", err)
+	}
 	processTool := NewProcessTool(execTool.ProcessManager())
 
 	start := execTool.Execute(context.Background(), map[string]any{
@@ -74,7 +77,10 @@ func TestExecBackground_WithProcessPoll(t *testing.T) {
 }
 
 func TestProcessTool_KillAndRemove(t *testing.T) {
-	execTool := NewExecTool(t.TempDir(), false)
+	execTool, err := NewExecTool(t.TempDir(), false)
+	if err != nil {
+		t.Fatalf("unable to configure exec tool: %v", err)
+	}
 	processTool := NewProcessTool(execTool.ProcessManager())
 
 	start := execTool.Execute(context.Background(), map[string]any{
@@ -125,7 +131,10 @@ func TestProcessTool_KillAndRemove(t *testing.T) {
 }
 
 func TestProcessTool_Write(t *testing.T) {
-	execTool := NewExecTool(t.TempDir(), false)
+	execTool, err := NewExecTool(t.TempDir(), false)
+	if err != nil {
+		t.Fatalf("unable to configure exec tool: %v", err)
+	}
 	processTool := NewProcessTool(execTool.ProcessManager())
 
 	start := execTool.Execute(context.Background(), map[string]any{

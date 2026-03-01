@@ -165,6 +165,10 @@ docker compose -p picoclaw -f docker/docker-compose.yml down
 
 进阶配置可直接查看代码中的配置结构（`pkg/config`）。
 
+## 单元测试
+
+单元测试与 TDD 工作流说明见：[UNIT_TESTING.md](UNIT_TESTING.md)。
+
 ## 排错
 
 参考：

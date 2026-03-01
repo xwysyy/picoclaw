@@ -312,7 +312,10 @@ func TestShellTool_RestrictToWorkspace(t *testing.T) {
 
 func TestShellTool_RestrictToWorkspace_AllowsEnvAssignmentWithSlash(t *testing.T) {
 	tmpDir := t.TempDir()
-	tool := NewExecTool(tmpDir, true)
+	tool, err := NewExecTool(tmpDir, true)
+	if err != nil {
+		t.Fatalf("unable to configure exec tool: %v", err)
+	}
 
 	guardErr := tool.guardCommand("TZ=Asia/Shanghai date '+%Y-%m-%d'", tmpDir)
 	if guardErr != "" {
@@ -322,7 +325,10 @@ func TestShellTool_RestrictToWorkspace_AllowsEnvAssignmentWithSlash(t *testing.T
 
 func TestShellTool_RestrictToWorkspace_StillBlocksRealPathAfterEnvAssignment(t *testing.T) {
 	tmpDir := t.TempDir()
-	tool := NewExecTool(tmpDir, true)
+	tool, err := NewExecTool(tmpDir, true)
+	if err != nil {
+		t.Fatalf("unable to configure exec tool: %v", err)
+	}
 
 	guardErr := tool.guardCommand("TZ=Asia/Shanghai cat /etc/passwd", tmpDir)
 	if guardErr == "" {
@@ -335,7 +341,10 @@ func TestShellTool_RestrictToWorkspace_StillBlocksRealPathAfterEnvAssignment(t *
 
 func TestShellTool_RestrictToWorkspace_AllowsHTTPSURLPathSegments(t *testing.T) {
 	tmpDir := t.TempDir()
-	tool := NewExecTool(tmpDir, true)
+	tool, err := NewExecTool(tmpDir, true)
+	if err != nil {
+		t.Fatalf("unable to configure exec tool: %v", err)
+	}
 
 	guardErr := tool.guardCommand("git clone https://github.com/xwysyy/Claw-Paper-Notes.git", tmpDir)
 	if guardErr != "" {

@@ -19,7 +19,7 @@ func newCronToolForTest(t *testing.T) *CronTool {
 	storePath := filepath.Join(workspace, "cron", "jobs.json")
 	cronService := cronpkg.NewCronService(storePath, nil)
 
-	tool := NewCronTool(
+	tool, err := NewCronTool(
 		cronService,
 		nil,
 		bus.NewMessageBus(),
@@ -28,6 +28,9 @@ func newCronToolForTest(t *testing.T) *CronTool {
 		5*time.Second,
 		config.DefaultConfig(),
 	)
+	if err != nil {
+		t.Fatalf("failed to construct cron tool: %v", err)
+	}
 	tool.SetContext("cli", "direct")
 	return tool
 }

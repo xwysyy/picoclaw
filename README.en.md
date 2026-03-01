@@ -165,6 +165,10 @@ docker compose -p picoclaw -f docker/docker-compose.yml down
 
 For advanced options, inspect in-code config structs under `pkg/config`.
 
+## Unit Testing
+
+See: [UNIT_TESTING.md](UNIT_TESTING.md) (Chinese doc, includes the recommended TDD workflow and project-specific test commands).
+
 ## Troubleshooting
 
 Use:
