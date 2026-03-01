@@ -30,6 +30,23 @@ func TestSplitMessage(t *testing.T) {
 			expectChunks: 1,
 		},
 		{
+			name:         "Invalid maxLen returns a single chunk (non-empty)",
+			content:      "Hello world",
+			maxLen:       0,
+			expectChunks: 1,
+			checkContent: func(t *testing.T, chunks []string) {
+				if chunks[0] != "Hello world" {
+					t.Fatalf("Unexpected chunk content: %q", chunks[0])
+				}
+			},
+		},
+		{
+			name:         "Invalid maxLen returns no chunks (empty)",
+			content:      "",
+			maxLen:       -1,
+			expectChunks: 0,
+		},
+		{
 			name:         "Simple split regular text",
 			content:      longText,
 			maxLen:       2000,

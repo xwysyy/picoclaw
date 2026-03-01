@@ -13,6 +13,15 @@ import (
 func SplitMessage(content string, maxLen int) []string {
 	var messages []string
 
+	// Guard against invalid limits. Without this, maxLen <= 0 can lead to an
+	// infinite loop (content never shrinks because msgEnd clamps to 0).
+	if maxLen <= 0 {
+		if content == "" {
+			return nil
+		}
+		return []string{content}
+	}
+
 	// Dynamic buffer: 10% of maxLen, but at least 50 chars if possible
 	codeBlockBuffer := maxLen / 10
 	if codeBlockBuffer < 50 {
