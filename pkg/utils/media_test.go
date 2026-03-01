@@ -131,3 +131,24 @@ func TestDownloadFile_InvalidURL_ReturnsEmpty(t *testing.T) {
 	}
 }
 
+func TestDownloadFileSimple(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = io.WriteString(w, "simple")
+	}))
+	defer srv.Close()
+
+	path := DownloadFileSimple(srv.URL, "simple.txt")
+	if path == "" {
+		t.Fatalf("expected non-empty path")
+	}
+	t.Cleanup(func() { _ = os.Remove(path) })
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read downloaded file: %v", err)
+	}
+	if string(data) != "simple" {
+		t.Fatalf("unexpected content: %q", string(data))
+	}
+}

@@ -128,3 +128,13 @@ func TestSanitizeMessageContent(t *testing.T) {
 		})
 	}
 }
+
+func TestDerefStr(t *testing.T) {
+	val := "x"
+	if got := DerefStr(&val, "fallback"); got != "x" {
+		t.Fatalf("expected deref value, got %q", got)
+	}
+	if got := DerefStr(nil, "fallback"); got != "fallback" {
+		t.Fatalf("expected fallback, got %q", got)
+	}
+}
