@@ -16,14 +16,14 @@ func (al *AgentLoop) maybeFlushMemoryBeforeCompaction(
 	sessionKey string,
 	tokenEstimate int,
 ) (bool, error) {
-	if !isCompactionModeEnabled(agent.CompactionMode) {
+	if !isCompactionModeEnabled(agent.Compaction.Mode) {
 		return false, nil
 	}
-	if !agent.MemoryFlushEnabled || sessionKey == "" {
+	if !agent.Compaction.MemoryFlushEnabled || sessionKey == "" {
 		return false, nil
 	}
 
-	triggerPoint := agent.ContextWindow - agent.CompactionReserveTokens - agent.MemoryFlushSoftThreshold
+	triggerPoint := agent.ContextWindow - agent.Compaction.ReserveTokens - agent.Compaction.MemoryFlushSoftThreshold
 	if triggerPoint < agent.ContextWindow/3 {
 		triggerPoint = agent.ContextWindow / 3
 	}
@@ -106,7 +106,7 @@ func (al *AgentLoop) compactWithSafeguard(
 	agent *AgentInstance,
 	sessionKey string,
 ) (bool, error) {
-	switch normalizeCompactionMode(agent.CompactionMode) {
+	switch normalizeCompactionMode(agent.Compaction.Mode) {
 	case "off":
 		return false, nil
 	case "legacy":
@@ -129,7 +129,7 @@ func (al *AgentLoop) compactWithSafeguard(
 	}
 
 	historyTokens := al.estimateTokens(history)
-	historyBudget := int(float64(agent.ContextWindow) * agent.CompactionMaxHistoryShare)
+	historyBudget := int(float64(agent.ContextWindow) * agent.Compaction.MaxHistoryShare)
 	if historyBudget <= 0 {
 		historyBudget = agent.ContextWindow / 2
 	}
@@ -137,7 +137,7 @@ func (al *AgentLoop) compactWithSafeguard(
 		return false, nil
 	}
 
-	keepRecentTokens := agent.CompactionKeepRecentTokens
+	keepRecentTokens := agent.Compaction.KeepRecentTokens
 	if keepRecentTokens <= 0 {
 		keepRecentTokens = maxInt(1024, agent.ContextWindow/4)
 	}
