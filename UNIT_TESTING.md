@@ -59,6 +59,23 @@ go test ./pkg/agent -run TestSanitizeHistoryForProvider -count=1
 
 ### 4. 覆盖率
 
+全仓库覆盖率（推荐，内存更稳）：
+
+```bash
+make cover
+```
+
+这会生成：
+
+- `coverage.out`（coverprofile）
+- `coverage.html`（可视化报告）
+
+等价于：
+
+```bash
+./scripts/cover-unit.sh
+```
+
 单包覆盖率：
 
 ```bash
@@ -70,12 +87,6 @@ go test ./pkg/agent -cover -count=1
 ```bash
 go test ./pkg/agent -coverprofile=coverage.out -count=1
 go tool cover -html=coverage.out -o coverage.html
-```
-
-如果你用的是 `./scripts/test-unit.sh`，建议用 `-coverprofile` 方式（脚本会把它转换成 `-test.coverprofile` 并在包目录下生成文件）：
-
-```bash
-./scripts/test-unit.sh -coverprofile=coverage.out
 ```
 
 提示：全仓库覆盖率聚合（`go test ./... -coverprofile=...`）在某些机器上会比较重，优先按包评估并逐步补齐边界用例。

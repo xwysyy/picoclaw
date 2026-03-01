@@ -1,4 +1,4 @@
-.PHONY: all build install uninstall clean help test test-fast
+.PHONY: all build install uninstall clean help test test-fast cover
 
 # Build variables
 BINARY_NAME=picoclaw
@@ -173,6 +173,10 @@ test:
 ## test-fast: Run `go test ./...` directly (faster, but may use more memory)
 test-fast:
 	@$(GO) test ./...
+
+## cover: Run unit tests with coverage and generate coverage.out + coverage.html
+cover:
+	@CGO_ENABLED=0 ./scripts/cover-unit.sh
 
 ## fmt: Format Go code
 fmt:

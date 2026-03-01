@@ -16,23 +16,23 @@ import (
 // AgentInstance represents a fully configured agent with its own workspace,
 // session manager, context builder, and tool registry.
 type AgentInstance struct {
-	ID             string
-	Name           string
-	Model          string
-	Fallbacks      []string
-	Workspace      string
-	MaxIterations  int
-	MaxTokens      int
-	Temperature    float64
-	ContextWindow  int
-	Provider       providers.LLMProvider
-	Sessions       *session.SessionManager
-	ContextBuilder *ContextBuilder
-	Tools          *tools.ToolRegistry
+	ID              string
+	Name            string
+	Model           string
+	Fallbacks       []string
+	Workspace       string
+	MaxIterations   int
+	MaxTokens       int
+	Temperature     float64
+	ContextWindow   int
+	Provider        providers.LLMProvider
+	Sessions        *session.SessionManager
+	ContextBuilder  *ContextBuilder
+	Tools           *tools.ToolRegistry
 	SubagentManager *tools.SubagentManager
-	Subagents      *config.SubagentsConfig
-	SkillsFilter   []string
-	Candidates     []providers.FallbackCandidate
+	Subagents       *config.SubagentsConfig
+	SkillsFilter    []string
+	Candidates      []providers.FallbackCandidate
 
 	Compaction     CompactionSettings
 	ContextPruning ContextPruningSettings
@@ -41,11 +41,11 @@ type AgentInstance struct {
 
 // CompactionSettings groups all compaction-related parameters.
 type CompactionSettings struct {
-	Mode               string
-	ReserveTokens      int
-	KeepRecentTokens   int
-	MaxHistoryShare    float64
-	MemoryFlushEnabled bool
+	Mode                     string
+	ReserveTokens            int
+	KeepRecentTokens         int
+	MaxHistoryShare          float64
+	MemoryFlushEnabled       bool
 	MemoryFlushSoftThreshold int
 }
 
@@ -60,7 +60,7 @@ type ContextPruningSettings struct {
 }
 
 // resolveCompaction resolves compaction settings from config with defaults.
-func resolveCompaction(c config.CompactionConfig) CompactionSettings {
+func resolveCompaction(c config.AgentCompactionConfig) CompactionSettings {
 	mode := strings.TrimSpace(c.Mode)
 	if mode == "" {
 		mode = "safeguard"
@@ -82,27 +82,27 @@ func resolveCompaction(c config.CompactionConfig) CompactionSettings {
 }
 
 // resolveContextPruning resolves context pruning settings from config with defaults.
-func resolveContextPruning(c config.ContextPruningConfig) ContextPruningSettings {
+func resolveContextPruning(c config.AgentContextPruningConfig) ContextPruningSettings {
 	mode := strings.TrimSpace(c.Mode)
 	if mode == "" {
 		mode = "tools_only"
 	}
 	return ContextPruningSettings{
-		Mode:          mode,
+		Mode:            mode,
 		IncludeChitChat: c.IncludeOldChitChat,
-		SoftToolChars: intDefault(c.SoftToolResultChars, 2000),
-		HardToolChars: intDefault(c.HardToolResultChars, 350),
-		TriggerRatio:  floatRangeDefault(c.TriggerRatio, 0, 1, 0.8),
+		SoftToolChars:   intDefault(c.SoftToolResultChars, 2000),
+		HardToolChars:   intDefault(c.HardToolResultChars, 350),
+		TriggerRatio:    floatRangeDefault(c.TriggerRatio, 0, 1, 0.8),
 	}
 }
 
 // resolveMemoryVector resolves memory vector settings from config with defaults.
-func resolveMemoryVector(c config.MemoryVectorConfig) MemoryVectorSettings {
+func resolveMemoryVector(c config.AgentMemoryVectorConfig) MemoryVectorSettings {
 	return MemoryVectorSettings{
-		Enabled:        c.Enabled,
-		Dimensions:     intDefault(c.Dimensions, defaultMemoryVectorDimensions),
-		TopK:           intDefault(c.TopK, defaultMemoryVectorTopK),
-		MinScore:       floatRangeDefault(c.MinScore, 0, 1, defaultMemoryVectorMinScore),
+		Enabled:         c.Enabled,
+		Dimensions:      intDefault(c.Dimensions, defaultMemoryVectorDimensions),
+		TopK:            intDefault(c.TopK, defaultMemoryVectorTopK),
+		MinScore:        floatRangeDefault(c.MinScore, 0, 1, defaultMemoryVectorMinScore),
 		MaxContextChars: intDefault(c.MaxContextChars, defaultMemoryVectorMaxContextChars),
 		RecentDailyDays: intDefault(c.RecentDailyDays, defaultMemoryVectorRecentDailyDays),
 	}

@@ -26,14 +26,14 @@ import (
 )
 
 var (
-	reHeading    = regexp.MustCompile(`^#{1,6}\s+(.+)$`)
-	reBlockquote = regexp.MustCompile(`^>\s*(.*)$`)
+	reHeading    = regexp.MustCompile(`(?m)^#{1,6}\s+(.+)$`)
+	reBlockquote = regexp.MustCompile(`(?m)^>\s*(.*)$`)
 	reLink       = regexp.MustCompile(`\[([^\]]+)\]\(([^)]+)\)`)
 	reBoldStar   = regexp.MustCompile(`\*\*(.+?)\*\*`)
 	reBoldUnder  = regexp.MustCompile(`__(.+?)__`)
 	reItalic     = regexp.MustCompile(`_([^_]+)_`)
 	reStrike     = regexp.MustCompile(`~~(.+?)~~`)
-	reListItem   = regexp.MustCompile(`^[-*]\s+`)
+	reListItem   = regexp.MustCompile(`(?m)^[-*]\s+`)
 	reCodeBlock  = regexp.MustCompile("```[\\w]*\\n?([\\s\\S]*?)```")
 	reInlineCode = regexp.MustCompile("`([^`]+)`")
 )
