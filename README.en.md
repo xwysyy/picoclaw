@@ -132,7 +132,7 @@ Public exposure (remote / cross-machine notifications):
 - Prefer HTTPS reverse proxy or private networking (e.g. Tailscale) for remote access
 - If you must bind it publicly: set `gateway.host` to `0.0.0.0` and configure a strong random `gateway.api_key`
 
-This repo also ships a notification skill doc at `workspace/skills/task-notify/SKILL.md` (preferred: proactive `message` tool; external systems can call `/api/notify`).
+For external agents (Claude Code / Codex) to notify PicoClaw, see: `extensions/picoclaw-notify/SKILL.md` (calls `/api/notify`).
 
 ## Docker Compose
 

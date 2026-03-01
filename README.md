@@ -132,7 +132,7 @@ curl -sS -X POST http://127.0.0.1:18790/api/notify \
 - 建议优先使用反向代理（HTTPS）或私网方案（如 Tailscale）再对外提供 `/api/notify`
 - 如必须直连：将 `gateway.host` 设为 `0.0.0.0` 并配置强随机 `gateway.api_key`
 
-同时仓库内置了一个通知技巧文档：`workspace/skills/task-notify/SKILL.md`（推荐通过 `message` tool 主动提醒；外部系统也可调用 `/api/notify`）。
+外部 Agent（例如 Claude Code / Codex）对接 PicoClaw 通知的扩展文档见：`extensions/picoclaw-notify/SKILL.md`（通过调用 `/api/notify` 推送提醒）。
 
 ## Docker Compose
 
