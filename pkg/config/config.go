@@ -601,6 +601,25 @@ type CronToolsConfig struct {
 	ExecTimeoutMinutes int `json:"exec_timeout_minutes" env:"PICOCLAW_TOOLS_CRON_EXEC_TIMEOUT_MINUTES"` // 0 means no timeout
 }
 
+// ToolTraceConfig controls on-disk tracing of tool calls for debugging and replay.
+//
+// When enabled, PicoClaw appends an event stream (JSONL) and (optionally) writes
+// per-call snapshots (JSON/Markdown) under the agent workspace.
+type ToolTraceConfig struct {
+	Enabled bool `json:"enabled" env:"PICOCLAW_TOOLS_TRACE_ENABLED"`
+	// Dir overrides the default trace directory.
+	// When empty, traces are written under: <workspace>/.picoclaw/audit/tools/<session>/
+	Dir string `json:"dir,omitempty" env:"PICOCLAW_TOOLS_TRACE_DIR"`
+
+	// WritePerCallFiles controls writing one JSON + one Markdown file per tool call.
+	WritePerCallFiles bool `json:"write_per_call_files" env:"PICOCLAW_TOOLS_TRACE_WRITE_PER_CALL_FILES"`
+
+	// MaxArgPreviewChars controls args_preview truncation in the JSONL event stream.
+	MaxArgPreviewChars int `json:"max_arg_preview_chars" env:"PICOCLAW_TOOLS_TRACE_MAX_ARG_PREVIEW_CHARS"`
+	// MaxResultPreviewChars controls output previews truncation in the JSONL event stream.
+	MaxResultPreviewChars int `json:"max_result_preview_chars" env:"PICOCLAW_TOOLS_TRACE_MAX_RESULT_PREVIEW_CHARS"`
+}
+
 type ExecConfig struct {
 	EnableDenyPatterns bool     `json:"enable_deny_patterns" env:"PICOCLAW_TOOLS_EXEC_ENABLE_DENY_PATTERNS"`
 	CustomDenyPatterns []string `json:"custom_deny_patterns" env:"PICOCLAW_TOOLS_EXEC_CUSTOM_DENY_PATTERNS"`
@@ -614,6 +633,7 @@ type MediaCleanupConfig struct {
 
 type ToolsConfig struct {
 	Web          WebToolsConfig     `json:"web"`
+	Trace        ToolTraceConfig    `json:"trace,omitempty"`
 	Cron         CronToolsConfig    `json:"cron"`
 	Exec         ExecConfig         `json:"exec"`
 	Skills       SkillsToolsConfig  `json:"skills"`

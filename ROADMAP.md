@@ -68,13 +68,13 @@
 
 ### Phase A — 可观测性与可复现（先把“能用”变成“可长期用”）
 
-- A1：Tool Trace（每次 tool call 落盘 md/json；可选开启；带耗时/截断/错误摘要）
+- A1：Tool Trace（每次 tool call 落盘 md/json；可选开启；带耗时/截断/错误摘要）✅（done: 2026-03-01；落点：`pkg/tools/toolcall_executor.go` + `pkg/tools/tool_trace.go`）
 - A2：Run/Session 导出（最少：导出当前 session + tool traces；便于 bug report）
 - A3：统一错误提示模板（让模型更会自救：换参数/换工具/先读后写）
 
 ### Phase B — 结构化记忆（先输出稳定，再做更强检索）
 
-- B1：`memory_search` / `memory_get` 输出升级为 JSON hits（同时保留 ForUser 摘要）
+- B1：`memory_search` / `memory_get` 输出升级为 JSON hits（同时保留 ForUser 摘要）✅（done: 2026-03-01；落点：`pkg/agent/memory_tool.go`）
 - B2：Memory blocks（persona/human/projects/facts）+ 只读约束 + 长度上限
 - B3：Scope 化（user/session/agent）避免跨渠道污染
 
@@ -1220,6 +1220,6 @@ poco-agent 的价值不在“又一个 agent”，而在于它把 **Agent 运行
 
 #### (4) 最小 PR 切法（优先 pico-scale 可落地）
 
-- PR-1（cron 可运营化）：为 cron job 增加 `timezone/next_run_at/run_history/coalesce`（先写 store schema + list 输出）
+- PR-1（cron 可运营化）：为 cron job 增加 `timezone/next_run_at/run_history/coalesce`（先写 store schema + list 输出）✅（done: 2026-03-01；落点：`pkg/cron/service.go` + `pkg/tools/cron.go`）
 - PR-2（Plan Mode 最小实现）：在 agent loop 中加“计划阶段工具白名单 + 用户确认开关”（先只管 `exec`/`edit`）
 - PR-3（通知工作流）：把“任务完成提醒”做成可选 hook（配置 `notify.on_task_complete=true` + 使用 `message` tool）

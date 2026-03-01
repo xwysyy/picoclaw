@@ -271,13 +271,49 @@ func (t *CronTool) listJobs() *ToolResult {
 		if j.Schedule.Kind == "every" && j.Schedule.EveryMS != nil {
 			scheduleInfo = fmt.Sprintf("every %ds", *j.Schedule.EveryMS/1000)
 		} else if j.Schedule.Kind == "cron" {
-			scheduleInfo = j.Schedule.Expr
+			tz := strings.TrimSpace(j.Schedule.TZ)
+			if tz == "" {
+				tz = "local"
+			}
+			scheduleInfo = fmt.Sprintf("%s (tz=%s)", j.Schedule.Expr, tz)
 		} else if j.Schedule.Kind == "at" {
 			scheduleInfo = "one-time"
 		} else {
 			scheduleInfo = "unknown"
 		}
-		result.WriteString(fmt.Sprintf("- %s (id: %s, %s)\n", j.Name, j.ID, scheduleInfo))
+
+		status := "enabled"
+		if !j.Enabled {
+			status = "disabled"
+		}
+		if j.State.Running {
+			status += ", running"
+		}
+
+		nextRun := "n/a"
+		if j.State.NextRunAtMS != nil {
+			nextRun = time.UnixMilli(*j.State.NextRunAtMS).Format("2006-01-02 15:04:05")
+		}
+		lastRun := "never"
+		if j.State.LastRunAtMS != nil {
+			lastRun = time.UnixMilli(*j.State.LastRunAtMS).Format("2006-01-02 15:04:05")
+		}
+
+		result.WriteString(fmt.Sprintf("- %s (id: %s)\n", j.Name, j.ID))
+		result.WriteString(fmt.Sprintf("  schedule: %s\n", scheduleInfo))
+		result.WriteString(fmt.Sprintf("  status: %s\n", status))
+		result.WriteString(fmt.Sprintf("  next_run_at: %s\n", nextRun))
+		result.WriteString(fmt.Sprintf("  last_run_at: %s\n", lastRun))
+
+		if j.State.LastStatus != "" {
+			result.WriteString(fmt.Sprintf("  last_status: %s\n", j.State.LastStatus))
+		}
+		if j.State.LastDurationMS != nil {
+			result.WriteString(fmt.Sprintf("  last_duration_ms: %d\n", *j.State.LastDurationMS))
+		}
+		if strings.TrimSpace(j.State.LastError) != "" {
+			result.WriteString(fmt.Sprintf("  last_error: %s\n", strings.TrimSpace(j.State.LastError)))
+		}
 	}
 
 	return SilentResult(result.String())
@@ -378,9 +414,9 @@ func (t *CronTool) ExecuteJob(ctx context.Context, job *cron.CronJob) (string, e
 			return "", err
 		}
 		if result.IsError {
-			return "", fmt.Errorf("cron command failed: %s", strings.TrimSpace(result.ForLLM))
+			return output, fmt.Errorf("cron command failed: %s", strings.TrimSpace(result.ForLLM))
 		}
-		return "ok", nil
+		return output, nil
 	}
 
 	// If deliver=true, send message directly without agent processing
@@ -394,7 +430,7 @@ func (t *CronTool) ExecuteJob(ctx context.Context, job *cron.CronJob) (string, e
 		}); err != nil {
 			return "", err
 		}
-		return "ok", nil
+		return job.Payload.Message, nil
 	}
 
 	// For deliver=false, process through agent (for complex tasks)
@@ -436,5 +472,8 @@ func (t *CronTool) ExecuteJob(ctx context.Context, job *cron.CronJob) (string, e
 		}
 	}
 
-	return "ok", nil
+	if strings.TrimSpace(response) == "" {
+		return "ok", nil
+	}
+	return response, nil
 }

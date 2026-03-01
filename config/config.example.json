@@ -253,6 +253,13 @@
       },
       "proxy": ""
     },
+    "trace": {
+      "enabled": false,
+      "dir": "",
+      "write_per_call_files": true,
+      "max_arg_preview_chars": 200,
+      "max_result_preview_chars": 400
+    },
     "cron": {
       "exec_timeout_minutes": 5
     },

@@ -38,6 +38,25 @@ type CronJobState struct {
 	LastRunAtMS *int64 `json:"lastRunAtMs,omitempty"`
 	LastStatus  string `json:"lastStatus,omitempty"`
 	LastError   string `json:"lastError,omitempty"`
+
+	// Running indicates a job is currently executing (best-effort; cleared on restart).
+	Running        bool   `json:"running,omitempty"`
+	RunningSinceMS *int64 `json:"runningSinceMs,omitempty"`
+	RunningRunID   string `json:"runningRunId,omitempty"`
+
+	LastDurationMS    *int64          `json:"lastDurationMs,omitempty"`
+	LastOutputPreview string          `json:"lastOutputPreview,omitempty"`
+	RunHistory        []CronRunRecord `json:"runHistory,omitempty"`
+}
+
+type CronRunRecord struct {
+	RunID        string `json:"runId"`
+	StartedAtMS  int64  `json:"startedAtMs"`
+	FinishedAtMS int64  `json:"finishedAtMs"`
+	DurationMS   int64  `json:"durationMs"`
+	Status       string `json:"status"`
+	Error        string `json:"error,omitempty"`
+	Output       string `json:"output,omitempty"`
 }
 
 type CronJob struct {
@@ -69,6 +88,12 @@ type CronService struct {
 	gronx     *gronx.Gronx
 }
 
+const (
+	defaultRunHistoryLimit    = 20
+	defaultOutputPreviewRunes = 400
+	defaultErrorPreviewRunes  = 800
+)
+
 func NewCronService(storePath string, onJob JobHandler) *CronService {
 	cs := &CronService{
 		storePath: storePath,
@@ -91,6 +116,10 @@ func (cs *CronService) Start() error {
 	if err := cs.loadStore(); err != nil {
 		return fmt.Errorf("failed to load store: %w", err)
 	}
+
+	// Best-effort recovery: if the service restarts mid-run, clear "running" flags
+	// so jobs are operable again and an aborted run is recorded for visibility.
+	cs.clearStaleRunningStatesUnsafe(time.Now().UnixMilli())
 
 	cs.recomputeNextRuns()
 	if err := cs.saveStoreUnsafe(); err != nil {
@@ -147,7 +176,7 @@ func (cs *CronService) checkJobs() {
 	// Collect jobs that are due (we need to copy them to execute outside lock)
 	for i := range cs.store.Jobs {
 		job := &cs.store.Jobs[i]
-		if job.Enabled && job.State.NextRunAtMS != nil && *job.State.NextRunAtMS <= now {
+		if job.Enabled && !job.State.Running && job.State.NextRunAtMS != nil && *job.State.NextRunAtMS <= now {
 			dueJobIDs = append(dueJobIDs, job.ID)
 		}
 	}
@@ -176,34 +205,66 @@ func (cs *CronService) checkJobs() {
 }
 
 func (cs *CronService) executeJobByID(jobID string) {
-	startTime := time.Now().UnixMilli()
+	startedAt := time.Now()
+	startedAtMS := startedAt.UnixMilli()
+	runID := generateID()
 
-	cs.mu.RLock()
-	var callbackJob *CronJob
+	// Mark job as running and persist state before executing handler.
+	cs.mu.Lock()
+	var job *CronJob
 	for i := range cs.store.Jobs {
-		job := &cs.store.Jobs[i]
-		if job.ID == jobID {
-			jobCopy := *job
-			callbackJob = &jobCopy
+		if cs.store.Jobs[i].ID == jobID {
+			job = &cs.store.Jobs[i]
 			break
 		}
 	}
-	cs.mu.RUnlock()
-
-	if callbackJob == nil {
+	if job == nil {
+		cs.mu.Unlock()
+		return
+	}
+	if job.State.Running {
+		// Coalesce: do not queue another run for the same job.
+		cs.mu.Unlock()
 		return
 	}
 
+	job.State.Running = true
+	job.State.RunningSinceMS = &startedAtMS
+	job.State.RunningRunID = runID
+	job.UpdatedAtMS = time.Now().UnixMilli()
+
+	jobCopy := *job
+	if err := cs.saveStoreUnsafe(); err != nil {
+		log.Printf("[cron] failed to save store before run: %v", err)
+	}
+	cs.mu.Unlock()
+
+	// Execute job outside lock.
+	var output string
 	var err error
 	if cs.onJob != nil {
-		_, err = cs.onJob(callbackJob)
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					err = fmt.Errorf("cron job panic: %v", r)
+				}
+			}()
+			output, err = cs.onJob(&jobCopy)
+		}()
 	}
 
-	// Now acquire lock to update state
+	finishedAt := time.Now()
+	finishedAtMS := finishedAt.UnixMilli()
+	durationMS := finishedAtMS - startedAtMS
+	if durationMS < 0 {
+		durationMS = 0
+	}
+
+	// Update state and run history.
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
 
-	var job *CronJob
+	job = nil
 	for i := range cs.store.Jobs {
 		if cs.store.Jobs[i].ID == jobID {
 			job = &cs.store.Jobs[i]
@@ -215,18 +276,38 @@ func (cs *CronService) executeJobByID(jobID string) {
 		return
 	}
 
-	job.State.LastRunAtMS = &startTime
+	job.State.Running = false
+	job.State.RunningSinceMS = nil
+	job.State.RunningRunID = ""
+
+	job.State.LastRunAtMS = &startedAtMS
+	job.State.LastDurationMS = &durationMS
+	job.State.LastOutputPreview = truncateRunes(output, defaultOutputPreviewRunes)
 	job.UpdatedAtMS = time.Now().UnixMilli()
 
+	status := "ok"
+	errText := ""
 	if err != nil {
-		job.State.LastStatus = "error"
-		job.State.LastError = err.Error()
-	} else {
-		job.State.LastStatus = "ok"
-		job.State.LastError = ""
+		status = "error"
+		errText = truncateRunes(err.Error(), defaultErrorPreviewRunes)
+	}
+	job.State.LastStatus = status
+	job.State.LastError = errText
+
+	job.State.RunHistory = append(job.State.RunHistory, CronRunRecord{
+		RunID:        runID,
+		StartedAtMS:  startedAtMS,
+		FinishedAtMS: finishedAtMS,
+		DurationMS:   durationMS,
+		Status:       status,
+		Error:        errText,
+		Output:       job.State.LastOutputPreview,
+	})
+	if len(job.State.RunHistory) > defaultRunHistoryLimit {
+		job.State.RunHistory = job.State.RunHistory[len(job.State.RunHistory)-defaultRunHistoryLimit:]
 	}
 
-	// Compute next run time
+	// Compute next run time (coalesce missed ticks by scheduling from finish time).
 	if job.Schedule.Kind == "at" {
 		if job.DeleteAfterRun {
 			cs.removeJobUnsafe(job.ID)
@@ -235,8 +316,12 @@ func (cs *CronService) executeJobByID(jobID string) {
 			job.State.NextRunAtMS = nil
 		}
 	} else {
-		nextRun := cs.computeNextRun(&job.Schedule, time.Now().UnixMilli())
-		job.State.NextRunAtMS = nextRun
+		if job.Enabled {
+			nextRun := cs.computeNextRun(&job.Schedule, finishedAtMS)
+			job.State.NextRunAtMS = nextRun
+		} else {
+			job.State.NextRunAtMS = nil
+		}
 	}
 
 	if err := cs.saveStoreUnsafe(); err != nil {
@@ -300,6 +385,60 @@ func (cs *CronService) recomputeNextRuns() {
 		if job.Enabled {
 			job.State.NextRunAtMS = cs.computeNextRun(&job.Schedule, now)
 		}
+	}
+}
+
+func (cs *CronService) clearStaleRunningStatesUnsafe(nowMS int64) {
+	if cs.store == nil || len(cs.store.Jobs) == 0 {
+		return
+	}
+
+	for i := range cs.store.Jobs {
+		job := &cs.store.Jobs[i]
+		if !job.State.Running {
+			continue
+		}
+
+		startedAt := nowMS
+		if job.State.RunningSinceMS != nil {
+			startedAt = *job.State.RunningSinceMS
+		}
+
+		runID := strings.TrimSpace(job.State.RunningRunID)
+		if runID == "" {
+			runID = generateID()
+		}
+
+		duration := nowMS - startedAt
+		if duration < 0 {
+			duration = 0
+		}
+
+		errMsg := "aborted: service restarted while job was running"
+
+		job.State.Running = false
+		job.State.RunningSinceMS = nil
+		job.State.RunningRunID = ""
+
+		job.State.LastRunAtMS = &startedAt
+		job.State.LastStatus = "aborted"
+		job.State.LastError = errMsg
+		job.State.LastOutputPreview = ""
+		job.State.LastDurationMS = &duration
+
+		job.State.RunHistory = append(job.State.RunHistory, CronRunRecord{
+			RunID:        runID,
+			StartedAtMS:  startedAt,
+			FinishedAtMS: nowMS,
+			DurationMS:   duration,
+			Status:       "aborted",
+			Error:        errMsg,
+		})
+		if len(job.State.RunHistory) > defaultRunHistoryLimit {
+			job.State.RunHistory = job.State.RunHistory[len(job.State.RunHistory)-defaultRunHistoryLimit:]
+		}
+
+		job.UpdatedAtMS = nowMS
 	}
 }
 
@@ -526,17 +665,37 @@ func (cs *CronService) Status() map[string]any {
 	defer cs.mu.RUnlock()
 
 	var enabledCount int
+	var runningJobs int
 	for _, job := range cs.store.Jobs {
 		if job.Enabled {
 			enabledCount++
+		}
+		if job.State.Running {
+			runningJobs++
 		}
 	}
 
 	return map[string]any{
 		"enabled":      cs.running,
 		"jobs":         len(cs.store.Jobs),
+		"running_jobs": runningJobs,
 		"nextWakeAtMS": cs.getNextWakeMS(),
 	}
+}
+
+func truncateRunes(s string, maxLen int) string {
+	s = strings.TrimSpace(s)
+	if maxLen <= 0 {
+		return ""
+	}
+	runes := []rune(s)
+	if len(runes) <= maxLen {
+		return s
+	}
+	if maxLen <= 3 {
+		return string(runes[:maxLen])
+	}
+	return string(runes[:maxLen-3]) + "..."
 }
 
 func generateID() string {

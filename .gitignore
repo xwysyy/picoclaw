@@ -10,7 +10,9 @@ build/
 *.out
 /picoclaw
 /picoclaw-test
-/ref
+/ref/*
+!/ref/go.mod
+!/ref/go.sum
 .cache
 
 # Picoclaw specific

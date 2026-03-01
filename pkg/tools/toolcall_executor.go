@@ -31,10 +31,20 @@ type ToolCallExecutionOptions struct {
 	ChatID   string
 	SenderID string
 
+	// Workspace is the agent workspace path used for optional on-disk tool tracing.
+	// When empty, tracing falls back to Trace.Dir (if set) or is disabled.
+	Workspace string
+	// SessionKey is a stable identifier for grouping tool traces on disk.
+	// In agent mode this is typically the session key; when empty we fallback
+	// to channel/chatID.
+	SessionKey string
+
 	Iteration int
 	LogScope  string
 
 	Parallel ToolCallParallelConfig
+
+	Trace ToolTraceOptions
 
 	// AsyncCallbackForCall creates a callback for async-capable tools.
 	// It may be nil when async callbacks are not needed.
@@ -65,6 +75,8 @@ func ExecuteToolCalls(
 	if scope == "" {
 		scope = "tool"
 	}
+
+	traceWriter := newToolTraceWriter(opts, scope)
 
 	results := make([]ToolCallExecution, len(toolCalls))
 	parallelCount := 0
@@ -113,6 +125,10 @@ func ExecuteToolCalls(
 		}
 
 		start := time.Now()
+		if traceWriter != nil {
+			traceWriter.RecordStart(start, opts.Iteration, tc, argsJSON)
+		}
+
 		var toolResult *ToolResult
 		if registry != nil {
 			toolResult = registry.ExecuteWithContext(
@@ -133,10 +149,15 @@ func ExecuteToolCalls(
 				WithError(fmt.Errorf("tool %q returned nil result", tc.Name))
 		}
 
+		duration := time.Since(start)
+		if traceWriter != nil {
+			traceWriter.RecordEnd(start.Add(duration), opts.Iteration, tc, argsJSON, toolResult, duration)
+		}
+
 		results[idx] = ToolCallExecution{
 			ToolCall:   tc,
 			Result:     toolResult,
-			DurationMS: time.Since(start).Milliseconds(),
+			DurationMS: duration.Milliseconds(),
 		}
 	}
 

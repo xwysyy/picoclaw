@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -43,8 +44,28 @@ func TestMemorySearchTool_Execute(t *testing.T) {
 	if !result.Silent {
 		t.Fatalf("expected memory_search to be silent")
 	}
-	if !strings.Contains(strings.ToLower(result.ForLLM), "neovim") {
-		t.Fatalf("expected tool output to include retrieved memory, got: %s", result.ForLLM)
+
+	var parsed struct {
+		Kind string `json:"kind"`
+		Hits []struct {
+			ID         string  `json:"id"`
+			Score      float64 `json:"score"`
+			Snippet    string  `json:"snippet"`
+			Source     string  `json:"source"`
+			SourcePath string  `json:"source_path"`
+		} `json:"hits"`
+	}
+	if err := json.Unmarshal([]byte(result.ForLLM), &parsed); err != nil {
+		t.Fatalf("expected JSON tool output, got unmarshal error: %v\nraw=%s", err, result.ForLLM)
+	}
+	if parsed.Kind != "memory_search_result" {
+		t.Fatalf("kind = %q, want %q", parsed.Kind, "memory_search_result")
+	}
+	if len(parsed.Hits) == 0 {
+		t.Fatalf("expected at least 1 hit, got 0")
+	}
+	if !strings.Contains(strings.ToLower(parsed.Hits[0].Snippet), "neovim") {
+		t.Fatalf("expected first hit snippet to include neovim, got: %s", parsed.Hits[0].Snippet)
 	}
 }
 
@@ -87,7 +108,29 @@ func TestMemoryGetTool_Execute(t *testing.T) {
 	if getResult.IsError {
 		t.Fatalf("memory_get failed: %s", getResult.ForLLM)
 	}
-	if !strings.Contains(strings.ToLower(getResult.ForLLM), "neovim") {
-		t.Fatalf("expected memory_get output to include neovim, got: %s", getResult.ForLLM)
+
+	var parsed struct {
+		Kind  string `json:"kind"`
+		Found bool   `json:"found"`
+		Hit   struct {
+			ID      string `json:"id"`
+			Source  string `json:"source"`
+			Content string `json:"content"`
+		} `json:"hit"`
+	}
+	if err := json.Unmarshal([]byte(getResult.ForLLM), &parsed); err != nil {
+		t.Fatalf("expected JSON tool output, got unmarshal error: %v\nraw=%s", err, getResult.ForLLM)
+	}
+	if parsed.Kind != "memory_get_result" {
+		t.Fatalf("kind = %q, want %q", parsed.Kind, "memory_get_result")
+	}
+	if !parsed.Found {
+		t.Fatalf("expected found=true")
+	}
+	if parsed.Hit.Source != "MEMORY.md#Long-term Facts" {
+		t.Fatalf("unexpected hit source: %q", parsed.Hit.Source)
+	}
+	if !strings.Contains(strings.ToLower(parsed.Hit.Content), "neovim") {
+		t.Fatalf("expected memory_get content to include neovim, got: %s", parsed.Hit.Content)
 	}
 }

@@ -2,10 +2,12 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 
 	"github.com/sipeed/picoclaw/pkg/tools"
+	"github.com/sipeed/picoclaw/pkg/utils"
 )
 
 // MemorySearchTool performs semantic lookup over persisted memory files.
@@ -34,7 +36,7 @@ func (t *MemorySearchTool) Name() string {
 }
 
 func (t *MemorySearchTool) Description() string {
-	return "Semantically search MEMORY.md and recent daily notes for relevant facts"
+	return "Semantically search MEMORY.md and recent daily notes for relevant facts. Returns structured JSON hits for stable LLM consumption."
 }
 
 func (t *MemorySearchTool) Parameters() map[string]any {
@@ -99,17 +101,69 @@ func (t *MemorySearchTool) Execute(ctx context.Context, args map[string]any) *to
 	if err != nil {
 		return tools.ErrorResult(fmt.Sprintf("memory search failed: %v", err)).WithError(err)
 	}
-	if len(hits) == 0 {
-		return tools.SilentResult("No relevant memory hits found.")
+
+	type memoryHit struct {
+		ID         string   `json:"id"`
+		Score      float64  `json:"score"`
+		Snippet    string   `json:"snippet"`
+		Source     string   `json:"source"`
+		SourcePath string   `json:"source_path"`
+		Tags       []string `json:"tags"`
+	}
+	type memorySearchResult struct {
+		Kind     string      `json:"kind"`
+		Query    string      `json:"query"`
+		TopK     int         `json:"top_k"`
+		MinScore float64     `json:"min_score"`
+		Hits     []memoryHit `json:"hits"`
 	}
 
-	var sb strings.Builder
-	sb.WriteString("Memory search hits:\n")
+	result := memorySearchResult{
+		Kind:     "memory_search_result",
+		Query:    query,
+		TopK:     topK,
+		MinScore: minScore,
+		Hits:     make([]memoryHit, 0, len(hits)),
+	}
+
 	for _, hit := range hits {
-		sb.WriteString(fmt.Sprintf("- (score=%.2f, source=%s) %s\n", hit.Score, hit.Source, hit.Text))
+		sourcePath := hit.Source
+		if before, _, ok := strings.Cut(hit.Source, "#"); ok && strings.TrimSpace(before) != "" {
+			sourcePath = before
+		}
+		result.Hits = append(result.Hits, memoryHit{
+			ID:         hit.Source,
+			Score:      hit.Score,
+			Snippet:    utils.Truncate(hit.Text, 240),
+			Source:     hit.Source,
+			SourcePath: sourcePath,
+			Tags:       []string{},
+		})
 	}
 
-	return tools.SilentResult(strings.TrimSpace(sb.String()))
+	payload, err := json.Marshal(result)
+	if err != nil {
+		return tools.ErrorResult(fmt.Sprintf("memory search failed: %v", err)).WithError(err)
+	}
+
+	// Keep a human-readable summary (for traces / debugging) while returning JSON to the LLM.
+	var summary strings.Builder
+	if len(hits) == 0 {
+		summary.WriteString("No relevant memory hits found.")
+	} else {
+		summary.WriteString("Memory search hits:\n")
+		for _, hit := range hits {
+			summary.WriteString(fmt.Sprintf("- (score=%.2f, source=%s) %s\n", hit.Score, hit.Source, hit.Text))
+		}
+	}
+
+	return &tools.ToolResult{
+		ForLLM:  string(payload),
+		ForUser: strings.TrimSpace(summary.String()),
+		Silent:  true,
+		IsError: false,
+		Async:   false,
+	}
 }
 
 // MemoryGetTool returns a specific memory item by its source citation.
@@ -126,7 +180,7 @@ func (t *MemoryGetTool) Name() string {
 }
 
 func (t *MemoryGetTool) Description() string {
-	return "Retrieve one memory entry by source citation returned from memory_search"
+	return "Retrieve one memory entry by source citation returned from memory_search. Returns structured JSON for stable LLM consumption."
 }
 
 func (t *MemoryGetTool) Parameters() map[string]any {
@@ -158,13 +212,51 @@ func (t *MemoryGetTool) Execute(ctx context.Context, args map[string]any) *tools
 	if err != nil {
 		return tools.ErrorResult(fmt.Sprintf("memory get failed: %v", err)).WithError(err)
 	}
-	if !found {
-		return tools.SilentResult("Memory source not found.")
+
+	type memoryGetResult struct {
+		Kind  string `json:"kind"`
+		Found bool   `json:"found"`
+		Hit   struct {
+			ID         string   `json:"id,omitempty"`
+			Source     string   `json:"source,omitempty"`
+			SourcePath string   `json:"source_path,omitempty"`
+			Content    string   `json:"content,omitempty"`
+			Tags       []string `json:"tags,omitempty"`
+		} `json:"hit"`
 	}
 
-	return tools.SilentResult(fmt.Sprintf(
-		"Memory entry:\n- source=%s\n- content=%s",
-		hit.Source,
-		hit.Text,
-	))
+	result := memoryGetResult{
+		Kind:  "memory_get_result",
+		Found: found,
+	}
+	if found {
+		sourcePath := hit.Source
+		if before, _, ok := strings.Cut(hit.Source, "#"); ok && strings.TrimSpace(before) != "" {
+			sourcePath = before
+		}
+
+		result.Hit.ID = hit.Source
+		result.Hit.Source = hit.Source
+		result.Hit.SourcePath = sourcePath
+		result.Hit.Content = hit.Text
+		result.Hit.Tags = []string{}
+	}
+
+	payload, err := json.Marshal(result)
+	if err != nil {
+		return tools.ErrorResult(fmt.Sprintf("memory get failed: %v", err)).WithError(err)
+	}
+
+	userSummary := "Memory source not found."
+	if found {
+		userSummary = fmt.Sprintf("Memory entry:\n- source=%s\n- content=%s", hit.Source, hit.Text)
+	}
+
+	return &tools.ToolResult{
+		ForLLM:  string(payload),
+		ForUser: userSummary,
+		Silent:  true,
+		IsError: false,
+		Async:   false,
+	}
 }

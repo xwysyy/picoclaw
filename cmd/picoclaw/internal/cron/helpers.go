@@ -23,7 +23,11 @@ func cronListCmd(storePath string) {
 		if job.Schedule.Kind == "every" && job.Schedule.EveryMS != nil {
 			schedule = fmt.Sprintf("every %ds", *job.Schedule.EveryMS/1000)
 		} else if job.Schedule.Kind == "cron" {
-			schedule = job.Schedule.Expr
+			tz := job.Schedule.TZ
+			if tz == "" {
+				tz = "local"
+			}
+			schedule = fmt.Sprintf("%s (tz=%s)", job.Schedule.Expr, tz)
 		} else {
 			schedule = "one-time"
 		}
@@ -31,18 +35,36 @@ func cronListCmd(storePath string) {
 		nextRun := "scheduled"
 		if job.State.NextRunAtMS != nil {
 			nextTime := time.UnixMilli(*job.State.NextRunAtMS)
-			nextRun = nextTime.Format("2006-01-02 15:04")
+			nextRun = nextTime.Format("2006-01-02 15:04:05")
 		}
 
 		status := "enabled"
 		if !job.Enabled {
 			status = "disabled"
 		}
+		if job.State.Running {
+			status += ", running"
+		}
+
+		lastRun := "never"
+		if job.State.LastRunAtMS != nil {
+			lastRun = time.UnixMilli(*job.State.LastRunAtMS).Format("2006-01-02 15:04:05")
+		}
 
 		fmt.Printf("  %s (%s)\n", job.Name, job.ID)
 		fmt.Printf("    Schedule: %s\n", schedule)
 		fmt.Printf("    Status: %s\n", status)
 		fmt.Printf("    Next run: %s\n", nextRun)
+		fmt.Printf("    Last run: %s\n", lastRun)
+		if job.State.LastStatus != "" {
+			fmt.Printf("    Last status: %s\n", job.State.LastStatus)
+		}
+		if job.State.LastDurationMS != nil {
+			fmt.Printf("    Last duration: %dms\n", *job.State.LastDurationMS)
+		}
+		if job.State.LastError != "" {
+			fmt.Printf("    Last error: %s\n", job.State.LastError)
+		}
 	}
 }
 

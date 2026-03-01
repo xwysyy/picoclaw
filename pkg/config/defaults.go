@@ -342,6 +342,13 @@ func DefaultConfig() *Config {
 					MaxResults:   5,
 				},
 			},
+			Trace: ToolTraceConfig{
+				Enabled:               false,
+				Dir:                   "",
+				WritePerCallFiles:     true,
+				MaxArgPreviewChars:    200,
+				MaxResultPreviewChars: 400,
+			},
 			Cron: CronToolsConfig{
 				ExecTimeoutMinutes: 5,
 			},
