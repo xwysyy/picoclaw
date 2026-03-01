@@ -1633,6 +1633,12 @@ func (al *AgentLoop) estimateTokens(messages []providers.Message) int {
 	return estimateTotalTokens("", messages)
 }
 
+// estimateMessageTokens estimates the number of tokens in a single message.
+// Kept as a thin wrapper for compaction helpers that operate message-by-message.
+func (al *AgentLoop) estimateMessageTokens(message providers.Message) int {
+	return estimateTotalTokens("", []providers.Message{message})
+}
+
 func (al *AgentLoop) handleCommand(ctx context.Context, msg bus.InboundMessage) (string, bool) {
 	content := strings.TrimSpace(msg.Content)
 	if !strings.HasPrefix(content, "/") {
