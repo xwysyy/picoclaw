@@ -29,6 +29,7 @@ import (
 	"github.com/sipeed/picoclaw/pkg/cron"
 	"github.com/sipeed/picoclaw/pkg/health"
 	"github.com/sipeed/picoclaw/pkg/heartbeat"
+	"github.com/sipeed/picoclaw/pkg/httpapi"
 	"github.com/sipeed/picoclaw/pkg/logger"
 	"github.com/sipeed/picoclaw/pkg/media"
 	"github.com/sipeed/picoclaw/pkg/providers"
@@ -143,6 +144,7 @@ func runGateway(svc *gatewayServices) error {
 
 	addr := fmt.Sprintf("%s:%d", svc.cfg.Gateway.Host, svc.cfg.Gateway.Port)
 	svc.channelManager.SetupHTTPServer(addr, svc.healthServer)
+	registerGatewayHTTPAPI(svc)
 
 	if err := svc.channelManager.StartAll(ctx); err != nil {
 		fmt.Printf("Error starting channels: %v\n", err)
@@ -158,6 +160,27 @@ func runGateway(svc *gatewayServices) error {
 	<-sigChan
 
 	return shutdownGateway(svc, cancel)
+}
+
+func registerGatewayHTTPAPI(svc *gatewayServices) {
+	if svc == nil || svc.channelManager == nil {
+		return
+	}
+
+	notify := httpapi.NewNotifyHandler(httpapi.NotifyHandlerOptions{
+		Sender: svc.channelManager,
+		APIKey: svc.cfg.Gateway.APIKey,
+		LastActive: func() (string, string) {
+			if svc.agentLoop == nil {
+				return "", ""
+			}
+			return svc.agentLoop.LastActive()
+		},
+	})
+
+	if err := svc.channelManager.RegisterHTTPHandler("/api/notify", notify); err != nil {
+		fmt.Printf("⚠ Warning: failed to register /api/notify: %v\n", err)
+	}
 }
 
 // shutdownGateway performs graceful shutdown of all services.
@@ -234,8 +257,7 @@ func setupCronTool(
 	agentLoop.RegisterTool(cronTool)
 
 	cronService.SetOnJob(func(job *cron.CronJob) (string, error) {
-		result := cronTool.ExecuteJob(context.Background(), job)
-		return result, nil
+		return cronTool.ExecuteJob(context.Background(), job)
 	})
 
 	return cronService

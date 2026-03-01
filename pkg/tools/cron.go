@@ -9,6 +9,7 @@ import (
 
 	"github.com/sipeed/picoclaw/pkg/bus"
 	"github.com/sipeed/picoclaw/pkg/config"
+	"github.com/sipeed/picoclaw/pkg/constants"
 	"github.com/sipeed/picoclaw/pkg/cron"
 	"github.com/sipeed/picoclaw/pkg/utils"
 )
@@ -16,6 +17,10 @@ import (
 // JobExecutor is the interface for executing cron jobs through the agent
 type JobExecutor interface {
 	ProcessDirectWithChannel(ctx context.Context, content, sessionKey, channel, chatID string) (string, error)
+}
+
+type lastActiveProvider interface {
+	LastActive() (channel string, chatID string)
 }
 
 // CronTool provides scheduling capabilities for the agent
@@ -309,17 +314,44 @@ func (t *CronTool) enableJob(args map[string]any, enable bool) *ToolResult {
 }
 
 // ExecuteJob executes a cron job through the agent
-func (t *CronTool) ExecuteJob(ctx context.Context, job *cron.CronJob) string {
-	// Get channel/chatID from job payload
-	channel := job.Payload.Channel
-	chatID := job.Payload.To
-
-	// Default values if not set
-	if channel == "" {
-		channel = "cli"
+func (t *CronTool) ExecuteJob(ctx context.Context, job *cron.CronJob) (string, error) {
+	if job == nil {
+		return "", fmt.Errorf("job is nil")
 	}
-	if chatID == "" {
-		chatID = "direct"
+
+	// Get channel/chatID from job payload
+	channel := strings.TrimSpace(job.Payload.Channel)
+	chatID := strings.TrimSpace(job.Payload.To)
+
+	// Prefer last_active when destination is missing (or internal).
+	if (channel == "" || chatID == "" || constants.IsInternalChannel(channel)) && t.executor != nil {
+		if lap, ok := t.executor.(lastActiveProvider); ok {
+			lastCh, lastID := lap.LastActive()
+			lastCh = strings.TrimSpace(lastCh)
+			lastID = strings.TrimSpace(lastID)
+			if lastCh != "" && lastID != "" && !constants.IsInternalChannel(lastCh) {
+				switch {
+				case channel == "" && chatID == "":
+					channel, chatID = lastCh, lastID
+				case channel != "" && chatID == "" && strings.EqualFold(channel, lastCh):
+					chatID = lastID
+				case channel == "" && chatID != "" && chatID == lastID:
+					channel = lastCh
+				}
+			}
+		}
+	}
+
+	if channel == "" || chatID == "" {
+		// Backward-compatible fallback (CLI), but treat as an error in gateway mode so job state shows it.
+		// Note: internal channels are not delivered to users.
+		if channel == "" {
+			channel = "cli"
+		}
+		if chatID == "" {
+			chatID = "direct"
+		}
+		return "", fmt.Errorf("no delivery destination for cron job %q (channel/to missing and last_active unavailable)", job.ID)
 	}
 
 	// Execute command if present
@@ -331,34 +363,44 @@ func (t *CronTool) ExecuteJob(ctx context.Context, job *cron.CronJob) string {
 		result := t.execTool.Execute(ctx, args)
 		var output string
 		if result.IsError {
-			output = fmt.Sprintf("Error executing scheduled command: %s", result.ForLLM)
+			output = fmt.Sprintf("Cron job '%s' failed executing command:\n%s", job.Name, result.ForLLM)
 		} else {
-			output = fmt.Sprintf("Scheduled command '%s' executed:\n%s", job.Payload.Command, result.ForLLM)
+			output = fmt.Sprintf("Cron job '%s' executed command:\n%s", job.Name, result.ForLLM)
 		}
 
 		pubCtx, pubCancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer pubCancel()
-		t.msgBus.PublishOutbound(pubCtx, bus.OutboundMessage{
+		if err := t.msgBus.PublishOutbound(pubCtx, bus.OutboundMessage{
 			Channel: channel,
 			ChatID:  chatID,
 			Content: output,
-		})
-		return "ok"
+		}); err != nil {
+			return "", err
+		}
+		if result.IsError {
+			return "", fmt.Errorf("cron command failed: %s", strings.TrimSpace(result.ForLLM))
+		}
+		return "ok", nil
 	}
 
 	// If deliver=true, send message directly without agent processing
 	if job.Payload.Deliver {
 		pubCtx, pubCancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer pubCancel()
-		t.msgBus.PublishOutbound(pubCtx, bus.OutboundMessage{
+		if err := t.msgBus.PublishOutbound(pubCtx, bus.OutboundMessage{
 			Channel: channel,
 			ChatID:  chatID,
 			Content: job.Payload.Message,
-		})
-		return "ok"
+		}); err != nil {
+			return "", err
+		}
+		return "ok", nil
 	}
 
 	// For deliver=false, process through agent (for complex tasks)
+	if t.executor == nil {
+		return "", fmt.Errorf("cron executor is not configured")
+	}
 	sessionKey := fmt.Sprintf("cron-%s", job.ID)
 
 	// Call agent with job's message
@@ -370,10 +412,29 @@ func (t *CronTool) ExecuteJob(ctx context.Context, job *cron.CronJob) string {
 		chatID,
 	)
 	if err != nil {
-		return fmt.Sprintf("Error: %v", err)
+		pubCtx, pubCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer pubCancel()
+		_ = t.msgBus.PublishOutbound(pubCtx, bus.OutboundMessage{
+			Channel: channel,
+			ChatID:  chatID,
+			Content: fmt.Sprintf("Cron job '%s' failed: %v", job.Name, err),
+		})
+		return "", err
 	}
 
-	// Response is automatically sent via MessageBus by AgentLoop
-	_ = response // Will be sent by AgentLoop
-	return "ok"
+	// In gateway mode, ProcessDirectWithChannel returns the response but does NOT publish it.
+	// Publish here so scheduled tasks can proactively notify the user (e.g. Feishu).
+	if strings.TrimSpace(response) != "" {
+		pubCtx, pubCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer pubCancel()
+		if err := t.msgBus.PublishOutbound(pubCtx, bus.OutboundMessage{
+			Channel: channel,
+			ChatID:  chatID,
+			Content: fmt.Sprintf("Cron job '%s' completed.\n\n%s", job.Name, response),
+		}); err != nil {
+			return "", err
+		}
+	}
+
+	return "ok", nil
 }

@@ -310,6 +310,21 @@ func (m *Manager) SetupHTTPServer(addr string, healthServer *health.Server) {
 	}
 }
 
+// RegisterHTTPHandler registers an extra HTTP handler on the shared gateway server.
+// SetupHTTPServer must be called before using this.
+func (m *Manager) RegisterHTTPHandler(pattern string, handler http.Handler) (err error) {
+	if m.mux == nil {
+		return fmt.Errorf("http server not initialized: call SetupHTTPServer first")
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("register http handler %q: %v", pattern, r)
+		}
+	}()
+	m.mux.Handle(pattern, handler)
+	return nil
+}
+
 func (m *Manager) StartAll(ctx context.Context) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()

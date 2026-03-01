@@ -556,8 +556,9 @@ func (c *ModelConfig) Validate() error {
 }
 
 type GatewayConfig struct {
-	Host string `json:"host" env:"PICOCLAW_GATEWAY_HOST"`
-	Port int    `json:"port" env:"PICOCLAW_GATEWAY_PORT"`
+	Host   string `json:"host"    env:"PICOCLAW_GATEWAY_HOST"`
+	Port   int    `json:"port"    env:"PICOCLAW_GATEWAY_PORT"`
+	APIKey string `json:"api_key,omitempty" env:"PICOCLAW_GATEWAY_API_KEY"`
 }
 
 type BraveConfig struct {

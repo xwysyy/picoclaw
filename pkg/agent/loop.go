@@ -473,6 +473,30 @@ func (al *AgentLoop) RecordLastChatID(chatID string) error {
 	return al.state.SetLastChatID(chatID)
 }
 
+// LastActive returns the most recently used channel and chat ID for this workspace.
+// It is backed by the persisted state file (state/state.json), but uses the in-memory
+// state manager instance so it stays up-to-date during a running gateway process.
+func (al *AgentLoop) LastActive() (string, string) {
+	if al == nil || al.state == nil {
+		return "", ""
+	}
+	key := strings.TrimSpace(al.state.GetLastChannel())
+	if key == "" {
+		return "", ""
+	}
+
+	parts := strings.SplitN(key, ":", 2)
+	if len(parts) != 2 {
+		return "", ""
+	}
+	channel := strings.TrimSpace(parts[0])
+	chatID := strings.TrimSpace(parts[1])
+	if channel == "" || chatID == "" {
+		return "", ""
+	}
+	return channel, chatID
+}
+
 func (al *AgentLoop) ProcessDirect(ctx context.Context, content, sessionKey string) (string, error) {
 	return al.ProcessDirectWithChannel(ctx, content, sessionKey, "cli", "direct")
 }
