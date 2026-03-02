@@ -606,54 +606,88 @@ func (m *Manager) sendMediaWithRetry(ctx context.Context, name string, w *channe
 	}
 }
 
-func (m *Manager) dispatchOutbound(ctx context.Context) {
-	logger.InfoC("channels", "Outbound dispatcher started")
+func dispatchLoop[M any](
+	ctx context.Context,
+	m *Manager,
+	subscribe func(context.Context) (M, bool),
+	getChannel func(M) string,
+	enqueue func(context.Context, *channelWorker, M) bool,
+	startMsg, stopMsg, unknownMsg, noWorkerMsg string,
+) {
+	logger.InfoC("channels", startMsg)
 
 	for {
-		msg, ok := m.bus.SubscribeOutbound(ctx)
+		msg, ok := subscribe(ctx)
 		if !ok {
-			logger.InfoC("channels", "Outbound dispatcher stopped")
+			logger.InfoC("channels", stopMsg)
 			return
 		}
 
-		if constants.IsInternalChannel(msg.Channel) {
+		channel := getChannel(msg)
+
+		// Silently skip internal channels
+		if constants.IsInternalChannel(channel) {
 			continue
 		}
 
-		w := m.lookupWorker(msg.Channel, "outbound")
-		if w != nil {
-			select {
-			case w.queue <- msg:
-			case <-ctx.Done():
+		m.mu.RLock()
+		_, exists := m.channels[channel]
+		w, wExists := m.workers[channel]
+		m.mu.RUnlock()
+
+		if !exists {
+			logger.WarnCF("channels", unknownMsg, map[string]any{"channel": channel})
+			continue
+		}
+
+		if wExists && w != nil {
+			if !enqueue(ctx, w, msg) {
 				return
 			}
+		} else if exists {
+			logger.WarnCF("channels", noWorkerMsg, map[string]any{"channel": channel})
 		}
 	}
 }
 
+func (m *Manager) dispatchOutbound(ctx context.Context) {
+	dispatchLoop(
+		ctx, m,
+		m.bus.SubscribeOutbound,
+		func(msg bus.OutboundMessage) string { return msg.Channel },
+		func(ctx context.Context, w *channelWorker, msg bus.OutboundMessage) bool {
+			select {
+			case w.queue <- msg:
+				return true
+			case <-ctx.Done():
+				return false
+			}
+		},
+		"Outbound dispatcher started",
+		"Outbound dispatcher stopped",
+		"Unknown channel for outbound message",
+		"Channel has no active worker, skipping message",
+	)
+}
+
 func (m *Manager) dispatchOutboundMedia(ctx context.Context) {
-	logger.InfoC("channels", "Outbound media dispatcher started")
-
-	for {
-		msg, ok := m.bus.SubscribeOutboundMedia(ctx)
-		if !ok {
-			logger.InfoC("channels", "Outbound media dispatcher stopped")
-			return
-		}
-
-		if constants.IsInternalChannel(msg.Channel) {
-			continue
-		}
-
-		w := m.lookupWorker(msg.Channel, "outbound media")
-		if w != nil {
+	dispatchLoop(
+		ctx, m,
+		m.bus.SubscribeOutboundMedia,
+		func(msg bus.OutboundMediaMessage) string { return msg.Channel },
+		func(ctx context.Context, w *channelWorker, msg bus.OutboundMediaMessage) bool {
 			select {
 			case w.mediaQueue <- msg:
+				return true
 			case <-ctx.Done():
-				return
+				return false
 			}
-		}
-	}
+		},
+		"Outbound media dispatcher started",
+		"Outbound media dispatcher stopped",
+		"Unknown channel for outbound media message",
+		"Channel has no active worker, skipping media message",
+	)
 }
 
 // lookupWorker finds the active worker for a channel, logging warnings for unknown or inactive channels.

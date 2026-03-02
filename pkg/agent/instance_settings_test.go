@@ -7,8 +7,6 @@ import (
 )
 
 func TestResolveCompaction_Defaults(t *testing.T) {
-	t.Parallel()
-
 	got := resolveCompaction(config.AgentCompactionConfig{})
 
 	if got.Mode != "safeguard" {
@@ -34,8 +32,6 @@ func TestResolveCompaction_Defaults(t *testing.T) {
 }
 
 func TestResolveCompaction_MemoryFlushExplicitDisable(t *testing.T) {
-	t.Parallel()
-
 	got := resolveCompaction(config.AgentCompactionConfig{
 		MemoryFlush: config.AgentCompactionMemoryFlushConfig{
 			Enabled:             false,
@@ -52,8 +48,6 @@ func TestResolveCompaction_MemoryFlushExplicitDisable(t *testing.T) {
 }
 
 func TestResolveContextPruning_DefaultsAndBounds(t *testing.T) {
-	t.Parallel()
-
 	got := resolveContextPruning(config.AgentContextPruningConfig{
 		// Intentionally set out-of-range values to exercise fallback.
 		Mode:         "",
@@ -75,8 +69,6 @@ func TestResolveContextPruning_DefaultsAndBounds(t *testing.T) {
 }
 
 func TestResolveMemoryVector_Defaults(t *testing.T) {
-	t.Parallel()
-
 	got := resolveMemoryVector(config.AgentMemoryVectorConfig{})
 
 	if got.Enabled {
