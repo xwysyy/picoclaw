@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/sipeed/picoclaw/pkg/config"
 	"github.com/sipeed/picoclaw/pkg/logger"
 	"github.com/sipeed/picoclaw/pkg/providers"
 )
@@ -23,6 +24,20 @@ type ToolLoopConfig struct {
 	MaxIterations int
 	LLMOptions    map[string]any
 	SenderID      string
+
+	// Workspace/session/run metadata are used for tool trace + tool policy features.
+	Workspace  string
+	SessionKey string
+	RunID      string
+	IsResume   bool
+
+	// Policy controls centralized tool guardrails (Phase D2).
+	Policy     config.ToolPolicyConfig
+	PolicyTags map[string]string
+	// Trace controls optional on-disk tool tracing (Phase A1).
+	Trace ToolTraceOptions
+	// ErrorTemplate controls tool error wrapping (Phase A3).
+	ErrorTemplate ToolErrorTemplateOptions
 
 	ToolCallsParallelEnabled bool
 	MaxToolCallConcurrency   int
@@ -205,11 +220,19 @@ func RunToolLoop(
 		}
 
 		toolExecutions := ExecuteToolCalls(ctx, config.Tools, normalizedToolCalls, ToolCallExecutionOptions{
-			Channel:   channel,
-			ChatID:    chatID,
-			SenderID:  config.SenderID,
-			Iteration: iteration,
-			LogScope:  "toolloop",
+			Channel:       channel,
+			ChatID:        chatID,
+			SenderID:      config.SenderID,
+			Workspace:     config.Workspace,
+			SessionKey:    config.SessionKey,
+			RunID:         config.RunID,
+			IsResume:      config.IsResume,
+			Policy:        config.Policy,
+			PolicyTags:    config.PolicyTags,
+			Iteration:     iteration,
+			LogScope:      "toolloop",
+			Trace:         config.Trace,
+			ErrorTemplate: config.ErrorTemplate,
 			Parallel: ToolCallParallelConfig{
 				Enabled:             config.ToolCallsParallelEnabled,
 				MaxConcurrency:      config.MaxToolCallConcurrency,

@@ -13,6 +13,7 @@ const (
 	executionContextSenderIDKey executionContextKey = "tool_execution_sender_id"
 	executionContextSessionKey  executionContextKey = "tool_execution_session_key"
 	executionContextRunIDKey    executionContextKey = "tool_execution_run_id"
+	executionContextIsResumeKey executionContextKey = "tool_execution_is_resume"
 )
 
 func withExecutionContext(ctx context.Context, channel, chatID, senderID string) context.Context {
@@ -47,6 +48,16 @@ func withExecutionRunID(ctx context.Context, runID string) context.Context {
 	}
 	if strings.TrimSpace(runID) != "" {
 		ctx = context.WithValue(ctx, executionContextRunIDKey, strings.TrimSpace(runID))
+	}
+	return ctx
+}
+
+func withExecutionIsResume(ctx context.Context, isResume bool) context.Context {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if isResume {
+		ctx = context.WithValue(ctx, executionContextIsResumeKey, true)
 	}
 	return ctx
 }
@@ -91,6 +102,14 @@ func toolExecutionRunID(ctx context.Context) string {
 	return strings.TrimSpace(v)
 }
 
+func toolExecutionIsResume(ctx context.Context) bool {
+	if ctx == nil {
+		return false
+	}
+	v, _ := ctx.Value(executionContextIsResumeKey).(bool)
+	return v
+}
+
 // ExecutionSessionKey returns the session key associated with the current tool
 // execution, if provided by the agent loop / tool executor.
 func ExecutionSessionKey(ctx context.Context) string {
@@ -101,4 +120,10 @@ func ExecutionSessionKey(ctx context.Context) string {
 // if provided by the agent loop / tool executor (Phase E2 resume support).
 func ExecutionRunID(ctx context.Context) string {
 	return toolExecutionRunID(ctx)
+}
+
+// ExecutionIsResume reports whether the current tool execution belongs to a
+// resume_last_task flow (Phase E2), if provided by the agent loop / tool executor.
+func ExecutionIsResume(ctx context.Context) bool {
+	return toolExecutionIsResume(ctx)
 }

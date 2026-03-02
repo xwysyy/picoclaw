@@ -192,8 +192,13 @@ func (cs *CronService) checkJobs() {
 		}
 	}
 
-	if err := cs.saveStoreUnsafe(); err != nil {
-		log.Printf("[cron] failed to save store: %v", err)
+	// Only persist state when we actually changed anything (i.e. a job became due).
+	// Otherwise this loop would write the store file every second, causing needless
+	// disk churn and log spam (especially under ENOSPC).
+	if len(dueJobIDs) > 0 {
+		if err := cs.saveStoreUnsafe(); err != nil {
+			log.Printf("[cron] failed to save store: %v", err)
+		}
 	}
 
 	cs.mu.Unlock()

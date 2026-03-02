@@ -221,6 +221,21 @@ func registerSharedTools(
 			cfg.Orchestration.ParallelToolsMode,
 			cfg.Orchestration.ToolParallelOverrides,
 		)
+		subagentManager.SetToolExecutionPolicy(cfg.Tools.Policy, cfg.Tools.Policy.Audit.Tags)
+		subagentManager.SetToolExecutionTracing(
+			tools.ToolTraceOptions{
+				Enabled:               cfg.Tools.Trace.Enabled,
+				Dir:                   cfg.Tools.Trace.Dir,
+				WritePerCallFiles:     cfg.Tools.Trace.WritePerCallFiles,
+				MaxArgPreviewChars:    cfg.Tools.Trace.MaxArgPreviewChars,
+				MaxResultPreviewChars: cfg.Tools.Trace.MaxResultPreviewChars,
+			},
+			tools.ToolErrorTemplateOptions{
+				Enabled:               cfg.Tools.ErrorTemplate.Enabled,
+				IncludeSchema:         cfg.Tools.ErrorTemplate.IncludeSchema,
+				IncludeAvailableTools: true,
+			},
+		)
 		subagentManager.SetTools(agent.Tools)
 		agent.SubagentManager = subagentManager
 		currentAgentID := agentID

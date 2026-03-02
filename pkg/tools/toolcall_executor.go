@@ -160,7 +160,7 @@ func ExecuteToolCalls(
 		idempotencyKey := ""
 
 		var toolResult *ToolResult
-		execCtx := withExecutionRunID(withExecutionSessionKey(ctx, opts.SessionKey), opts.RunID)
+		execCtx := withExecutionRunID(withExecutionSessionKey(withExecutionIsResume(ctx, opts.IsResume), opts.SessionKey), opts.RunID)
 		var cancel context.CancelFunc = func() {}
 		if policy != nil && !policy.policyDisabled() {
 			execCtx, cancel, policyTimeoutMS = policy.toolTimeoutContext(execCtx)

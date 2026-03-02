@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/sipeed/picoclaw/pkg/bus"
+	"github.com/sipeed/picoclaw/pkg/config"
 	"github.com/sipeed/picoclaw/pkg/providers"
 )
 
@@ -17,6 +18,9 @@ type SubagentTask struct {
 	Task          string
 	Label         string
 	AgentID       string
+	SessionKey    string
+	RunID         string
+	IsResume      bool
 	OriginChannel string
 	OriginChatID  string
 	Status        string
@@ -78,6 +82,11 @@ type SubagentManager struct {
 	maxToolCallConcurrency   int
 	parallelToolsMode        string
 	toolPolicyOverrides      map[string]string
+
+	toolPolicy        config.ToolPolicyConfig
+	toolPolicyTags    map[string]string
+	toolTrace         ToolTraceOptions
+	toolErrorTemplate ToolErrorTemplateOptions
 }
 
 func NewSubagentManager(
@@ -166,6 +175,23 @@ func (sm *SubagentManager) SetToolCallParallelism(
 	sm.toolPolicyOverrides = clonePolicyOverrides(toolPolicyOverrides)
 }
 
+// SetToolExecutionPolicy configures the centralized tool policy for subagent tool loops.
+// This should match the main agent tool executor policy so all tool sources behave consistently.
+func (sm *SubagentManager) SetToolExecutionPolicy(policy config.ToolPolicyConfig, tags map[string]string) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	sm.toolPolicy = policy
+	sm.toolPolicyTags = copyStringMap(tags)
+}
+
+// SetToolExecutionTracing configures tool trace + error template behavior for subagent tool loops.
+func (sm *SubagentManager) SetToolExecutionTracing(trace ToolTraceOptions, errorTemplate ToolErrorTemplateOptions) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	sm.toolTrace = trace
+	sm.toolErrorTemplate = errorTemplate
+}
+
 func clonePolicyOverrides(src map[string]string) map[string]string {
 	if len(src) == 0 {
 		return nil
@@ -244,12 +270,19 @@ func (sm *SubagentManager) SpawnTask(
 	taskID := fmt.Sprintf("subagent-%d", sm.nextID)
 	sm.nextID++
 
+	sessionKey := toolExecutionSessionKey(ctx)
+	runID := toolExecutionRunID(ctx)
+	isResume := toolExecutionIsResume(ctx)
+
 	subagentTask := &SubagentTask{
 		ID:            taskID,
 		ParentTaskID:  parentTaskID,
 		Task:          task,
 		Label:         label,
 		AgentID:       agentID,
+		SessionKey:    sessionKey,
+		RunID:         runID,
+		IsResume:      isResume,
 		OriginChannel: originChannel,
 		OriginChatID:  originChatID,
 		Status:        "running",
@@ -331,6 +364,10 @@ Working directory: %s`, sm.workspace)
 	maxToolCallConcurrency := sm.maxToolCallConcurrency
 	parallelToolsMode := sm.parallelToolsMode
 	toolPolicyOverrides := clonePolicyOverrides(sm.toolPolicyOverrides)
+	policyCfg := sm.toolPolicy
+	policyTags := copyStringMap(sm.toolPolicyTags)
+	traceOpts := sm.toolTrace
+	errorTemplateOpts := sm.toolErrorTemplate
 	sm.mu.RUnlock()
 
 	execution := SubagentExecutionConfig{
@@ -387,6 +424,14 @@ Working directory: %s`, sm.workspace)
 		MaxIterations:            maxIter,
 		LLMOptions:               llmOptions,
 		SenderID:                 fmt.Sprintf("subagent:%s", task.ID),
+		Workspace:                sm.workspace,
+		SessionKey:               task.SessionKey,
+		RunID:                    task.RunID,
+		IsResume:                 task.IsResume,
+		Policy:                   policyCfg,
+		PolicyTags:               policyTags,
+		Trace:                    traceOpts,
+		ErrorTemplate:            errorTemplateOpts,
 		ToolCallsParallelEnabled: toolCallsParallelEnabled,
 		MaxToolCallConcurrency:   maxToolCallConcurrency,
 		ParallelToolsMode:        parallelToolsMode,
@@ -647,6 +692,10 @@ func (t *SubagentTool) Execute(ctx context.Context, args map[string]any) *ToolRe
 	maxToolCallConcurrency := sm.maxToolCallConcurrency
 	parallelToolsMode := sm.parallelToolsMode
 	toolPolicyOverrides := clonePolicyOverrides(sm.toolPolicyOverrides)
+	policyCfg := sm.toolPolicy
+	policyTags := copyStringMap(sm.toolPolicyTags)
+	traceOpts := sm.toolTrace
+	errorTemplateOpts := sm.toolErrorTemplate
 	execution := SubagentExecutionConfig{
 		Provider: sm.provider,
 		Model:    sm.defaultModel,
@@ -690,6 +739,15 @@ func (t *SubagentTool) Execute(ctx context.Context, args map[string]any) *ToolRe
 		Tools:                    execution.Tools,
 		MaxIterations:            maxIter,
 		LLMOptions:               llmOptions,
+		SenderID:                 fmt.Sprintf("subagent:sync:%s", toolExecutionSenderID(ctx)),
+		Workspace:                sm.workspace,
+		SessionKey:               toolExecutionSessionKey(ctx),
+		RunID:                    toolExecutionRunID(ctx),
+		IsResume:                 toolExecutionIsResume(ctx),
+		Policy:                   policyCfg,
+		PolicyTags:               policyTags,
+		Trace:                    traceOpts,
+		ErrorTemplate:            errorTemplateOpts,
 		ToolCallsParallelEnabled: toolCallsParallelEnabled,
 		MaxToolCallConcurrency:   maxToolCallConcurrency,
 		ParallelToolsMode:        parallelToolsMode,
