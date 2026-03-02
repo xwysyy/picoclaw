@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -594,27 +595,44 @@ func (t *WebSearchTool) Execute(ctx context.Context, args map[string]any) *ToolR
 }
 
 type WebFetchTool struct {
-	maxChars int
-	proxy    string
+	maxChars        int
+	proxy           string
+	client          *http.Client
+	fetchLimitBytes int64
 }
 
-func NewWebFetchTool(maxChars int) *WebFetchTool {
+func NewWebFetchTool(maxChars int, fetchLimitBytes int64) (*WebFetchTool, error) {
+	// createHTTPClient cannot fail with an empty proxy string.
+	return NewWebFetchToolWithProxy(maxChars, "", fetchLimitBytes)
+}
+
+func NewWebFetchToolWithProxy(maxChars int, proxy string, fetchLimitBytes int64) (*WebFetchTool, error) {
 	if maxChars <= 0 {
 		maxChars = 50000
 	}
-	return &WebFetchTool{
-		maxChars: maxChars,
-	}
-}
 
-func NewWebFetchToolWithProxy(maxChars int, proxy string) *WebFetchTool {
-	if maxChars <= 0 {
-		maxChars = 50000
+	client, err := createHTTPClient(proxy, 60*time.Second)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create HTTP client for web fetch: %w", err)
 	}
+
+	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		if len(via) >= 5 {
+			return fmt.Errorf("stopped after 5 redirects")
+		}
+		return nil
+	}
+
+	if fetchLimitBytes <= 0 {
+		fetchLimitBytes = 10 * 1024 * 1024 // Security Fallback
+	}
+
 	return &WebFetchTool{
-		maxChars: maxChars,
-		proxy:    proxy,
-	}
+		maxChars:        maxChars,
+		proxy:           proxy,
+		client:          client,
+		fetchLimitBytes: fetchLimitBytes,
+	}, nil
 }
 
 func (t *WebFetchTool) Name() string {
@@ -712,10 +730,17 @@ func (t *WebFetchTool) Execute(ctx context.Context, args map[string]any) *ToolRe
 	if err != nil {
 		return ErrorResult(fmt.Sprintf("request failed: %v", err))
 	}
+
+	resp.Body = http.MaxBytesReader(nil, resp.Body, t.fetchLimitBytes)
+
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			return ErrorResult(fmt.Sprintf("failed to read response: size exceeded %d bytes limit", t.fetchLimitBytes))
+		}
 		return ErrorResult(fmt.Sprintf("failed to read response: %v", err))
 	}
 
