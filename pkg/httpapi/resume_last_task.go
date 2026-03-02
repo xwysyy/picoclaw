@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -98,21 +99,49 @@ func (h *ResumeLastTaskHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 
 	resumeCtx, cancel := context.WithTimeout(r.Context(), h.timeout)
 	defer cancel()
-	candidate, response, err := h.resume(resumeCtx)
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
+
+	type resumeResult struct {
+		candidate any
+		response  string
+		err       error
+	}
+	done := make(chan resumeResult, 1)
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				done <- resumeResult{err: fmt.Errorf("resume panic: %v", r)}
+			}
+		}()
+		candidate, response, err := h.resume(resumeCtx)
+		done <- resumeResult{candidate: candidate, response: response, err: err}
+	}()
+
+	select {
+	case res := <-done:
+		if res.err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			_ = json.NewEncoder(w).Encode(resumeLastTaskResponse{
+				OK:        false,
+				Error:     res.err.Error(),
+				Candidate: res.candidate,
+			})
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode(resumeLastTaskResponse{
-			OK:        false,
-			Error:     err.Error(),
-			Candidate: candidate,
+			OK:        true,
+			Candidate: res.candidate,
+			Response:  res.response,
+		})
+		return
+
+	case <-resumeCtx.Done():
+		w.WriteHeader(http.StatusGatewayTimeout)
+		_ = json.NewEncoder(w).Encode(resumeLastTaskResponse{
+			OK:    false,
+			Error: "resume timeout",
 		})
 		return
 	}
-
-	w.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(w).Encode(resumeLastTaskResponse{
-		OK:        true,
-		Candidate: candidate,
-		Response:  response,
-	})
 }

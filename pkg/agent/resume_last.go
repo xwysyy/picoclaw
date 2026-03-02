@@ -27,6 +27,15 @@ type ResumeCandidate struct {
 	UserMessagePreview string `json:"user_message_preview,omitempty"`
 }
 
+func isInternalSessionKey(sessionKey string) bool {
+	switch strings.ToLower(strings.TrimSpace(sessionKey)) {
+	case "heartbeat":
+		return true
+	default:
+		return false
+	}
+}
+
 func findLastUnfinishedRun(workspace string) (*ResumeCandidate, error) {
 	workspace = strings.TrimSpace(workspace)
 	if workspace == "" {
@@ -60,6 +69,11 @@ func findLastUnfinishedRun(workspace string) (*ResumeCandidate, error) {
 	// Scan each session's events.jsonl.
 	for _, e := range entries {
 		if e == nil || !e.IsDir() {
+			continue
+		}
+		// Never try to resume internal system sessions (e.g. heartbeat).
+		// The resume API is designed for user-initiated runs only.
+		if strings.EqualFold(strings.TrimSpace(e.Name()), "heartbeat") {
 			continue
 		}
 		eventsPath := filepath.Join(root, e.Name(), "events.jsonl")
@@ -132,6 +146,9 @@ func findLastUnfinishedRun(workspace string) (*ResumeCandidate, error) {
 			continue
 		}
 		if st.endedNormally {
+			continue
+		}
+		if isInternalSessionKey(st.sessionKey) {
 			continue
 		}
 		// Must have enough routing info to resume safely.
