@@ -57,6 +57,10 @@ type processOptions struct {
 	EnableSummary   bool   // Whether to trigger summarization
 	SendResponse    bool   // Whether to send response via bus
 	NoHistory       bool   // If true, don't load session history (for heartbeat)
+
+	// Phase E2: resume support
+	RunID  string // optional: resume into an existing run_id
+	Resume bool   // true when invoked by resume_last_task
 }
 
 const defaultResponse = "I've completed processing but have no response to give. Increase `max_tool_iterations` in config.json."
@@ -180,6 +184,10 @@ func registerSharedTools(
 			})
 		})
 		agent.Tools.Register(messageTool)
+
+		// Tool confirmation (Phase E2): two-phase commit gate for side-effect tools.
+		confirmTTL := time.Duration(cfg.Tools.Policy.Confirm.ExpiresSeconds) * time.Second
+		agent.Tools.Register(tools.NewToolConfirmTool(agent.Workspace, confirmTTL))
 
 		// Feishu calendar tool
 		if strings.TrimSpace(cfg.Channels.Feishu.AppID) != "" &&
@@ -776,7 +784,11 @@ func (al *AgentLoop) runAgentLoop(ctx context.Context, agent *AgentInstance, opt
 	runTraceEnabled := al.cfg != nil && al.cfg.Tools.Trace.Enabled
 	runTrace := newRunTraceWriter(agent.Workspace, runTraceEnabled, opts, agent.ID, agent.Model)
 	if runTrace != nil {
-		runTrace.recordStart(opts.UserMessage, len(messages), len(agent.Tools.List()))
+		if opts.Resume {
+			runTrace.recordResume(opts.UserMessage, len(messages), len(agent.Tools.List()))
+		} else {
+			runTrace.recordStart(opts.UserMessage, len(messages), len(agent.Tools.List()))
+		}
 	}
 
 	// 4. Save user message to session
@@ -1280,12 +1292,28 @@ func (al *AgentLoop) runLLMIteration(
 			errorTemplateOpts.IncludeAvailableTools = true
 		}
 
+		runID := ""
+		if trace != nil {
+			runID = trace.RunID()
+		}
+
+		policyCfg := config.ToolPolicyConfig{}
+		policyTags := map[string]string(nil)
+		if al.cfg != nil {
+			policyCfg = al.cfg.Tools.Policy
+			policyTags = al.cfg.Tools.Policy.Audit.Tags
+		}
+
 		toolExecutions := tools.ExecuteToolCalls(ctx, agent.Tools, normalizedToolCalls, tools.ToolCallExecutionOptions{
 			Channel:       opts.Channel,
 			ChatID:        opts.ChatID,
 			SenderID:      opts.SenderID,
 			Workspace:     agent.Workspace,
 			SessionKey:    opts.SessionKey,
+			RunID:         runID,
+			IsResume:      opts.Resume,
+			Policy:        policyCfg,
+			PolicyTags:    policyTags,
 			Iteration:     iteration,
 			LogScope:      "agent",
 			Parallel:      parallelCfg,

@@ -86,12 +86,12 @@
 ### Phase D — MCP Bridge（生态接入）
 
 - D1：`tools.mcp.servers[]` 配置 + 动态工具发现/注册（命名空间隔离）✅（done: 2026-03-02；落点：`pkg/mcp/*` + `pkg/agent/loop.go` + `pkg/config/config.go`）
-- D2：MCP 工具调用统一走策略层（allow/deny、超时、脱敏、审计）
+- D2：MCP 工具调用统一走策略层（allow/deny、超时、脱敏、审计）✅（done: 2026-03-02；落点：`pkg/tools/toolcall_executor.go` + `pkg/tools/tool_policy.go` + `pkg/tools/tool_policy_store.go` + `pkg/tools/tool_confirm.go` + `pkg/tools/tool_trace.go` + `pkg/config/config.go`）
 
 ### Phase E — Durable execution（checkpoint/resume）
 
 - E1：线性 checkpoint（run 级 JSONL 事件；与 tool trace 互补）✅（done: 2026-03-02；落点：`pkg/agent/run_trace.go` + `cmd/picoclaw/internal/export/helpers.go`）
-- E2：`resume_last_task` + “副作用确认”机制（写操作两段提交 / 幂等键）
+- E2：`resume_last_task` + “副作用确认”机制（写操作两段提交 / 幂等键）✅（done: 2026-03-02；落点：`pkg/agent/resume_last.go` + `pkg/httpapi/resume_last_task.go` + `cmd/picoclaw/internal/gateway/helpers.go` + `pkg/agent/run_trace.go` + `pkg/tools/tool_policy_store.go`）
 
 ### Phase F — 多 Agent 协作（极简 handoff）
 
@@ -100,8 +100,8 @@
 
 ### Phase G — 渠道与媒体（“本地桥接”与“媒体稳”）
 
-- G1：飞书等渠道的“本地长连接桥接”模式（避免公网 Webhook）
-- G2：图片/音频/附件的端到端可靠通路（下载、大小限制、临时文件、回传）
+- G1：飞书等渠道的“本地长连接桥接”模式（避免公网 Webhook）✅（done: 2026-03-02；落点：`pkg/channels/feishu/feishu_64.go`）
+- G2：图片/音频/附件的端到端可靠通路（下载、大小限制、临时文件、回传）✅（done: 2026-03-02；落点：`pkg/channels/feishu/feishu_64.go` + `pkg/media/store.go`）
 
 ---
 

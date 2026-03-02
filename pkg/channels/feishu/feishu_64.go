@@ -5,6 +5,7 @@ package feishu
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html"
 	"io"
@@ -12,6 +13,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -92,22 +94,56 @@ func (c *FeishuChannel) Start(ctx context.Context) error {
 
 	c.mu.Lock()
 	c.cancel = cancel
-	c.wsClient = larkws.NewClient(
-		c.config.AppID,
-		c.config.AppSecret,
-		larkws.WithEventHandler(dispatcher),
-	)
-	wsClient := c.wsClient
 	c.mu.Unlock()
 
 	c.SetRunning(true)
 	logger.InfoC("feishu", "Feishu channel started (websocket mode)")
 
 	go func() {
-		if err := wsClient.Start(runCtx); err != nil {
-			logger.ErrorCF("feishu", "Feishu websocket stopped with error", map[string]any{
-				"error": err.Error(),
+		backoff := 1 * time.Second
+		for {
+			c.mu.Lock()
+			// Stop() sets cancel=nil; treat that as terminal.
+			if c.cancel == nil {
+				c.mu.Unlock()
+				return
+			}
+			wsClient := larkws.NewClient(
+				c.config.AppID,
+				c.config.AppSecret,
+				larkws.WithEventHandler(dispatcher),
+			)
+			c.wsClient = wsClient
+			c.mu.Unlock()
+
+			if err := wsClient.Start(runCtx); err != nil {
+				// larkws client should handle reconnect internally, but keep a best-effort
+				// outer restart loop to survive unexpected exits.
+				if runCtx.Err() == nil {
+					logger.ErrorCF("feishu", "Feishu websocket stopped with error", map[string]any{
+						"error": err.Error(),
+					})
+				}
+			}
+
+			if runCtx.Err() != nil {
+				return
+			}
+
+			logger.WarnCF("feishu", "Feishu websocket stopped; retrying", map[string]any{
+				"backoff_s": backoff.Seconds(),
 			})
+			select {
+			case <-runCtx.Done():
+				return
+			case <-time.After(backoff):
+			}
+			if backoff < 30*time.Second {
+				backoff *= 2
+				if backoff > 30*time.Second {
+					backoff = 30 * time.Second
+				}
+			}
 		}
 	}()
 
@@ -1147,9 +1183,40 @@ func (c *FeishuChannel) downloadMessageResource(ctx context.Context, messageID, 
 		Type(resourceType).
 		Build()
 
-	resp, err := c.client.Im.V1.MessageResource.Get(ctx, req)
-	if err != nil {
-		return "", "", "", fmt.Errorf("%w: feishu resource download: %v", channels.ErrTemporary, err)
+	// Avoid blocking websocket handler forever on stuck downloads.
+	dlCtx := ctx
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		dlCtx, cancel = context.WithTimeout(ctx, 30*time.Second)
+		defer cancel()
+	}
+
+	var resp *larkim.GetMessageResourceResp
+	var lastErr error
+	backoff := 400 * time.Millisecond
+retry:
+	for attempt := 0; attempt < 3; attempt++ {
+		resp, err = c.client.Im.V1.MessageResource.Get(dlCtx, req)
+		if err == nil {
+			lastErr = nil
+			break
+		}
+		lastErr = err
+		// Respect cancellation/deadline immediately.
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || dlCtx.Err() != nil {
+			break
+		}
+		select {
+		case <-dlCtx.Done():
+			break retry
+		case <-time.After(backoff):
+		}
+		if backoff < 2*time.Second {
+			backoff *= 2
+		}
+	}
+	if lastErr != nil {
+		return "", "", "", fmt.Errorf("%w: feishu resource download: %v", channels.ErrTemporary, lastErr)
 	}
 	if resp == nil || resp.File == nil {
 		if resp != nil && !resp.Success() {
@@ -1171,6 +1238,18 @@ func (c *FeishuChannel) downloadMessageResource(ctx context.Context, messageID, 
 		}
 	}
 
+	maxBytes := int64(25 * 1024 * 1024) // default: 25MB for files
+	if strings.EqualFold(resourceType, "image") {
+		maxBytes = 10 * 1024 * 1024 // Feishu message images: 10MB limit
+	}
+	if resp.ApiResp != nil {
+		if cl := strings.TrimSpace(resp.ApiResp.Header.Get("Content-Length")); cl != "" {
+			if n, parseErr := strconv.ParseInt(cl, 10, 64); parseErr == nil && n > 0 && maxBytes > 0 && n > maxBytes {
+				return "", "", "", fmt.Errorf("%w: feishu resource download: file too large (%d bytes > %d bytes)", channels.ErrSendFailed, n, maxBytes)
+			}
+		}
+	}
+
 	mediaDir := filepath.Join(os.TempDir(), "picoclaw_media")
 	if err := os.MkdirAll(mediaDir, 0o700); err != nil {
 		return "", "", "", fmt.Errorf("feishu resource download: create media dir: %w", err)
@@ -1183,10 +1262,25 @@ func (c *FeishuChannel) downloadMessageResource(ctx context.Context, messageID, 
 	}
 	defer f.Close()
 
-	if _, err := io.Copy(f, resp.File); err != nil {
+	if closer, ok := resp.File.(interface{ Close() error }); ok {
+		defer closer.Close()
+	}
+
+	reader := io.Reader(resp.File)
+	if maxBytes > 0 {
+		reader = io.LimitReader(resp.File, maxBytes+1)
+	}
+
+	written, err := io.Copy(f, reader)
+	if err != nil {
 		f.Close()
 		_ = os.Remove(localPath)
 		return "", "", "", fmt.Errorf("feishu resource download: write file: %w", err)
+	}
+	if maxBytes > 0 && written > maxBytes {
+		f.Close()
+		_ = os.Remove(localPath)
+		return "", "", "", fmt.Errorf("%w: feishu resource download: file too large (> %d bytes)", channels.ErrSendFailed, maxBytes)
 	}
 
 	return localPath, filename, contentType, nil

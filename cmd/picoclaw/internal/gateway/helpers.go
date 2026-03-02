@@ -181,6 +181,20 @@ func registerGatewayHTTPAPI(svc *gatewayServices) {
 	if err := svc.channelManager.RegisterHTTPHandler("/api/notify", notify); err != nil {
 		fmt.Printf("⚠ Warning: failed to register /api/notify: %v\n", err)
 	}
+
+	resume := httpapi.NewResumeLastTaskHandler(httpapi.ResumeLastTaskHandlerOptions{
+		APIKey: svc.cfg.Gateway.APIKey,
+		Resume: func(ctx context.Context) (any, string, error) {
+			if svc.agentLoop == nil {
+				return nil, "", fmt.Errorf("agent loop not available")
+			}
+			candidate, response, err := svc.agentLoop.ResumeLastTask(ctx)
+			return candidate, response, err
+		},
+	})
+	if err := svc.channelManager.RegisterHTTPHandler("/api/resume_last_task", resume); err != nil {
+		fmt.Printf("⚠ Warning: failed to register /api/resume_last_task: %v\n", err)
+	}
 }
 
 // shutdownGateway performs graceful shutdown of all services.

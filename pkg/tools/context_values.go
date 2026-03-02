@@ -12,6 +12,7 @@ const (
 	executionContextChatIDKey   executionContextKey = "tool_execution_chat_id"
 	executionContextSenderIDKey executionContextKey = "tool_execution_sender_id"
 	executionContextSessionKey  executionContextKey = "tool_execution_session_key"
+	executionContextRunIDKey    executionContextKey = "tool_execution_run_id"
 )
 
 func withExecutionContext(ctx context.Context, channel, chatID, senderID string) context.Context {
@@ -36,6 +37,16 @@ func withExecutionSessionKey(ctx context.Context, sessionKey string) context.Con
 	}
 	if strings.TrimSpace(sessionKey) != "" {
 		ctx = context.WithValue(ctx, executionContextSessionKey, strings.TrimSpace(sessionKey))
+	}
+	return ctx
+}
+
+func withExecutionRunID(ctx context.Context, runID string) context.Context {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if strings.TrimSpace(runID) != "" {
+		ctx = context.WithValue(ctx, executionContextRunIDKey, strings.TrimSpace(runID))
 	}
 	return ctx
 }
@@ -72,8 +83,22 @@ func toolExecutionSessionKey(ctx context.Context) string {
 	return strings.TrimSpace(v)
 }
 
+func toolExecutionRunID(ctx context.Context) string {
+	if ctx == nil {
+		return ""
+	}
+	v, _ := ctx.Value(executionContextRunIDKey).(string)
+	return strings.TrimSpace(v)
+}
+
 // ExecutionSessionKey returns the session key associated with the current tool
 // execution, if provided by the agent loop / tool executor.
 func ExecutionSessionKey(ctx context.Context) string {
 	return toolExecutionSessionKey(ctx)
+}
+
+// ExecutionRunID returns the run_id associated with the current tool execution,
+// if provided by the agent loop / tool executor (Phase E2 resume support).
+func ExecutionRunID(ctx context.Context) string {
+	return toolExecutionRunID(ctx)
 }

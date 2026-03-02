@@ -112,10 +112,18 @@ func (r *ToolRegistry) ExecuteWithContext(
 ) *ToolResult {
 	ctx = withExecutionContext(ctx, channel, chatID, senderID)
 
+	// Avoid logging raw args (may contain secrets). ToolTrace/Policy is the
+	// canonical place for detailed auditing.
+	argKeys := make([]string, 0, len(args))
+	for k := range args {
+		argKeys = append(argKeys, k)
+	}
+	sort.Strings(argKeys)
 	logger.InfoCF("tool", "Tool execution started",
 		map[string]any{
-			"tool": name,
-			"args": args,
+			"tool":      name,
+			"args_keys": argKeys,
+			"args_len":  len(args),
 		})
 
 	tool, ok := r.Get(name)
@@ -149,15 +157,14 @@ func (r *ToolRegistry) ExecuteWithContext(
 	if result.IsError {
 		logger.ErrorCF("tool", "Tool execution failed",
 			map[string]any{
-				"tool":     name,
-				"duration": duration.Milliseconds(),
-				"error":    result.ForLLM,
+				"tool":        name,
+				"duration_ms": duration.Milliseconds(),
 			})
 	} else if result.Async {
 		logger.InfoCF("tool", "Tool started (async)",
 			map[string]any{
-				"tool":     name,
-				"duration": duration.Milliseconds(),
+				"tool":        name,
+				"duration_ms": duration.Milliseconds(),
 			})
 	} else {
 		logger.InfoCF("tool", "Tool execution completed",

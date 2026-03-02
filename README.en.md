@@ -172,6 +172,86 @@ Config example:
 }
 ```
 
+### Run Trace (run-level checkpoint stream)
+
+Tool Trace answers “what happened in each tool call”. Run Trace answers “what happened in this whole user request/run” (LLM turns, tool batches, final output).
+
+When `tools.trace.enabled=true`, PicoClaw also appends a per-session run-level JSONL event stream (append-only), used for:
+- debugging / post-mortems
+- durable long tasks (the foundation for resume)
+- export bundles (`picoclaw export --trace`)
+
+Default location:
+
+- ` <workspace>/.picoclaw/audit/runs/<session>/events.jsonl `
+
+### Tool Policy (`tools.policy`: unified guardrails + audit)
+
+Phase D2 adds a centralized policy layer at the **tool executor chokepoint** (built-in tools and MCP tools are treated the same), covering:
+- allow/deny (exact names + prefixes)
+- unified timeouts per tool call
+- redaction (avoid secrets leaking into traces/ledgers; optionally redact LLM/User outputs)
+- side-effect confirmation (two-phase commit)
+- idempotency/replay for safe resume
+
+Example (audit redaction + timeout only):
+
+```json
+{
+  "tools": {
+    "policy": {
+      "enabled": true,
+      "timeout_ms": 60000,
+      "redact": {
+        "enabled": true,
+        "apply_to_llm": false,
+        "apply_to_user": false
+      }
+    }
+  }
+}
+```
+
+Enable “confirmation gate + idempotent replay” (recommended to confirm only on resume flows):
+
+```json
+{
+  "tools": {
+    "policy": {
+      "enabled": true,
+      "confirm": {
+        "enabled": true,
+        "mode": "resume_only",
+        "tools": ["exec", "write_file", "edit_file", "append_file"]
+      },
+      "idempotency": {
+        "enabled": true,
+        "cache_result": true,
+        "tools": ["exec", "write_file", "edit_file", "append_file"]
+      }
+    }
+  }
+}
+```
+
+Notes:
+- When blocked by policy, tools return structured JSON (`kind=tool_policy_*`). The model should ask the user, then call `tool_confirm(confirm_key)`.
+- The idempotency ledger is stored at: ` <workspace>/.picoclaw/audit/runs/<session>/runs/<run_id>/policy.jsonl `
+
+### Resume last task (`/api/resume_last_task`)
+
+Phase E2 adds a Gateway endpoint that resumes the most recent run that did **not** end normally (and continues on the same `run_id`).
+
+```bash
+curl -sS -X POST http://127.0.0.1:18790/api/resume_last_task
+```
+
+Auth is the same as `/api/notify`:
+- empty `gateway.api_key` → loopback only
+- non-empty `gateway.api_key` → `Authorization: Bearer <api_key>` or `X-API-Key: <api_key>`
+
+Strongly recommended: enable `tools.policy.confirm` + `tools.policy.idempotency` to prevent side effects from being repeated on resume.
+
 ### Run/Session Export (`picoclaw export`)
 
 When you need to file a bug report, review a conversation, or share a replay bundle, you can export a zip bundle (by default it includes: session snapshot + tool traces + cron/state + redacted config snapshot + manifest).

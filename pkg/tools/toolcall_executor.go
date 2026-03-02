@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sipeed/picoclaw/pkg/config"
 	"github.com/sipeed/picoclaw/pkg/logger"
 	"github.com/sipeed/picoclaw/pkg/providers"
 	"github.com/sipeed/picoclaw/pkg/utils"
@@ -38,6 +39,18 @@ type ToolCallExecutionOptions struct {
 	// In agent mode this is typically the session key; when empty we fallback
 	// to channel/chatID.
 	SessionKey string
+	// RunID associates tool traces with one durable run trace (Phase E1/E2).
+	// When empty, per-run policy ledger features (confirm/idempotency) are disabled.
+	RunID string
+	// IsResume indicates this tool batch belongs to a resume_last_task flow (Phase E2).
+	// Used by tool policy confirmation gating mode "resume_only".
+	IsResume bool
+
+	// Policy applies centralized tool guardrails (Phase D2).
+	Policy config.ToolPolicyConfig
+	// PolicyTags are attached to tool trace events and snapshots.
+	// When empty, no tags are recorded.
+	PolicyTags map[string]string
 
 	Iteration int
 	LogScope  string
@@ -84,6 +97,7 @@ func ExecuteToolCalls(
 	}
 
 	traceWriter := newToolTraceWriter(opts, scope)
+	policy := newToolPolicy(opts.Workspace, opts.SessionKey, opts.RunID, opts.IsResume, opts.Policy)
 
 	results := make([]ToolCallExecution, len(toolCalls))
 	parallelCount := 0
@@ -119,7 +133,11 @@ func ExecuteToolCalls(
 	runOne := func(idx int) {
 		tc := toolCalls[idx]
 		argsJSON, _ := json.Marshal(tc.Arguments)
-		argsPreview := utils.Truncate(string(argsJSON), 200)
+		redactedArgsJSON := argsJSON
+		if policy != nil && !policy.policyDisabled() {
+			redactedArgsJSON = policy.redactJSONBytes(argsJSON)
+		}
+		argsPreview := utils.Truncate(string(redactedArgsJSON), 200)
 		logger.InfoCF(scope, fmt.Sprintf("Tool call: %s(%s)", tc.Name, argsPreview),
 			map[string]any{
 				"tool":      tc.Name,
@@ -133,23 +151,82 @@ func ExecuteToolCalls(
 
 		start := time.Now()
 		if traceWriter != nil {
-			traceWriter.RecordStart(start, opts.Iteration, tc, argsJSON)
+			traceWriter.RecordStart(start, opts.Iteration, tc, redactedArgsJSON)
 		}
 
+		policyDecision := ""
+		policyReason := ""
+		policyTimeoutMS := 0
+		idempotencyKey := ""
+
 		var toolResult *ToolResult
-		if registry != nil {
-			execCtx := withExecutionSessionKey(ctx, opts.SessionKey)
-			toolResult = registry.ExecuteWithContext(
-				execCtx,
-				tc.Name,
-				tc.Arguments,
-				opts.Channel,
-				opts.ChatID,
-				opts.SenderID,
-				asyncCallback,
-			)
-		} else {
-			toolResult = ErrorResult("No tools available")
+		execCtx := withExecutionRunID(withExecutionSessionKey(ctx, opts.SessionKey), opts.RunID)
+		var cancel context.CancelFunc = func() {}
+		if policy != nil && !policy.policyDisabled() {
+			execCtx, cancel, policyTimeoutMS = policy.toolTimeoutContext(execCtx)
+		}
+		defer cancel()
+
+		// Phase D2: centralized tool policy layer (allow/deny, confirm, idempotency).
+		if policy != nil && !policy.policyDisabled() && strings.ToLower(strings.TrimSpace(tc.Name)) != "tool_confirm" {
+			allowed, reason := policy.isToolAllowed(tc.Name)
+			if !allowed {
+				policyDecision = string(toolPolicyDecisionDeny)
+				policyReason = reason
+				toolResult = policy.buildDeniedResult(tc.Name, reason)
+			}
+		}
+
+		// Phase E2: idempotency (avoid repeated side effects on resume).
+		//
+		// We always compute the idempotency key (so the first attempt records it),
+		// but we only replay cached outputs during resume flows.
+		if toolResult == nil && policy != nil && !policy.policyDisabled() && policy.shouldBeIdempotent(tc.Name) && strings.TrimSpace(opts.RunID) != "" {
+			idempotencyKey = toolIdempotencyKey(tc.Name, argsJSON)
+			if policy.isResume && policy.store != nil && policy.idempotencyCacheResult {
+				if cached, ok := policy.store.GetCachedExecution(idempotencyKey); ok {
+					policyDecision = string(toolPolicyDecisionIdempotentReplay)
+					toolResult = policy.buildIdempotentReplayResult(tc.Name, idempotencyKey, cached)
+				}
+			}
+		}
+
+		// Phase E2: confirmation gate for side-effect tools (two-phase commit).
+		if toolResult == nil && policy != nil && !policy.policyDisabled() && policy.shouldRequireConfirmation(tc.Name) && strings.TrimSpace(opts.RunID) != "" {
+			if idempotencyKey == "" {
+				idempotencyKey = toolIdempotencyKey(tc.Name, argsJSON)
+			}
+			if policy.store != nil && policy.store.IsConfirmed(idempotencyKey) {
+				// confirmed; proceed
+			} else if policy.store == nil || !policy.store.enabled {
+				policyDecision = string(toolPolicyDecisionConfirmRequired)
+				policyReason = "confirmation gate is enabled but policy store is unavailable (missing run_id/session_key?)"
+				toolResult = policy.buildConfirmRequiredResult(tc.Name, idempotencyKey, argsPreview)
+			} else {
+				policyDecision = string(toolPolicyDecisionConfirmRequired)
+				toolResult = policy.buildConfirmRequiredResult(tc.Name, idempotencyKey, argsPreview)
+			}
+		}
+
+		executed := false
+		if toolResult == nil {
+			if registry != nil {
+				toolResult = registry.ExecuteWithContext(
+					execCtx,
+					tc.Name,
+					tc.Arguments,
+					opts.Channel,
+					opts.ChatID,
+					opts.SenderID,
+					asyncCallback,
+				)
+				executed = true
+			} else {
+				toolResult = ErrorResult("No tools available")
+			}
+			if policyDecision == "" {
+				policyDecision = string(toolPolicyDecisionAllow)
+			}
 		}
 
 		if toolResult == nil {
@@ -157,18 +234,36 @@ func ExecuteToolCalls(
 				WithError(fmt.Errorf("tool %q returned nil result", tc.Name))
 		}
 
-		if toolResult.IsError && opts.ErrorTemplate.Enabled {
-			applyToolErrorTemplate(registry, tc, argsJSON, toolResult, opts)
+		if toolResult.IsError && opts.ErrorTemplate.Enabled && !shouldSkipErrorTemplate(toolResult.ForLLM) {
+			applyToolErrorTemplate(registry, tc, redactedArgsJSON, toolResult, opts)
+		}
+
+		// Apply redaction (always for audit; optional for return).
+		auditResult := toolResult
+		returnedResult := toolResult
+		if policy != nil && !policy.policyDisabled() {
+			auditResult = policy.redactToolResultForAudit(toolResult)
+			returnedResult = policy.redactToolResultForReturn(toolResult)
+		}
+
+		// Phase E2: record idempotent execution output for replay on resume.
+		if executed && policy != nil && !policy.policyDisabled() && policy.store != nil && policy.shouldBeIdempotent(tc.Name) && strings.TrimSpace(opts.RunID) != "" && idempotencyKey != "" && policyDecision != string(toolPolicyDecisionIdempotentReplay) {
+			if err := policy.store.RecordExecution(opts.RunID, opts.SessionKey, tc.Name, tc.ID, idempotencyKey, argsPreview, auditResult); err != nil {
+				logger.WarnCF(scope, "Tool policy: failed to record idempotency ledger", map[string]any{
+					"tool": tc.Name,
+					"err":  err.Error(),
+				})
+			}
 		}
 
 		duration := time.Since(start)
 		if traceWriter != nil {
-			traceWriter.RecordEnd(start.Add(duration), opts.Iteration, tc, argsJSON, toolResult, duration)
+			traceWriter.RecordEnd(start.Add(duration), opts.Iteration, tc, redactedArgsJSON, auditResult, duration, policyDecision, policyReason, policyTimeoutMS, idempotencyKey)
 		}
 
 		results[idx] = ToolCallExecution{
 			ToolCall:   tc,
-			Result:     toolResult,
+			Result:     returnedResult,
 			DurationMS: duration.Milliseconds(),
 		}
 	}

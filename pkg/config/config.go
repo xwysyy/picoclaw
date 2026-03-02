@@ -710,12 +710,89 @@ type ToolsConfig struct {
 	AllowWritePaths []string                `json:"allow_write_paths" env:"PICOCLAW_TOOLS_ALLOW_WRITE_PATHS"`
 	Web             WebToolsConfig          `json:"web"`
 	MCP             MCPToolsConfig          `json:"mcp,omitempty"`
+	Policy          ToolPolicyConfig        `json:"policy,omitempty"`
 	Trace           ToolTraceConfig         `json:"trace,omitempty"`
 	ErrorTemplate   ToolErrorTemplateConfig `json:"error_template,omitempty"`
 	Cron            CronToolsConfig         `json:"cron"`
 	Exec            ExecConfig              `json:"exec"`
 	Skills          SkillsToolsConfig       `json:"skills"`
 	MediaCleanup    MediaCleanupConfig      `json:"media_cleanup"`
+}
+
+// ToolPolicyConfig defines a centralized policy/middleware for all tool calls.
+//
+// Phase D2 in ROADMAP.md:
+// - Built-in tools and MCP tools are treated the same (single chokepoint).
+// - Policy applies allow/deny, timeouts, redaction, auditing, confirmations, and idempotency.
+//
+// NOTE: This config is enforced at the tool executor layer (pkg/tools/toolcall_executor.go),
+// so it automatically covers all tool sources (built-in, skills, MCP bridge).
+type ToolPolicyConfig struct {
+	Enabled bool `json:"enabled,omitempty"`
+
+	// Allow/Deny lists support both exact tool names and prefixes.
+	// If Allow or AllowPrefixes is non-empty, tools must match one of them to execute.
+	Allow         []string `json:"allow,omitempty"`
+	AllowPrefixes []string `json:"allow_prefixes,omitempty"`
+	Deny          []string `json:"deny,omitempty"`
+	DenyPrefixes  []string `json:"deny_prefixes,omitempty"`
+
+	// TimeoutMS enforces a maximum wall time per tool call when no tighter deadline exists.
+	TimeoutMS int `json:"timeout_ms,omitempty"`
+
+	Redact      ToolPolicyRedactConfig      `json:"redact,omitempty"`
+	Confirm     ToolPolicyConfirmConfig     `json:"confirm,omitempty"`
+	Idempotency ToolPolicyIdempotencyConfig `json:"idempotency,omitempty"`
+	Audit       ToolPolicyAuditConfig       `json:"audit,omitempty"`
+}
+
+type ToolPolicyRedactConfig struct {
+	Enabled bool `json:"enabled,omitempty"`
+
+	// JSONFields are field names to redact in JSON objects (case-insensitive).
+	JSONFields []string `json:"json_fields,omitempty"`
+	// Patterns are regex patterns applied to string outputs (best-effort).
+	Patterns []string `json:"patterns,omitempty"`
+
+	// ApplyToLLM controls whether redaction is applied to ToolResult.ForLLM (model input).
+	// If false, redaction only affects audit logs/traces.
+	ApplyToLLM bool `json:"apply_to_llm,omitempty"`
+	// ApplyToUser controls whether redaction is applied to ToolResult.ForUser (user-facing).
+	ApplyToUser bool `json:"apply_to_user,omitempty"`
+}
+
+type ToolPolicyConfirmConfig struct {
+	Enabled bool `json:"enabled,omitempty"`
+
+	// Mode controls when confirmation gates are active:
+	// - "always": every matching tool call requires confirmation
+	// - "resume_only": only during resume_last_task flows
+	// - "never": disable confirmation gate
+	Mode string `json:"mode,omitempty"`
+
+	Tools        []string `json:"tools,omitempty"`
+	ToolPrefixes []string `json:"tool_prefixes,omitempty"`
+
+	// ExpiresSeconds limits how long a confirmation stays valid (per run).
+	ExpiresSeconds int `json:"expires_seconds,omitempty"`
+}
+
+type ToolPolicyIdempotencyConfig struct {
+	Enabled bool `json:"enabled,omitempty"`
+
+	// Tools/ToolPrefixes declare which tool calls are treated as having side effects
+	// and therefore should be idempotent across resume.
+	Tools        []string `json:"tools,omitempty"`
+	ToolPrefixes []string `json:"tool_prefixes,omitempty"`
+
+	// CacheResult controls whether previously executed outputs are replayed
+	// (instead of re-executing) when the same idempotency key is seen again.
+	CacheResult bool `json:"cache_result,omitempty"`
+}
+
+type ToolPolicyAuditConfig struct {
+	// Tags are attached to tool trace / policy ledger events for filtering.
+	Tags map[string]string `json:"tags,omitempty"`
 }
 
 type SkillsToolsConfig struct {

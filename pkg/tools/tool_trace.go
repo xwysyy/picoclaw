@@ -42,6 +42,8 @@ type toolTraceWriter struct {
 	enabled bool
 	dir     string
 
+	runID string
+
 	sessionKey string
 	channel    string
 	chatID     string
@@ -54,6 +56,8 @@ type toolTraceWriter struct {
 	maxArgPreviewChars int
 	maxResPreviewChars int
 
+	policyTags map[string]string
+
 	mu sync.Mutex
 }
 
@@ -63,6 +67,8 @@ type toolTraceEvent struct {
 	TS   string `json:"ts"`
 	TSMS int64  `json:"ts_ms"`
 
+	RunID string `json:"run_id,omitempty"`
+
 	SessionKey string `json:"session_key,omitempty"`
 	Channel    string `json:"channel,omitempty"`
 	ChatID     string `json:"chat_id,omitempty"`
@@ -71,6 +77,12 @@ type toolTraceEvent struct {
 	Iteration  int    `json:"iteration,omitempty"`
 	ToolCallID string `json:"tool_call_id,omitempty"`
 	Tool       string `json:"tool"`
+
+	PolicyDecision  string            `json:"policy_decision,omitempty"`
+	PolicyReason    string            `json:"policy_reason,omitempty"`
+	PolicyTimeoutMS int               `json:"policy_timeout_ms,omitempty"`
+	IdempotencyKey  string            `json:"idempotency_key,omitempty"`
+	PolicyTags      map[string]string `json:"policy_tags,omitempty"`
 
 	Args        json.RawMessage `json:"args,omitempty"`
 	ArgsPreview string          `json:"args_preview,omitempty"`
@@ -92,6 +104,8 @@ type toolTraceSnapshot struct {
 	TS   string `json:"ts"`
 	TSMS int64  `json:"ts_ms"`
 
+	RunID string `json:"run_id,omitempty"`
+
 	SessionKey string `json:"session_key,omitempty"`
 	Channel    string `json:"channel,omitempty"`
 	ChatID     string `json:"chat_id,omitempty"`
@@ -100,6 +114,12 @@ type toolTraceSnapshot struct {
 	Iteration  int    `json:"iteration,omitempty"`
 	ToolCallID string `json:"tool_call_id,omitempty"`
 	Tool       string `json:"tool"`
+
+	PolicyDecision  string            `json:"policy_decision,omitempty"`
+	PolicyReason    string            `json:"policy_reason,omitempty"`
+	PolicyTimeoutMS int               `json:"policy_timeout_ms,omitempty"`
+	IdempotencyKey  string            `json:"idempotency_key,omitempty"`
+	PolicyTags      map[string]string `json:"policy_tags,omitempty"`
 
 	Args json.RawMessage `json:"args,omitempty"`
 
@@ -158,6 +178,8 @@ func newToolTraceWriter(opts ToolCallExecutionOptions, scope string) *toolTraceW
 		enabled: true,
 		dir:     dir,
 
+		runID: strings.TrimSpace(opts.RunID),
+
 		sessionKey: effectiveSessionKey,
 		channel:    strings.TrimSpace(opts.Channel),
 		chatID:     strings.TrimSpace(opts.ChatID),
@@ -169,6 +191,8 @@ func newToolTraceWriter(opts ToolCallExecutionOptions, scope string) *toolTraceW
 		perCallDir:         filepath.Join(dir, "calls"),
 		maxArgPreviewChars: maxArgPreview,
 		maxResPreviewChars: maxResPreview,
+
+		policyTags: copyStringMap(opts.PolicyTags),
 	}
 
 	if w.writePerCallFiles {
@@ -194,6 +218,8 @@ func (w *toolTraceWriter) RecordStart(ts time.Time, iteration int, tc providers.
 		TS:   ts.UTC().Format(time.RFC3339Nano),
 		TSMS: ts.UnixMilli(),
 
+		RunID: w.runID,
+
 		SessionKey: w.sessionKey,
 		Channel:    w.channel,
 		ChatID:     w.chatID,
@@ -203,6 +229,8 @@ func (w *toolTraceWriter) RecordStart(ts time.Time, iteration int, tc providers.
 		ToolCallID: tc.ID,
 		Tool:       tc.Name,
 
+		PolicyTags: w.policyTags,
+
 		Args:        argsJSON,
 		ArgsPreview: utils.Truncate(string(argsJSON), w.maxArgPreviewChars),
 	}
@@ -210,7 +238,18 @@ func (w *toolTraceWriter) RecordStart(ts time.Time, iteration int, tc providers.
 	w.appendEvent(event)
 }
 
-func (w *toolTraceWriter) RecordEnd(ts time.Time, iteration int, tc providers.ToolCall, argsJSON []byte, result *ToolResult, duration time.Duration) {
+func (w *toolTraceWriter) RecordEnd(
+	ts time.Time,
+	iteration int,
+	tc providers.ToolCall,
+	argsJSON []byte,
+	result *ToolResult,
+	duration time.Duration,
+	policyDecision string,
+	policyReason string,
+	policyTimeoutMS int,
+	idempotencyKey string,
+) {
 	if w == nil || !w.enabled {
 		return
 	}
@@ -244,6 +283,8 @@ func (w *toolTraceWriter) RecordEnd(ts time.Time, iteration int, tc providers.To
 		TS:   ts.UTC().Format(time.RFC3339Nano),
 		TSMS: ts.UnixMilli(),
 
+		RunID: w.runID,
+
 		SessionKey: w.sessionKey,
 		Channel:    w.channel,
 		ChatID:     w.chatID,
@@ -252,6 +293,12 @@ func (w *toolTraceWriter) RecordEnd(ts time.Time, iteration int, tc providers.To
 		Iteration:  iteration,
 		ToolCallID: tc.ID,
 		Tool:       tc.Name,
+
+		PolicyDecision:  strings.TrimSpace(policyDecision),
+		PolicyReason:    utils.Truncate(strings.TrimSpace(policyReason), 200),
+		PolicyTimeoutMS: policyTimeoutMS,
+		IdempotencyKey:  strings.TrimSpace(idempotencyKey),
+		PolicyTags:      w.policyTags,
 
 		Args:        argsJSON,
 		ArgsPreview: utils.Truncate(string(argsJSON), w.maxArgPreviewChars),
@@ -270,7 +317,7 @@ func (w *toolTraceWriter) RecordEnd(ts time.Time, iteration int, tc providers.To
 	w.appendEvent(event)
 
 	if w.writePerCallFiles {
-		w.writeSnapshot(ts, iteration, tc, argsJSON, result, duration)
+		w.writeSnapshot(ts, iteration, tc, argsJSON, result, duration, policyDecision, policyReason, policyTimeoutMS, idempotencyKey)
 	}
 }
 
@@ -311,7 +358,18 @@ func (w *toolTraceWriter) appendEvent(event toolTraceEvent) {
 	_ = f.Sync()
 }
 
-func (w *toolTraceWriter) writeSnapshot(ts time.Time, iteration int, tc providers.ToolCall, argsJSON []byte, result *ToolResult, duration time.Duration) {
+func (w *toolTraceWriter) writeSnapshot(
+	ts time.Time,
+	iteration int,
+	tc providers.ToolCall,
+	argsJSON []byte,
+	result *ToolResult,
+	duration time.Duration,
+	policyDecision string,
+	policyReason string,
+	policyTimeoutMS int,
+	idempotencyKey string,
+) {
 	if w == nil || !w.enabled || !w.writePerCallFiles {
 		return
 	}
@@ -330,6 +388,8 @@ func (w *toolTraceWriter) writeSnapshot(ts time.Time, iteration int, tc provider
 		TS:   ts.UTC().Format(time.RFC3339Nano),
 		TSMS: ts.UnixMilli(),
 
+		RunID: w.runID,
+
 		SessionKey: w.sessionKey,
 		Channel:    w.channel,
 		ChatID:     w.chatID,
@@ -338,6 +398,12 @@ func (w *toolTraceWriter) writeSnapshot(ts time.Time, iteration int, tc provider
 		Iteration:  iteration,
 		ToolCallID: tc.ID,
 		Tool:       tc.Name,
+
+		PolicyDecision:  strings.TrimSpace(policyDecision),
+		PolicyReason:    utils.Truncate(strings.TrimSpace(policyReason), 200),
+		PolicyTimeoutMS: policyTimeoutMS,
+		IdempotencyKey:  strings.TrimSpace(idempotencyKey),
+		PolicyTags:      w.policyTags,
 
 		Args: argsJSON,
 
@@ -384,6 +450,9 @@ func renderToolSnapshotMarkdown(s toolTraceSnapshot) string {
 	var sb strings.Builder
 	sb.WriteString("# Tool Call Trace\n\n")
 	sb.WriteString(fmt.Sprintf("- ts: %s\n", s.TS))
+	if s.RunID != "" {
+		sb.WriteString(fmt.Sprintf("- run_id: %s\n", s.RunID))
+	}
 	if s.SessionKey != "" {
 		sb.WriteString(fmt.Sprintf("- session_key: %s\n", s.SessionKey))
 	}
@@ -398,6 +467,16 @@ func renderToolSnapshotMarkdown(s toolTraceSnapshot) string {
 	sb.WriteString(fmt.Sprintf("- tool: %s\n", s.Tool))
 	if s.ToolCallID != "" {
 		sb.WriteString(fmt.Sprintf("- tool_call_id: %s\n", s.ToolCallID))
+	}
+	if strings.TrimSpace(s.PolicyDecision) != "" {
+		sb.WriteString(fmt.Sprintf("- policy_decision: %s\n", strings.TrimSpace(s.PolicyDecision)))
+	}
+	if strings.TrimSpace(s.IdempotencyKey) != "" {
+		sb.WriteString(fmt.Sprintf("- idempotency_key: %s\n", strings.TrimSpace(s.IdempotencyKey)))
+	}
+	if len(s.PolicyTags) > 0 {
+		// Keep it compact and deterministic.
+		sb.WriteString(fmt.Sprintf("- policy_tags: %s\n", toolPolicyTagsToString(s.PolicyTags)))
 	}
 	sb.WriteString(fmt.Sprintf("- duration_ms: %d\n", s.DurationMS))
 	if s.Result != nil {

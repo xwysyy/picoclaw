@@ -109,11 +109,16 @@ func newRunTraceWriter(workspace string, enabled bool, opts processOptions, agen
 		return nil
 	}
 
+	runID := strings.TrimSpace(opts.RunID)
+	if runID == "" {
+		runID = uuid.NewString()
+	}
+
 	return &runTraceWriter{
 		enabled: true,
 		scope:   "agent",
 
-		runID:      uuid.NewString(),
+		runID:      runID,
 		sessionKey: sessionKey,
 		channel:    strings.TrimSpace(opts.Channel),
 		chatID:     strings.TrimSpace(opts.ChatID),
@@ -142,6 +147,33 @@ func (w *runTraceWriter) recordStart(userMessage string, messagesCount, toolsCou
 	ts := time.Now()
 	w.appendEvent(runTraceEvent{
 		Type: "run.start",
+
+		TS:   ts.UTC().Format(time.RFC3339Nano),
+		TSMS: ts.UnixMilli(),
+
+		RunID:      w.runID,
+		SessionKey: w.sessionKey,
+		Channel:    w.channel,
+		ChatID:     w.chatID,
+		SenderID:   w.senderID,
+
+		AgentID: w.agentID,
+		Model:   w.model,
+
+		UserMessagePreview: utils.Truncate(strings.TrimSpace(userMessage), w.maxPreviewChars),
+		UserMessageChars:   len(userMessage),
+		MessagesCount:      messagesCount,
+		ToolsCount:         toolsCount,
+	})
+}
+
+func (w *runTraceWriter) recordResume(userMessage string, messagesCount, toolsCount int) {
+	if w == nil || !w.enabled {
+		return
+	}
+	ts := time.Now()
+	w.appendEvent(runTraceEvent{
+		Type: "run.resume",
 
 		TS:   ts.UTC().Format(time.RFC3339Nano),
 		TSMS: ts.UnixMilli(),

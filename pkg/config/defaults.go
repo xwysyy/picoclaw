@@ -338,6 +338,56 @@ func DefaultConfig() *Config {
 			APIKey: "",
 		},
 		Tools: ToolsConfig{
+			Policy: ToolPolicyConfig{
+				Enabled: false,
+				// Conservative defaults: no allow/deny restrictions, no forced timeouts.
+				// Enable and tune in config.json when running in production.
+				TimeoutMS: 0,
+				Redact: ToolPolicyRedactConfig{
+					Enabled:     true,
+					ApplyToLLM:  false,
+					ApplyToUser: false,
+					JSONFields: []string{
+						"api_key", "apikey",
+						"token", "access_token", "refresh_token",
+						"secret", "password",
+						"authorization", "cookie",
+					},
+					Patterns: []string{
+						`(?i)(authorization\s*:\s*)(bearer\s+)[^\s]+`,
+						`(?i)(api[_-]?key\s*[:=]\s*)[^\s]+`,
+						`(?i)(access[_-]?token\s*[:=]\s*)[^\s]+`,
+						`(?i)(refresh[_-]?token\s*[:=]\s*)[^\s]+`,
+						`\bsk-[A-Za-z0-9]{16,}\b`,
+					},
+				},
+				Confirm: ToolPolicyConfirmConfig{
+					Enabled:        false,
+					Mode:           "resume_only",
+					ExpiresSeconds: 15 * 60,
+					Tools: []string{
+						"exec",
+						"write_file",
+						"edit_file",
+						"append_file",
+					},
+					ToolPrefixes: []string{"mcp_"},
+				},
+				Idempotency: ToolPolicyIdempotencyConfig{
+					Enabled:     true,
+					CacheResult: true,
+					Tools: []string{
+						"exec",
+						"write_file",
+						"edit_file",
+						"append_file",
+					},
+					ToolPrefixes: []string{"mcp_"},
+				},
+				Audit: ToolPolicyAuditConfig{
+					Tags: map[string]string{},
+				},
+			},
 			MediaCleanup: MediaCleanupConfig{
 				Enabled:  true,
 				MaxAge:   30,
