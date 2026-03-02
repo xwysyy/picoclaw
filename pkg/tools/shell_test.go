@@ -351,3 +351,18 @@ func TestShellTool_RestrictToWorkspace_AllowsHTTPSURLPathSegments(t *testing.T) 
 		t.Fatalf("expected URL path segments to be ignored by guard, got: %s", guardErr)
 	}
 }
+
+func TestShellTool_RestrictToWorkspace_AllowsRelativePathWithSlash(t *testing.T) {
+	tmpDir := t.TempDir()
+	tool, err := NewExecTool(tmpDir, true)
+	if err != nil {
+		t.Fatalf("unable to configure exec tool: %v", err)
+	}
+
+	// Regression: absolutePathPattern used to match "/arxiv-watcher/..." inside a
+	// relative path like "skills/arxiv-watcher/..." and incorrectly block it.
+	guardErr := tool.guardCommand(`bash skills/arxiv-watcher/scripts/search_arxiv.sh "cat:cs.AI"`, tmpDir)
+	if guardErr != "" {
+		t.Fatalf("expected relative path with slashes to be allowed, got: %s", guardErr)
+	}
+}

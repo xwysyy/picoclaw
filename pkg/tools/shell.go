@@ -579,6 +579,13 @@ func (t *ExecTool) guardCommand(command, cwd string) string {
 		matches := absolutePathPattern.FindAllStringIndex(cmd, -1)
 		for _, match := range matches {
 			raw := cmd[match[0]:match[1]]
+			if !pathMatchHasTokenBoundary(cmd, match[0]) {
+				// absolutePathPattern is intentionally broad and can match substrings
+				// inside relative paths (e.g. "skills/foo/bar" contains "/foo/bar").
+				// Only treat this match as an absolute path when it begins at a token
+				// boundary, otherwise skip it.
+				continue
+			}
 			if pathMatchIsEnvAssignmentValue(cmd, match[0]) || pathMatchIsURLSegment(cmd, raw, match[0]) {
 				continue
 			}
@@ -602,6 +609,27 @@ func (t *ExecTool) guardCommand(command, cwd string) string {
 	}
 
 	return ""
+}
+
+func pathMatchHasTokenBoundary(command string, matchStart int) bool {
+	if matchStart <= 0 {
+		return true
+	}
+	if matchStart > len(command) {
+		return false
+	}
+
+	prev := command[matchStart-1]
+	// Whitespace and common shell metacharacters delimit tokens.
+	if prev <= ' ' {
+		return true
+	}
+	switch prev {
+	case '"', '\'', '(', ')', '[', ']', '{', '}', '<', '>', '|', '&', ';', '=':
+		return true
+	default:
+		return false
+	}
 }
 
 func pathMatchIsEnvAssignmentValue(command string, matchStart int) bool {
