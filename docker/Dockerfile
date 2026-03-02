@@ -1,7 +1,7 @@
 # ============================================================
 # Stage 1: Build the picoclaw binary
 # ============================================================
-FROM golang:1.25-alpine AS builder
+FROM golang:1.25 AS builder
 
 ARG HTTP_PROXY
 ARG HTTPS_PROXY
@@ -17,7 +17,9 @@ ENV HTTP_PROXY=$HTTP_PROXY \
   https_proxy=$https_proxy \
   no_proxy=$no_proxy
 
-RUN apk add --no-cache git make
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends git make ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
 
 WORKDIR /src
 
