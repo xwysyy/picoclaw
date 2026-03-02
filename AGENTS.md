@@ -58,15 +58,16 @@ If toolchain/dependency download needs proxy in this environment, run:
 
 ## Docker Redeploy (Important: profiles are required)
 
-`docker-compose.yml` defines services under profiles (`agent`, `gateway`).
+Compose file lives at `docker/docker-compose.yml` and defines services under profiles (`agent`, `gateway`).
 Running `docker compose up -d --build` without profile may fail with:
 `no service selected`.
 
 ### Gateway redeploy
-1. `docker compose down`
-2. `docker compose --profile gateway up -d --build`
-3. `docker compose ps`
-4. `curl -sS http://127.0.0.1:18790/health`
+1. `cd docker`
+2. `docker compose -p picoclaw down`
+3. `docker compose -p picoclaw --profile gateway up -d --build`
+4. `docker compose -p picoclaw ps`
+5. `curl -sS http://127.0.0.1:18790/health`
 
 Expected healthy state:
 - container: `picoclaw-gateway`
