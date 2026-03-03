@@ -467,6 +467,7 @@
     "on_task_complete": false
   },
   "gateway": {
+    "_comment": "gateway.api_key secures /api/notify, /api/estop, /api/console and /console (loopback-only when empty; bearer token when set).",
     "host": "127.0.0.1",
     "port": 18790,
     "api_key": "",

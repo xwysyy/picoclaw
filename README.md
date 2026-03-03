@@ -132,6 +132,40 @@ curl -sS http://127.0.0.1:18790/health
 }
 ```
 
+### Gateway Console（/console/）
+
+Gateway 内置一个**只读 Console**（Web UI），用于自助查看：
+- `last_active` / 基础状态
+- cron jobs（`cron/jobs.json`）
+- run trace / tool trace（`<workspace>/.picoclaw/audit/**/events.jsonl`）
+- 健康检查链接（`/health` / `/ready`）
+
+打开：
+
+```bash
+# 浏览器访问
+http://127.0.0.1:18790/console/
+```
+
+鉴权规则同 `/api/notify`：
+- 当 `gateway.api_key` 为空时，仅允许来自本机 loopback 的访问
+- 当 `gateway.api_key` 非空时，需要携带 `Authorization: Bearer <api_key>`
+
+Console 对应的 JSON API（便于脚本化）：
+
+```bash
+curl -sS http://127.0.0.1:18790/api/console/status
+curl -sS http://127.0.0.1:18790/api/console/cron
+curl -sS http://127.0.0.1:18790/api/console/runs
+curl -sS http://127.0.0.1:18790/api/console/tools
+```
+
+下载 workspace 内的审计/状态文件（只允许 `.picoclaw/audit/`、`cron/`、`state/` 下的 `.json/.jsonl/.md` 等白名单文件）：
+
+```bash
+curl -sS -OJ "http://127.0.0.1:18790/api/console/file?path=cron/jobs.json"
+```
+
 ### 通知接口（/api/notify）
 
 Gateway 会额外暴露一个通知接口，用于让外部系统（CI / 脚本 / 守护进程）通过已配置的渠道给你发提醒（例如飞书）。

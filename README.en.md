@@ -112,6 +112,39 @@ Check runtime status (includes `last_active` / cron / trace, etc.):
 ./build/picoclaw status --json
 ```
 
+### Gateway Console (`/console/`)
+
+Gateway includes a **read-only Console** (Web UI) for self-serve operations:
+- basic status + `last_active`
+- cron jobs (`cron/jobs.json`)
+- run trace / tool trace (`<workspace>/.picoclaw/audit/**/events.jsonl`)
+- health links (`/health` / `/ready`)
+
+Open in a browser:
+
+```bash
+http://127.0.0.1:18790/console/
+```
+
+Auth policy is the same as `/api/notify`:
+- If `gateway.api_key` is empty: loopback only
+- If `gateway.api_key` is set: require `Authorization: Bearer <api_key>`
+
+JSON endpoints (for scripting):
+
+```bash
+curl -sS http://127.0.0.1:18790/api/console/status
+curl -sS http://127.0.0.1:18790/api/console/cron
+curl -sS http://127.0.0.1:18790/api/console/runs
+curl -sS http://127.0.0.1:18790/api/console/tools
+```
+
+Download workspace audit/state files (only allows whitelisted paths under `.picoclaw/audit/`, `cron/`, `state/`):
+
+```bash
+curl -sS -OJ "http://127.0.0.1:18790/api/console/file?path=cron/jobs.json"
+```
+
 ### Notification API (`/api/notify`)
 
 Gateway also exposes a lightweight notification endpoint so external systems (CI / scripts / daemons) can push a reminder to you via configured channels (e.g. Feishu).

@@ -207,6 +207,33 @@ func registerGatewayHTTPAPI(svc *gatewayServices) {
 	if err := svc.channelManager.RegisterHTTPHandler("/api/estop", estop); err != nil {
 		fmt.Printf("⚠ Warning: failed to register /api/estop: %v\n", err)
 	}
+
+	console := httpapi.NewConsoleHandler(httpapi.ConsoleHandlerOptions{
+		Workspace: svc.cfg.WorkspacePath(),
+		APIKey:    svc.cfg.Gateway.APIKey,
+		LastActive: func() (string, string) {
+			if svc.agentLoop == nil {
+				return "", ""
+			}
+			return svc.agentLoop.LastActive()
+		},
+		Info: httpapi.ConsoleInfo{
+			Model:                svc.cfg.Agents.Defaults.ModelName,
+			NotifyOnTaskComplete: svc.cfg.Notify.OnTaskComplete,
+			ToolTraceEnabled:     svc.cfg.Tools.Trace.Enabled,
+			RunTraceEnabled:      svc.cfg.Tools.Trace.Enabled,
+			WebEvidenceMode:      svc.cfg.Tools.Web.Evidence.Enabled,
+
+			InboundQueueEnabled:        svc.cfg.Gateway.InboundQueue.Enabled,
+			InboundQueueMaxConcurrency: svc.cfg.Gateway.InboundQueue.MaxConcurrency,
+		},
+	})
+	if err := svc.channelManager.RegisterHTTPHandler("/console/", console); err != nil {
+		fmt.Printf("⚠ Warning: failed to register /console/: %v\n", err)
+	}
+	if err := svc.channelManager.RegisterHTTPHandler("/api/console/", console); err != nil {
+		fmt.Printf("⚠ Warning: failed to register /api/console/: %v\n", err)
+	}
 }
 
 // shutdownGateway performs graceful shutdown of all services.
