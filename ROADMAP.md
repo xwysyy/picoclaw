@@ -71,6 +71,7 @@
 - A1：Tool Trace（每次 tool call 落盘 md/json；可选开启；带耗时/截断/错误摘要）✅（done: 2026-03-01；落点：`pkg/tools/toolcall_executor.go` + `pkg/tools/tool_trace.go`）
 - A2：Run/Session 导出（最少：导出当前 session + tool traces；便于 bug report）✅（done: 2026-03-01；落点：`cmd/picoclaw/internal/export/` + `pkg/tools/tool_trace.go`）
 - A3：统一错误提示模板（让模型更会自救：换参数/换工具/先读后写）✅（done: 2026-03-01；落点：`pkg/tools/tool_error_template.go` + `tools.error_template`）
+- A4：Token Usage（按 workspace/按模型累计 token；Console 可视化）✅（done: 2026-03-03；落点：`pkg/agent/token_usage.go` + `pkg/httpapi/console.go` + `web/picoclaw-console/src/app/page.tsx`）
 
 ### Phase B — 结构化记忆（先输出稳定，再做更强检索）
 
