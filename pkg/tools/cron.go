@@ -30,6 +30,29 @@ type CronTool struct {
 	execTool    *ExecTool
 }
 
+func isNoUpdateResponse(raw string) bool {
+	s := strings.TrimSpace(raw)
+	if s == "" {
+		return true
+	}
+	if strings.EqualFold(s, "HEARTBEAT_OK") {
+		return true
+	}
+
+	upper := strings.ToUpper(s)
+	switch upper {
+	case "NO_UPDATE", "NO-UPDATE", "NOUPDATE":
+		return true
+	}
+	if strings.HasPrefix(upper, "NO_UPDATE") {
+		rest := strings.TrimSpace(strings.TrimPrefix(upper, "NO_UPDATE"))
+		if rest == "" || strings.HasPrefix(rest, ":") || strings.HasPrefix(rest, "-") {
+			return true
+		}
+	}
+	return false
+}
+
 // NewCronTool creates a new CronTool
 // execTimeout: 0 means no timeout, >0 sets the timeout duration
 func NewCronTool(
@@ -446,20 +469,23 @@ func (t *CronTool) ExecuteJob(ctx context.Context, job *cron.CronJob) (string, e
 
 	// In gateway mode, ProcessDirectWithChannel returns the response but does NOT publish it.
 	// Publish here so scheduled tasks can proactively notify the user (e.g. Feishu).
-	if strings.TrimSpace(response) != "" {
+	if strings.TrimSpace(response) != "" && !isNoUpdateResponse(response) {
 		pubCtx, pubCancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer pubCancel()
 		if err := t.msgBus.PublishOutbound(pubCtx, bus.OutboundMessage{
 			Channel: channel,
 			ChatID:  chatID,
 			Content: fmt.Sprintf("Cron job '%s' completed.\n\n%s", job.Name, response),
-		}); err != nil {
-			return "", err
+			}); err != nil {
+				return "", err
+			}
 		}
-	}
 
 	if strings.TrimSpace(response) == "" {
 		return "ok", nil
+	}
+	if isNoUpdateResponse(response) {
+		return "NO_UPDATE", nil
 	}
 	return response, nil
 }

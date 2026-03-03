@@ -15,7 +15,8 @@
         "memory_flush": {
           "enabled": true,
           "soft_threshold_tokens": 1500
-        }
+        },
+        "notify_user": false
       },
       "context_pruning": {
         "mode": "tools_only",

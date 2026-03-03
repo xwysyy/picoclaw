@@ -988,14 +988,23 @@ func (al *AgentLoop) runAgentLoop(ctx context.Context, agent *AgentInstance, opt
 		runTrace.recordEnd(iteration, finalContent)
 	}
 
-	// Optional notification hook (ROADMAP.md:1226): when a run completes in an
-	// internal channel (system/cli/subagent), notify the last active external chat.
-	if al.cfg != nil && al.cfg.Notify.OnTaskComplete && constants.IsInternalChannel(opts.Channel) {
-		targetCh, targetChat := al.LastActive()
-		if strings.TrimSpace(targetCh) != "" && strings.TrimSpace(targetChat) != "" && !constants.IsInternalChannel(targetCh) {
-			notifyText := fmt.Sprintf(
-				"✅ Task complete\n\nTask:\n%s\n\nResult:\n%s",
-				utils.Truncate(strings.TrimSpace(opts.UserMessage), 240),
+		// Optional notification hook (ROADMAP.md:1226): when a run completes in an
+		// internal channel (system/cli/subagent), notify the last active external chat.
+		if al.cfg != nil && al.cfg.Notify.OnTaskComplete && constants.IsInternalChannel(opts.Channel) {
+			trimmedResult := strings.TrimSpace(finalContent)
+			// Quiet-by-default: allow background tasks (cron/heartbeat/etc.) to opt out
+			// by returning a deterministic sentinel.
+			if trimmedResult == "" ||
+				strings.EqualFold(trimmedResult, "NO_UPDATE") ||
+				strings.EqualFold(trimmedResult, "HEARTBEAT_OK") {
+				return finalContent, nil
+			}
+
+			targetCh, targetChat := al.LastActive()
+			if strings.TrimSpace(targetCh) != "" && strings.TrimSpace(targetChat) != "" && !constants.IsInternalChannel(targetCh) {
+				notifyText := fmt.Sprintf(
+					"✅ Task complete\n\nTask:\n%s\n\nResult:\n%s",
+					utils.Truncate(strings.TrimSpace(opts.UserMessage), 240),
 				utils.Truncate(strings.TrimSpace(finalContent), 1200),
 			)
 			if tool, ok := agent.Tools.Get("message"); ok && tool != nil {
@@ -1621,12 +1630,12 @@ func (al *AgentLoop) maybeSummarize(agent *AgentInstance, sessionKey, channel, c
 				ctx, cancel := al.safeCompactionContext()
 				defer cancel()
 
-				if al.bus != nil && channel != "" && chatID != "" && !constants.IsInternalChannel(channel) {
-					if err := al.bus.PublishOutbound(ctx, bus.OutboundMessage{
-						Channel: channel,
-						ChatID:  chatID,
-						Content: "Memory threshold reached. Optimizing conversation history...",
-					}); err != nil {
+					if agent != nil && agent.Compaction.NotifyUser && al.bus != nil && channel != "" && chatID != "" && !constants.IsInternalChannel(channel) {
+						if err := al.bus.PublishOutbound(ctx, bus.OutboundMessage{
+							Channel: channel,
+							ChatID:  chatID,
+							Content: "Memory threshold reached. Optimizing conversation history...",
+						}); err != nil {
 						logger.WarnCF("agent", "Failed to publish compaction notice (best-effort)", map[string]any{
 							"channel": channel,
 							"chat_id": chatID,

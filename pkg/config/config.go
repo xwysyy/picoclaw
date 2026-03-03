@@ -203,6 +203,10 @@ type AgentCompactionConfig struct {
 	KeepRecentTokens int                              `json:"keep_recent_tokens,omitempty"`
 	MaxHistoryShare  float64                          `json:"max_history_share,omitempty"`
 	MemoryFlush      AgentCompactionMemoryFlushConfig `json:"memory_flush,omitempty"`
+
+	// NotifyUser controls whether the agent publishes a chat message when background
+	// compaction/summarization kicks in. Default: false (quiet-by-default).
+	NotifyUser bool `json:"notify_user,omitempty"`
 }
 
 type AgentCompactionMemoryFlushConfig struct {

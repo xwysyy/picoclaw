@@ -50,6 +50,7 @@ type CompactionSettings struct {
 	MaxHistoryShare          float64
 	MemoryFlushEnabled       bool
 	MemoryFlushSoftThreshold int
+	NotifyUser               bool
 }
 
 // ContextPruningSettings groups all context pruning parameters.
@@ -81,6 +82,7 @@ func resolveCompaction(c config.AgentCompactionConfig) CompactionSettings {
 		MaxHistoryShare:          floatRangeDefault(c.MaxHistoryShare, 0, 0.9, 0.5),
 		MemoryFlushEnabled:       flushEnabled,
 		MemoryFlushSoftThreshold: intDefault(c.MemoryFlush.SoftThresholdTokens, 1500),
+		NotifyUser:               c.NotifyUser,
 	}
 }
 
