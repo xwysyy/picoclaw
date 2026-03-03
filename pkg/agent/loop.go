@@ -1351,7 +1351,13 @@ func (al *AgentLoop) runAgentLoop(
 
 	// Phase E1: durable run checkpoint (append-only JSONL event stream).
 	runTraceEnabled := cfg != nil && cfg.Tools.Trace.Enabled
-	runTrace := newRunTraceWriter(agent.Workspace, runTraceEnabled, opts, agent.ID, agent.Model)
+	modelForRun := strings.TrimSpace(agent.Model)
+	if agent.Sessions != nil {
+		if override, ok := agent.Sessions.EffectiveModelOverride(opts.SessionKey); ok {
+			modelForRun = override
+		}
+	}
+	runTrace := newRunTraceWriter(agent.Workspace, runTraceEnabled, opts, agent.ID, modelForRun)
 	if runTrace != nil {
 		if opts.Resume {
 			runTrace.recordResume(opts.UserMessage, len(messages), len(agent.Tools.List()))
@@ -1373,7 +1379,7 @@ func (al *AgentLoop) runAgentLoop(
 	}
 
 	// 5. Run LLM iteration loop (may switch active agent via handoff).
-	finalContent, iteration, activeAgent, err := al.runLLMIteration(ctx, agent, messages, opts, runTrace)
+	finalContent, iteration, activeAgent, err := al.runLLMIteration(ctx, agent, messages, opts, runTrace, modelForRun)
 	if err != nil {
 		if runTrace != nil {
 			runTrace.recordError(iteration, err)
@@ -1551,6 +1557,7 @@ func (al *AgentLoop) runLLMIteration(
 	messages []providers.Message,
 	opts processOptions,
 	trace *runTraceWriter,
+	modelForRun string,
 ) (string, int, *AgentInstance, error) {
 	iteration := 0
 	var finalContent string
@@ -1563,6 +1570,11 @@ func (al *AgentLoop) runLLMIteration(
 	limitsEnabled := cfg != nil && cfg.Limits.Enabled
 	maxWallTimeSeconds := 0
 	maxToolCallsPerRun := 0
+
+	modelForRun = strings.TrimSpace(modelForRun)
+	if modelForRun == "" {
+		modelForRun = strings.TrimSpace(agent.Model)
+	}
 	maxToolResultChars := 0
 	if limitsEnabled {
 		maxWallTimeSeconds = cfg.Limits.MaxRunWallTimeSeconds
@@ -1608,7 +1620,7 @@ func (al *AgentLoop) runLLMIteration(
 			map[string]any{
 				"agent_id":          agent.ID,
 				"iteration":         iteration,
-				"model":             agent.Model,
+				"model":             modelForRun,
 				"messages_count":    len(messages),
 				"tools_count":       len(providerToolDefs),
 				"max_tokens":        agent.MaxTokens,
@@ -1630,6 +1642,14 @@ func (al *AgentLoop) runLLMIteration(
 		var err error
 
 		callLLM := func() (*providers.LLMResponse, string, error) {
+			if strings.TrimSpace(agent.Model) != "" && modelForRun != strings.TrimSpace(agent.Model) {
+				resp, err := agent.Provider.Chat(ctx, messages, providerToolDefs, modelForRun, map[string]any{
+					"max_tokens":       agent.MaxTokens,
+					"temperature":      agent.Temperature,
+					"prompt_cache_key": agent.ID,
+				})
+				return resp, modelForRun, err
+			}
 			if len(agent.Candidates) > 1 && al.fallback != nil {
 				fbResult, fbErr := al.fallback.Execute(
 					ctx,
@@ -1661,12 +1681,12 @@ func (al *AgentLoop) runLLMIteration(
 				}
 				return fbResult.Response, strings.TrimSpace(fbResult.Model), nil
 			}
-			resp, err := agent.Provider.Chat(ctx, messages, providerToolDefs, agent.Model, map[string]any{
+			resp, err := agent.Provider.Chat(ctx, messages, providerToolDefs, modelForRun, map[string]any{
 				"max_tokens":       agent.MaxTokens,
 				"temperature":      agent.Temperature,
 				"prompt_cache_key": agent.ID,
 			})
-			return resp, strings.TrimSpace(agent.Model), err
+			return resp, modelForRun, err
 		}
 
 		// Retry loop for context/token errors
@@ -1771,7 +1791,7 @@ func (al *AgentLoop) runLLMIteration(
 		// Log token usage if available
 		if response.Usage != nil {
 			if strings.TrimSpace(usedModel) == "" {
-				usedModel = agent.Model
+				usedModel = modelForRun
 			}
 
 			// Persist token usage counters (best-effort, durable).
@@ -2207,9 +2227,15 @@ func (al *AgentLoop) runLLMIteration(
 				})
 
 				agent = target
+				modelForRun = strings.TrimSpace(agent.Model)
+				if agent.Sessions != nil {
+					if override, ok := agent.Sessions.EffectiveModelOverride(opts.SessionKey); ok {
+						modelForRun = override
+					}
+				}
 				if trace != nil {
 					trace.agentID = strings.TrimSpace(agent.ID)
-					trace.model = strings.TrimSpace(agent.Model)
+					trace.model = strings.TrimSpace(modelForRun)
 				}
 
 				history := agent.Sessions.GetHistory(opts.SessionKey)
@@ -2933,7 +2959,7 @@ func (al *AgentLoop) handleCommand(ctx context.Context, msg bus.InboundMessage, 
 
 	case "/switch":
 		if len(args) < 3 || args[1] != "to" {
-			return "Usage: /switch [model|channel] to <name>", true
+			return "Usage: /switch [model|channel|session_model] to <name> [ttl_minutes]", true
 		}
 		target := args[0]
 		value := args[2]
@@ -2947,6 +2973,44 @@ func (al *AgentLoop) handleCommand(ctx context.Context, msg bus.InboundMessage, 
 			oldModel := defaultAgent.Model
 			defaultAgent.Model = value
 			return fmt.Sprintf("Switched model from %s to %s", oldModel, value), true
+		case "session_model":
+			if agent == nil {
+				agent = al.registry.GetDefaultAgent()
+			}
+			if agent == nil || agent.Sessions == nil {
+				return "No session manager configured", true
+			}
+			if strings.TrimSpace(sessionKey) == "" {
+				return "No session available (missing session_key)", true
+			}
+
+			ttlMinutes := 0
+			if len(args) >= 4 {
+				if n, err := strconv.Atoi(strings.TrimSpace(args[3])); err == nil && n > 0 {
+					ttlMinutes = n
+				}
+			}
+
+			normalized := strings.ToLower(strings.TrimSpace(value))
+			if normalized == "" || normalized == "default" || normalized == "clear" || normalized == "off" {
+				_, _ = agent.Sessions.ClearModelOverride(sessionKey)
+				return "Cleared session model override (using default model).", true
+			}
+
+			ttl := time.Duration(ttlMinutes) * time.Minute
+			expiresAt, err := agent.Sessions.SetModelOverride(sessionKey, value, ttl)
+			if err != nil {
+				return fmt.Sprintf("Error: %v", err), true
+			}
+			if expiresAt != nil {
+				return fmt.Sprintf(
+					"Session model override set: %s (ttl=%dm; expires=%s)",
+					value,
+					ttlMinutes,
+					expiresAt.UTC().Format(time.RFC3339Nano),
+				), true
+			}
+			return fmt.Sprintf("Session model override set: %s (ttl=none)", value), true
 		case "channel":
 			if al.channelManager == nil {
 				return "Channel manager not initialized", true

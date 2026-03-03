@@ -25,6 +25,9 @@ type Session struct {
 	Created                    time.Time           `json:"created"`
 	Updated                    time.Time           `json:"updated"`
 
+	ModelOverride            string `json:"model_override,omitempty"`
+	ModelOverrideExpiresAtMS *int64 `json:"model_override_expires_at_ms,omitempty"`
+
 	// LastEventID tracks the last appended JSONL session event for parent linking.
 	// It is not required for correctness, but improves tree reconstruction and reload.
 	LastEventID string `json:"last_event_id,omitempty"`
@@ -440,6 +443,11 @@ func buildSessionMeta(s *Session) SessionMeta {
 		Updated:       s.Updated,
 		LastEventID:   strings.TrimSpace(s.LastEventID),
 		MessagesCount: len(s.Messages),
+		ModelOverride: strings.TrimSpace(s.ModelOverride),
+	}
+	if s.ModelOverrideExpiresAtMS != nil && *s.ModelOverrideExpiresAtMS > 0 {
+		expires := *s.ModelOverrideExpiresAtMS
+		meta.ModelOverrideExpiresAtMS = &expires
 	}
 	return meta
 }
@@ -643,6 +651,11 @@ func (sm *SessionManager) loadSessions() error {
 			if meta != nil {
 				sess.Summary = strings.TrimSpace(meta.Summary)
 				sess.ActiveAgentID = strings.TrimSpace(meta.ActiveAgentID)
+				sess.ModelOverride = strings.TrimSpace(meta.ModelOverride)
+				if meta.ModelOverrideExpiresAtMS != nil && *meta.ModelOverrideExpiresAtMS > 0 {
+					expires := *meta.ModelOverrideExpiresAtMS
+					sess.ModelOverrideExpiresAtMS = &expires
+				}
 				sess.Created = meta.Created
 				sess.Updated = meta.Updated
 				sess.LastEventID = strings.TrimSpace(meta.LastEventID)
@@ -801,6 +814,11 @@ func (sm *SessionManager) GetSessionSnapshot(key string) (*Session, bool) {
 		MemoryFlushCompactionCount: stored.MemoryFlushCompactionCount,
 		Created:                    stored.Created,
 		Updated:                    stored.Updated,
+		ModelOverride:              stored.ModelOverride,
+	}
+	if stored.ModelOverrideExpiresAtMS != nil && *stored.ModelOverrideExpiresAtMS > 0 {
+		expires := *stored.ModelOverrideExpiresAtMS
+		snapshot.ModelOverrideExpiresAtMS = &expires
 	}
 	if len(stored.Messages) > 0 {
 		snapshot.Messages = make([]providers.Message, len(stored.Messages))
@@ -828,6 +846,11 @@ func (sm *SessionManager) ListSessionSnapshots() []Session {
 			MemoryFlushCompactionCount: stored.MemoryFlushCompactionCount,
 			Created:                    stored.Created,
 			Updated:                    stored.Updated,
+			ModelOverride:              stored.ModelOverride,
+		}
+		if stored.ModelOverrideExpiresAtMS != nil && *stored.ModelOverrideExpiresAtMS > 0 {
+			expires := *stored.ModelOverrideExpiresAtMS
+			snapshot.ModelOverrideExpiresAtMS = &expires
 		}
 		if len(stored.Messages) > 0 {
 			snapshot.Messages = make([]providers.Message, len(stored.Messages))

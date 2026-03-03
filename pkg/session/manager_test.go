@@ -222,3 +222,41 @@ func TestSessionTree_SwitchLeafBranchesHistory(t *testing.T) {
 		t.Fatalf("unexpected history after reload: %#v", h3)
 	}
 }
+
+func TestSessionModelOverride_TTLAndPersistence(t *testing.T) {
+	tmpDir := t.TempDir()
+	sm := NewSessionManager(tmpDir)
+	key := "cli:direct"
+
+	sm.AddMessage(key, "user", "hello")
+
+	expiresAt, err := sm.SetModelOverride(key, "test-model", 10*time.Millisecond)
+	if err != nil {
+		t.Fatalf("SetModelOverride failed: %v", err)
+	}
+	if expiresAt == nil {
+		t.Fatal("expected expiresAt to be set")
+	}
+
+	if got, ok := sm.EffectiveModelOverride(key); !ok || got != "test-model" {
+		t.Fatalf("expected active override, got model=%q ok=%v", got, ok)
+	}
+
+	// Reload should preserve override (until expiry).
+	sm2 := NewSessionManager(tmpDir)
+	if got, ok := sm2.EffectiveModelOverride(key); !ok || got != "test-model" {
+		t.Fatalf("expected override after reload, got model=%q ok=%v", got, ok)
+	}
+
+	time.Sleep(25 * time.Millisecond)
+
+	// After expiry, EffectiveModelOverride returns false and clears persisted state.
+	if got, ok := sm2.EffectiveModelOverride(key); ok || got != "" {
+		t.Fatalf("expected override to be expired, got model=%q ok=%v", got, ok)
+	}
+
+	sm3 := NewSessionManager(tmpDir)
+	if got, ok := sm3.EffectiveModelOverride(key); ok || got != "" {
+		t.Fatalf("expected override to remain cleared after reload, got model=%q ok=%v", got, ok)
+	}
+}

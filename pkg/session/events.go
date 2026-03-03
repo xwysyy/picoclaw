@@ -69,6 +69,9 @@ type SessionMeta struct {
 	LastEventID string `json:"last_event_id,omitempty"`
 
 	MessagesCount int `json:"messages_count,omitempty"`
+
+	ModelOverride            string `json:"model_override,omitempty"`
+	ModelOverrideExpiresAtMS *int64 `json:"model_override_expires_at_ms,omitempty"`
 }
 
 func newEventID() string { return uuid.NewString() }
