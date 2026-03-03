@@ -613,6 +613,47 @@ func NewWebSearchTool(opts WebSearchToolOptions) *WebSearchTool {
 	return tool
 }
 
+type WebSearchDualTool struct {
+	base *WebSearchTool
+}
+
+func NewWebSearchDualTool(opts WebSearchToolOptions) *WebSearchDualTool {
+	opts.EvidenceModeEnabled = true
+	tool := NewWebSearchTool(opts)
+	if tool == nil {
+		return nil
+	}
+	return &WebSearchDualTool{base: tool}
+}
+
+func (t *WebSearchDualTool) Name() string {
+	return "web_search_dual"
+}
+
+func (t *WebSearchDualTool) ParallelPolicy() ToolParallelPolicy {
+	return ToolParallelReadOnly
+}
+
+func (t *WebSearchDualTool) Description() string {
+	return "Search the web using two providers in parallel (when available) and return a structured JSON payload. " +
+		"Input: query (string, required), count (integer, optional, 1-10, default 5). " +
+		"Output: JSON including per-provider status, extracted sources, and an evidence summary."
+}
+
+func (t *WebSearchDualTool) Parameters() map[string]any {
+	if t == nil || t.base == nil {
+		return map[string]any{"type": "object"}
+	}
+	return t.base.Parameters()
+}
+
+func (t *WebSearchDualTool) Execute(ctx context.Context, args map[string]any) *ToolResult {
+	if t == nil || t.base == nil {
+		return ErrorResult("web_search_dual tool is not configured")
+	}
+	return t.base.Execute(ctx, args)
+}
+
 func (t *WebSearchTool) Name() string {
 	return "web_search"
 }

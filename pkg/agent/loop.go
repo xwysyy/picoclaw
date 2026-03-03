@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -368,7 +369,7 @@ func registerSharedTools(
 		currentAgentID := agentID
 
 		// Web tools
-		searchTool := tools.NewWebSearchTool(tools.WebSearchToolOptions{
+		webOpts := tools.WebSearchToolOptions{
 			BraveAPIKey:          cfg.Tools.Web.Brave.APIKey,
 			BraveMaxResults:      cfg.Tools.Web.Brave.MaxResults,
 			BraveEnabled:         cfg.Tools.Web.Brave.Enabled,
@@ -386,9 +387,14 @@ func registerSharedTools(
 			Proxy:                cfg.Tools.Web.Proxy,
 			EvidenceModeEnabled:  cfg.Tools.Web.Evidence.Enabled,
 			EvidenceMinDomains:   cfg.Tools.Web.Evidence.MinDomains,
-		})
+		}
+		searchTool := tools.NewWebSearchTool(webOpts)
 		if searchTool != nil {
 			agent.Tools.Register(searchTool)
+		}
+		dualSearchTool := tools.NewWebSearchDualTool(webOpts)
+		if dualSearchTool != nil {
+			agent.Tools.Register(dualSearchTool)
 		}
 		fetchTool, err := tools.NewWebFetchToolWithProxy(50000, cfg.Tools.Web.Proxy, cfg.Tools.Web.FetchLimitBytes)
 		if err != nil {
@@ -2823,6 +2829,106 @@ func (al *AgentLoop) handleCommand(ctx context.Context, msg bus.InboundMessage, 
 			return fmt.Sprintf("Registered agents: %s", strings.Join(agentIDs, ", ")), true
 		default:
 			return fmt.Sprintf("Unknown list target: %s", args[0]), true
+		}
+
+	case "/tree":
+		if agent == nil {
+			agent = al.registry.GetDefaultAgent()
+		}
+		if agent == nil || agent.Sessions == nil {
+			return "No session manager configured", true
+		}
+		if strings.TrimSpace(sessionKey) == "" {
+			return "No session available (missing session_key)", true
+		}
+
+		usage := "Usage:\n" +
+			"/tree leaf\n" +
+			"/tree list [N]\n" +
+			"/tree switch <event_id>"
+
+		if len(args) == 0 {
+			leaf := agent.Sessions.LeafEventID(sessionKey)
+			if leaf == "" {
+				return "leaf: (none)\n\n" + usage, true
+			}
+			return fmt.Sprintf("leaf: %s\n\n%s", leaf, usage), true
+		}
+
+		sub := strings.ToLower(strings.TrimSpace(args[0]))
+		switch sub {
+		case "help":
+			return usage, true
+
+		case "leaf":
+			leaf := agent.Sessions.LeafEventID(sessionKey)
+			if leaf == "" {
+				return "leaf: (none)", true
+			}
+			return fmt.Sprintf("leaf: %s", leaf), true
+
+		case "list":
+			limit := 30
+			if len(args) >= 2 {
+				if n, err := strconv.Atoi(strings.TrimSpace(args[1])); err == nil && n > 0 {
+					limit = n
+				}
+			}
+			tree, err := agent.Sessions.GetTree(sessionKey, limit)
+			if err != nil {
+				return fmt.Sprintf("Error: %v", err), true
+			}
+			if tree == nil {
+				return "No tree available", true
+			}
+
+			var b strings.Builder
+			b.WriteString(fmt.Sprintf("session=%s\nleaf=%s\n", sessionKey, tree.LeafID))
+			b.WriteString(fmt.Sprintf("events=%d (showing last %d)\n", tree.Total, len(tree.Nodes)))
+			b.WriteString("Legend: * leaf; + on-branch; - off-branch\n\n")
+			for _, n := range tree.Nodes {
+				mark := "-"
+				if n.IsLeaf {
+					mark = "*"
+				} else if n.OnBranch {
+					mark = "+"
+				}
+
+				parent := strings.TrimSpace(n.ParentID)
+				if parent == "" {
+					parent = "(root)"
+				}
+
+				role := strings.TrimSpace(n.Role)
+				if role != "" {
+					role = " role=" + role
+				}
+
+				preview := strings.TrimSpace(n.Preview)
+				if preview != "" {
+					preview = " " + preview
+				}
+
+				b.WriteString(fmt.Sprintf("%s %s parent=%s type=%s%s%s\n", mark, n.ID, parent, n.Type, role, preview))
+			}
+			return b.String(), true
+
+		case "switch":
+			if len(args) < 2 {
+				return "Usage: /tree switch <event_id>", true
+			}
+			target := strings.TrimSpace(args[1])
+			from, to, err := agent.Sessions.SwitchLeaf(sessionKey, target)
+			if err != nil {
+				return fmt.Sprintf("Error: %v", err), true
+			}
+			if from == "" {
+				from = "(none)"
+			}
+			return fmt.Sprintf("Switched leaf: %s -> %s\nNext messages will branch from %s.", from, to, to), true
+
+		default:
+			return usage, true
 		}
 
 	case "/switch":

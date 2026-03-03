@@ -363,6 +363,15 @@ func registerGatewayHTTPAPI(svc *gatewayServices) {
 		fmt.Printf("⚠ Warning: failed to register /api/estop: %v\n", err)
 	}
 
+	security := httpapi.NewSecurityHandler(httpapi.SecurityHandlerOptions{
+		APIKey:    svc.cfg.Gateway.APIKey,
+		Workspace: svc.cfg.WorkspacePath(),
+		Config:    svc.cfg,
+	})
+	if err := svc.channelManager.RegisterHTTPHandler("/api/security", security); err != nil {
+		fmt.Printf("⚠ Warning: failed to register /api/security: %v\n", err)
+	}
+
 	console := httpapi.NewConsoleHandler(httpapi.ConsoleHandlerOptions{
 		Workspace: svc.cfg.WorkspacePath(),
 		APIKey:    svc.cfg.Gateway.APIKey,

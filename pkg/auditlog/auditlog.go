@@ -1,6 +1,9 @@
 package auditlog
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -45,6 +48,10 @@ type Event struct {
 	ResultPreview string `json:"result_preview,omitempty"`
 
 	Note string `json:"note,omitempty"`
+
+	SigAlg   string `json:"sig_alg,omitempty"`
+	SigKeyID string `json:"sig_key_id,omitempty"`
+	Sig      string `json:"sig,omitempty"`
 }
 
 type writer struct {
@@ -56,6 +63,9 @@ type writer struct {
 	maxBackups int
 
 	path string
+
+	hmacKey   []byte
+	hmacKeyID string
 
 	mu sync.Mutex
 }
@@ -80,6 +90,11 @@ func Configure(workspace string, cfg config.AuditLogConfig) {
 	w.maxBytes = int64(cfg.MaxBytes)
 	w.maxBackups = cfg.MaxBackups
 	w.path = filepath.Join(w.dir, "audit.jsonl")
+	w.hmacKey = nil
+	if strings.TrimSpace(cfg.HMACKey) != "" {
+		w.hmacKey = []byte(strings.TrimSpace(cfg.HMACKey))
+	}
+	w.hmacKeyID = strings.TrimSpace(cfg.HMACKeyID)
 }
 
 func Record(workspace string, ev Event) {
@@ -111,6 +126,14 @@ func Record(workspace string, ev Event) {
 		return
 	}
 
+	if len(w.hmacKey) > 0 {
+		ev.SigAlg = "hmac-sha256"
+		ev.SigKeyID = strings.TrimSpace(w.hmacKeyID)
+		if sig, err := computeHMACSignatureHex(ev, w.hmacKey); err == nil {
+			ev.Sig = sig
+		}
+	}
+
 	line, err := json.Marshal(ev)
 	if err != nil {
 		return
@@ -131,6 +154,50 @@ func Record(workspace string, ev Event) {
 	}
 	_, _ = f.Write(line)
 	_ = f.Close()
+}
+
+func VerifyHMACSignature(ev Event, key []byte) (bool, error) {
+	if len(key) == 0 {
+		return false, fmt.Errorf("missing hmac key")
+	}
+	sigHex := strings.TrimSpace(ev.Sig)
+	if sigHex == "" {
+		return false, fmt.Errorf("missing signature")
+	}
+	sigBytes, err := hex.DecodeString(sigHex)
+	if err != nil {
+		return false, fmt.Errorf("invalid signature hex: %w", err)
+	}
+
+	want, err := computeHMACSignatureBytes(ev, key)
+	if err != nil {
+		return false, err
+	}
+	return hmac.Equal(sigBytes, want), nil
+}
+
+func computeHMACSignatureHex(ev Event, key []byte) (string, error) {
+	sum, err := computeHMACSignatureBytes(ev, key)
+	if err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(sum), nil
+}
+
+func computeHMACSignatureBytes(ev Event, key []byte) ([]byte, error) {
+	if len(key) == 0 {
+		return nil, fmt.Errorf("missing hmac key")
+	}
+
+	ev.Sig = ""
+	payload, err := json.Marshal(ev)
+	if err != nil {
+		return nil, err
+	}
+
+	mac := hmac.New(sha256.New, key)
+	_, _ = mac.Write(payload)
+	return mac.Sum(nil), nil
 }
 
 func getOrCreateWriter(workspace string) *writer {

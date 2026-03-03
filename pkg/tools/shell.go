@@ -32,6 +32,9 @@ type ExecTool struct {
 	dockerImage          string
 	dockerNetwork        string
 	dockerReadOnlyRootFS bool
+	dockerMemoryMB       int
+	dockerCPUs           float64
+	dockerPidsLimit      int
 }
 
 var (
@@ -113,6 +116,9 @@ func NewExecToolWithConfig(workingDir string, restrict bool, config *config.Conf
 	dockerImage := ""
 	dockerNetwork := ""
 	dockerReadOnly := false
+	dockerMemoryMB := 0
+	dockerCPUs := 0.0
+	dockerPidsLimit := 0
 
 	if config != nil {
 		execConfig := config.Tools.Exec
@@ -158,22 +164,28 @@ func NewExecToolWithConfig(workingDir string, restrict bool, config *config.Conf
 			dockerNetwork = "none"
 		}
 		dockerReadOnly = execConfig.Docker.ReadOnlyRootFS
+		dockerMemoryMB = execConfig.Docker.MemoryMB
+		dockerCPUs = execConfig.Docker.CPUs
+		dockerPidsLimit = execConfig.Docker.PidsLimit
 	} else {
 		denyPatterns = append(denyPatterns, defaultDenyPatterns...)
 	}
 
 	return &ExecTool{
-		workingDir:          workingDir,
-		timeout:             60 * time.Second,
-		denyPatterns:        denyPatterns,
-		allowPatterns:       nil,
-		customAllowPatterns: customAllowPatterns,
-		restrictToWorkspace: restrict,
-		processes:           NewProcessManager(defaultProcessMaxOutputChars),
-		backend:             backend,
-		dockerImage:         dockerImage,
-		dockerNetwork:       dockerNetwork,
+		workingDir:           workingDir,
+		timeout:              60 * time.Second,
+		denyPatterns:         denyPatterns,
+		allowPatterns:        nil,
+		customAllowPatterns:  customAllowPatterns,
+		restrictToWorkspace:  restrict,
+		processes:            NewProcessManager(defaultProcessMaxOutputChars),
+		backend:              backend,
+		dockerImage:          dockerImage,
+		dockerNetwork:        dockerNetwork,
 		dockerReadOnlyRootFS: dockerReadOnly,
+		dockerMemoryMB:       dockerMemoryMB,
+		dockerCPUs:           dockerCPUs,
+		dockerPidsLimit:      dockerPidsLimit,
 	}, nil
 }
 
@@ -343,6 +355,15 @@ func (t *ExecTool) executeDockerSync(ctx context.Context, command, cwd string, t
 		"--network", network,
 		"-v", fmt.Sprintf("%s:/workspace", workspace),
 		"-w", containerWD,
+	}
+	if t.dockerMemoryMB > 0 {
+		args = append(args, "--memory", fmt.Sprintf("%dm", t.dockerMemoryMB))
+	}
+	if t.dockerCPUs > 0 {
+		args = append(args, "--cpus", fmt.Sprintf("%g", t.dockerCPUs))
+	}
+	if t.dockerPidsLimit > 0 {
+		args = append(args, "--pids-limit", fmt.Sprintf("%d", t.dockerPidsLimit))
 	}
 	if t.dockerReadOnlyRootFS {
 		args = append(args,

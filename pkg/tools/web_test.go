@@ -302,6 +302,29 @@ func TestWebTool_WebSearch_NoApiKey(t *testing.T) {
 	}
 }
 
+func TestWebTool_WebSearchDual_ForcesEvidenceMode(t *testing.T) {
+	tool := NewWebSearchDualTool(WebSearchToolOptions{
+		TavilyEnabled:     true,
+		TavilyAPIKey:      "test-key",
+		DuckDuckGoEnabled: true,
+	})
+	if tool == nil {
+		t.Fatal("expected a tool, got nil")
+	}
+	if tool.Name() != "web_search_dual" {
+		t.Fatalf("unexpected tool name: %s", tool.Name())
+	}
+	if tool.base == nil {
+		t.Fatal("expected base tool to be configured")
+	}
+	if !tool.base.evidenceMode {
+		t.Fatal("expected evidence_mode to be forced on for web_search_dual")
+	}
+	if tool.base.secondary == nil {
+		t.Fatal("expected a secondary provider when multiple candidates are enabled")
+	}
+}
+
 // TestWebTool_WebSearch_MissingQuery verifies error handling for missing query
 func TestWebTool_WebSearch_MissingQuery(t *testing.T) {
 	tool := NewWebSearchTool(WebSearchToolOptions{BraveEnabled: true, BraveAPIKey: "test-key", BraveMaxResults: 5})

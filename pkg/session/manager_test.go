@@ -150,3 +150,75 @@ func TestCompactionStateLifecycle(t *testing.T) {
 		t.Fatal("flushAt should be set")
 	}
 }
+
+func TestSessionTree_SwitchLeafBranchesHistory(t *testing.T) {
+	tmpDir := t.TempDir()
+	sm := NewSessionManager(tmpDir)
+	key := "telegram:123456"
+
+	sm.AddMessage(key, "user", "A")
+	sm.AddMessage(key, "assistant", "B")
+	sm.AddMessage(key, "user", "C")
+
+	events, err := readJSONLEvents(sm.eventsPath(key))
+	if err != nil {
+		t.Fatalf("read events: %v", err)
+	}
+
+	msgIDs := make([]string, 0, 3)
+	for _, ev := range events {
+		if ev.Type == EventSessionMessage && ev.Message != nil {
+			if ev.ID != "" {
+				msgIDs = append(msgIDs, ev.ID)
+			}
+		}
+	}
+	if len(msgIDs) < 3 {
+		t.Fatalf("expected >=3 message events, got %d", len(msgIDs))
+	}
+
+	originalLeaf := sm.LeafEventID(key)
+	if originalLeaf == "" {
+		t.Fatal("expected a non-empty leaf after messages")
+	}
+
+	branchPoint := msgIDs[1]
+	from, to, err := sm.SwitchLeaf(key, branchPoint)
+	if err != nil {
+		t.Fatalf("SwitchLeaf failed: %v", err)
+	}
+	if from == "" || to != branchPoint {
+		t.Fatalf("unexpected leaf switch from=%q to=%q", from, to)
+	}
+
+	h1 := sm.GetHistory(key)
+	if len(h1) != 2 {
+		t.Fatalf("expected 2 messages after switch, got %d", len(h1))
+	}
+	if h1[0].Content != "A" || h1[1].Content != "B" {
+		t.Fatalf("unexpected history after switch: %#v", h1)
+	}
+
+	sm.AddMessage(key, "user", "D")
+
+	h2 := sm.GetHistory(key)
+	if len(h2) != 3 {
+		t.Fatalf("expected 3 messages after branching, got %d", len(h2))
+	}
+	if h2[0].Content != "A" || h2[1].Content != "B" || h2[2].Content != "D" {
+		t.Fatalf("unexpected history after branching: %#v", h2)
+	}
+
+	if sm.LeafEventID(key) == originalLeaf {
+		t.Fatal("expected new leaf after branching")
+	}
+
+	sm2 := NewSessionManager(tmpDir)
+	h3 := sm2.GetHistory(key)
+	if len(h3) != 3 {
+		t.Fatalf("expected 3 messages after reload, got %d", len(h3))
+	}
+	if h3[0].Content != "A" || h3[1].Content != "B" || h3[2].Content != "D" {
+		t.Fatalf("unexpected history after reload: %#v", h3)
+	}
+}

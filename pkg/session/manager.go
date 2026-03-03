@@ -566,7 +566,7 @@ func (sm *SessionManager) loadSessions() error {
 		return &sess, nil
 	}
 
-	applyEvents := func(sess *Session, path string) error {
+	applyEvents := func(sess *Session, path string, leafHint string) error {
 		if sess == nil {
 			return fmt.Errorf("session is nil")
 		}
@@ -578,72 +578,26 @@ func (sm *SessionManager) loadSessions() error {
 			return err
 		}
 
-		// Derive timestamps when meta is missing.
-		var minTSMS, maxTSMS int64
-		for _, ev := range events {
-			if ev.TSMS > 0 {
-				if minTSMS == 0 || ev.TSMS < minTSMS {
-					minTSMS = ev.TSMS
-				}
-				if ev.TSMS > maxTSMS {
-					maxTSMS = ev.TSMS
-				}
-			}
-
-			switch ev.Type {
-			case EventSessionMessage:
-				if ev.Message != nil {
-					sess.Messages = append(sess.Messages, *ev.Message)
-				}
-			case EventSessionSummary:
-				sess.Summary = ev.Summary
-			case EventSessionActiveAgent:
-				if strings.TrimSpace(ev.ActiveAgentID) != "" {
-					sess.ActiveAgentID = strings.TrimSpace(ev.ActiveAgentID)
-				}
-			case EventSessionHistorySet:
-				if ev.History != nil {
-					msgs := make([]providers.Message, len(ev.History))
-					copy(msgs, ev.History)
-					sess.Messages = msgs
-				}
-			case EventSessionHistoryTrunc:
-				if ev.KeepLast <= 0 {
-					sess.Messages = []providers.Message{}
-				} else if len(sess.Messages) > ev.KeepLast {
-					sess.Messages = sess.Messages[len(sess.Messages)-ev.KeepLast:]
-				}
-			case EventSessionCompactionInc:
-				if ev.CompactionCount > sess.CompactionCount {
-					sess.CompactionCount = ev.CompactionCount
-				}
-			case EventSessionMemoryFlush:
-				if !ev.MemoryFlushAt.IsZero() {
-					sess.MemoryFlushAt = ev.MemoryFlushAt
-				}
-				if ev.MemoryFlushCompactionCount != 0 {
-					sess.MemoryFlushCompactionCount = ev.MemoryFlushCompactionCount
-				}
-			default:
-				// Ignore unknown event types for forward compatibility.
-			}
-
-			if strings.TrimSpace(ev.ID) != "" {
-				sess.LastEventID = strings.TrimSpace(ev.ID)
-			}
+		replayed, effectiveLeaf := replayEvents(events, leafHint)
+		if effectiveLeaf == "" {
+			return nil
 		}
 
-		if sess.Created.IsZero() && minTSMS > 0 {
-			sess.Created = time.UnixMilli(minTSMS)
+		sess.Messages = replayed.Messages
+		sess.Summary = replayed.Summary
+		sess.ActiveAgentID = replayed.ActiveAgentID
+		sess.CompactionCount = replayed.CompactionCount
+		sess.MemoryFlushAt = replayed.MemoryFlushAt
+		sess.MemoryFlushCompactionCount = replayed.MemoryFlushCompactionCount
+		sess.LastEventID = effectiveLeaf
+
+		if sess.Created.IsZero() && !replayed.Created.IsZero() {
+			sess.Created = replayed.Created
 		}
-		if sess.Updated.IsZero() && maxTSMS > 0 {
-			sess.Updated = time.UnixMilli(maxTSMS)
-		} else if maxTSMS > 0 {
-			// If meta-derived Updated is older than the events file, prefer the events.
-			evUpdated := time.UnixMilli(maxTSMS)
-			if sess.Updated.Before(evUpdated) {
-				sess.Updated = evUpdated
-			}
+		if sess.Updated.IsZero() && !replayed.Updated.IsZero() {
+			sess.Updated = replayed.Updated
+		} else if !replayed.Updated.IsZero() && sess.Updated.Before(replayed.Updated) {
+			sess.Updated = replayed.Updated
 		}
 		return nil
 	}
@@ -685,8 +639,6 @@ func (sm *SessionManager) loadSessions() error {
 			sess = &Session{
 				Key:      key,
 				Messages: []providers.Message{},
-				Created:  time.Now(),
-				Updated:  time.Now(),
 			}
 			if meta != nil {
 				sess.Summary = strings.TrimSpace(meta.Summary)
@@ -696,7 +648,13 @@ func (sm *SessionManager) loadSessions() error {
 				sess.LastEventID = strings.TrimSpace(meta.LastEventID)
 			}
 
-			_ = applyEvents(sess, sf.jsonl)
+			_ = applyEvents(sess, sf.jsonl, sess.LastEventID)
+			if sess.Created.IsZero() {
+				sess.Created = time.Now()
+			}
+			if sess.Updated.IsZero() {
+				sess.Updated = sess.Created
+			}
 
 			sm.sessions[sess.Key] = sess
 			continue

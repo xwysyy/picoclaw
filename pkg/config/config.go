@@ -581,6 +581,14 @@ type AuditLogConfig struct {
 	// MaxBackups controls how many rotated files to keep (best-effort).
 	// 0 means keep all rotated files.
 	MaxBackups int `json:"max_backups,omitempty" env:"PICOCLAW_AUDIT_LOG_MAX_BACKUPS"`
+
+	// HMACKey enables per-line HMAC signatures on audit.jsonl entries.
+	// When empty, signing is disabled. Prefer setting this via env.
+	HMACKey string `json:"hmac_key,omitempty" env:"PICOCLAW_AUDIT_LOG_HMAC_KEY"`
+
+	// HMACKeyID is an optional identifier written into each signed line
+	// to support key rotation and log forensics.
+	HMACKeyID string `json:"hmac_key_id,omitempty" env:"PICOCLAW_AUDIT_LOG_HMAC_KEY_ID"`
 }
 
 type ProvidersConfig struct {
@@ -836,6 +844,15 @@ type ExecDockerConfig struct {
 
 	// ReadOnlyRootFS sets --read-only and mounts tmpfs for /tmp and /var/tmp.
 	ReadOnlyRootFS bool `json:"read_only_rootfs,omitempty"`
+
+	// MemoryMB maps to docker run --memory (in megabytes). 0 disables the limit.
+	MemoryMB int `json:"memory_mb,omitempty" env:"PICOCLAW_TOOLS_EXEC_DOCKER_MEMORY_MB"`
+
+	// CPUs maps to docker run --cpus (e.g. 0.5). 0 disables the limit.
+	CPUs float64 `json:"cpus,omitempty" env:"PICOCLAW_TOOLS_EXEC_DOCKER_CPUS"`
+
+	// PidsLimit maps to docker run --pids-limit. 0 disables the limit.
+	PidsLimit int `json:"pids_limit,omitempty" env:"PICOCLAW_TOOLS_EXEC_DOCKER_PIDS_LIMIT"`
 }
 
 // EstopConfig enables a global kill switch for tool execution (Policy-first Tools).
