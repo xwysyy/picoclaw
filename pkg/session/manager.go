@@ -2,6 +2,8 @@ package session
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -21,6 +23,10 @@ type Session struct {
 	MemoryFlushCompactionCount int                 `json:"memory_flush_compaction_count,omitempty"`
 	Created                    time.Time           `json:"created"`
 	Updated                    time.Time           `json:"updated"`
+
+	// LastEventID tracks the last appended JSONL session event for parent linking.
+	// It is not required for correctness, but improves tree reconstruction and reload.
+	LastEventID string `json:"last_event_id,omitempty"`
 }
 
 type SessionManager struct {
@@ -86,8 +92,38 @@ func (sm *SessionManager) AddFullMessage(sessionKey string, msg providers.Messag
 		sm.sessions[sessionKey] = session
 	}
 
+	now := time.Now()
+	if session.Created.IsZero() {
+		session.Created = now
+	}
 	session.Messages = append(session.Messages, msg)
-	session.Updated = time.Now()
+	session.Updated = now
+
+	if sm.storage == "" {
+		return
+	}
+
+	// Append durable JSONL event (session tree).
+	msgCopy := msg
+	ev := SessionEvent{
+		Type:       EventSessionMessage,
+		ID:         newEventID(),
+		ParentID:   strings.TrimSpace(session.LastEventID),
+		TS:         now.UTC().Format(time.RFC3339Nano),
+		TSMS:       now.UnixMilli(),
+		SessionKey: strings.TrimSpace(sessionKey),
+		Message:    &msgCopy,
+	}
+	if path := sm.eventsPath(sessionKey); path != "" {
+		if err := appendJSONLEvent(path, ev); err == nil {
+			session.LastEventID = ev.ID
+		}
+	}
+
+	// Best-effort meta snapshot for the gateway console.
+	if path := sm.metaPath(sessionKey); path != "" {
+		_ = writeMetaFile(path, buildSessionMeta(session))
+	}
 }
 
 func (sm *SessionManager) GetHistory(key string) []providers.Message {
@@ -121,8 +157,31 @@ func (sm *SessionManager) SetSummary(key string, summary string) {
 
 	session, ok := sm.sessions[key]
 	if ok {
+		now := time.Now()
 		session.Summary = summary
-		session.Updated = time.Now()
+		session.Updated = now
+
+		if sm.storage == "" {
+			return
+		}
+
+		ev := SessionEvent{
+			Type:       EventSessionSummary,
+			ID:         newEventID(),
+			ParentID:   strings.TrimSpace(session.LastEventID),
+			TS:         now.UTC().Format(time.RFC3339Nano),
+			TSMS:       now.UnixMilli(),
+			SessionKey: strings.TrimSpace(key),
+			Summary:    summary,
+		}
+		if path := sm.eventsPath(key); path != "" {
+			if err := appendJSONLEvent(path, ev); err == nil {
+				session.LastEventID = ev.ID
+			}
+		}
+		if path := sm.metaPath(key); path != "" {
+			_ = writeMetaFile(path, buildSessionMeta(session))
+		}
 	}
 }
 
@@ -135,18 +194,40 @@ func (sm *SessionManager) TruncateHistory(key string, keepLast int) {
 		return
 	}
 
+	now := time.Now()
 	if keepLast <= 0 {
 		session.Messages = []providers.Message{}
-		session.Updated = time.Now()
+		session.Updated = now
+	} else {
+		if len(session.Messages) <= keepLast {
+			return
+		}
+
+		session.Messages = session.Messages[len(session.Messages)-keepLast:]
+		session.Updated = now
+	}
+
+	if sm.storage == "" {
 		return
 	}
 
-	if len(session.Messages) <= keepLast {
-		return
+	ev := SessionEvent{
+		Type:       EventSessionHistoryTrunc,
+		ID:         newEventID(),
+		ParentID:   strings.TrimSpace(session.LastEventID),
+		TS:         now.UTC().Format(time.RFC3339Nano),
+		TSMS:       now.UnixMilli(),
+		SessionKey: strings.TrimSpace(key),
+		KeepLast:   keepLast,
 	}
-
-	session.Messages = session.Messages[len(session.Messages)-keepLast:]
-	session.Updated = time.Now()
+	if path := sm.eventsPath(key); path != "" {
+		if err := appendJSONLEvent(path, ev); err == nil {
+			session.LastEventID = ev.ID
+		}
+	}
+	if path := sm.metaPath(key); path != "" {
+		_ = writeMetaFile(path, buildSessionMeta(session))
+	}
 }
 
 func (sm *SessionManager) IncrementCompactionCount(key string) int {
@@ -158,7 +239,28 @@ func (sm *SessionManager) IncrementCompactionCount(key string) int {
 		return 0
 	}
 	session.CompactionCount++
-	session.Updated = time.Now()
+	now := time.Now()
+	session.Updated = now
+
+	if sm.storage != "" {
+		ev := SessionEvent{
+			Type:            EventSessionCompactionInc,
+			ID:              newEventID(),
+			ParentID:        strings.TrimSpace(session.LastEventID),
+			TS:              now.UTC().Format(time.RFC3339Nano),
+			TSMS:            now.UnixMilli(),
+			SessionKey:      strings.TrimSpace(key),
+			CompactionCount: session.CompactionCount,
+		}
+		if path := sm.eventsPath(key); path != "" {
+			if err := appendJSONLEvent(path, ev); err == nil {
+				session.LastEventID = ev.ID
+			}
+		}
+		if path := sm.metaPath(key); path != "" {
+			_ = writeMetaFile(path, buildSessionMeta(session))
+		}
+	}
 	return session.CompactionCount
 }
 
@@ -170,9 +272,31 @@ func (sm *SessionManager) MarkMemoryFlush(key string, compactionCount int) {
 	if !ok {
 		return
 	}
-	session.MemoryFlushAt = time.Now()
+	now := time.Now()
+	session.MemoryFlushAt = now
 	session.MemoryFlushCompactionCount = compactionCount
-	session.Updated = time.Now()
+	session.Updated = now
+
+	if sm.storage != "" {
+		ev := SessionEvent{
+			Type:                       EventSessionMemoryFlush,
+			ID:                         newEventID(),
+			ParentID:                   strings.TrimSpace(session.LastEventID),
+			TS:                         now.UTC().Format(time.RFC3339Nano),
+			TSMS:                       now.UnixMilli(),
+			SessionKey:                 strings.TrimSpace(key),
+			MemoryFlushAt:              session.MemoryFlushAt,
+			MemoryFlushCompactionCount: session.MemoryFlushCompactionCount,
+		}
+		if path := sm.eventsPath(key); path != "" {
+			if err := appendJSONLEvent(path, ev); err == nil {
+				session.LastEventID = ev.ID
+			}
+		}
+		if path := sm.metaPath(key); path != "" {
+			_ = writeMetaFile(path, buildSessionMeta(session))
+		}
+	}
 }
 
 func (sm *SessionManager) GetCompactionState(key string) (count int, flushCount int, flushAt time.Time) {
@@ -195,86 +319,90 @@ func sanitizeFilename(key string) string {
 	return strings.ReplaceAll(key, ":", "_")
 }
 
+func fileStemForKey(key string) (string, bool) {
+	stem := sanitizeFilename(strings.TrimSpace(key))
+	if stem == "" || stem == "." {
+		return "", false
+	}
+	// filepath.IsLocal rejects empty names, "..", absolute paths, and
+	// OS-reserved device names (NUL, COM1 … on Windows).
+	if !filepath.IsLocal(stem) {
+		return "", false
+	}
+	// Reject any directory separators to ensure the session file is always written
+	// directly inside sm.storage.
+	if strings.ContainsAny(stem, `/\`) {
+		return "", false
+	}
+	return stem, true
+}
+
+func (sm *SessionManager) eventsPath(key string) string {
+	if sm == nil {
+		return ""
+	}
+	stem, ok := fileStemForKey(key)
+	if !ok {
+		return ""
+	}
+	return filepath.Join(sm.storage, stem+".jsonl")
+}
+
+func (sm *SessionManager) metaPath(key string) string {
+	if sm == nil {
+		return ""
+	}
+	stem, ok := fileStemForKey(key)
+	if !ok {
+		return ""
+	}
+	return filepath.Join(sm.storage, stem+".meta.json")
+}
+
+func (sm *SessionManager) legacySnapshotPath(key string) string {
+	if sm == nil {
+		return ""
+	}
+	stem, ok := fileStemForKey(key)
+	if !ok {
+		return ""
+	}
+	return filepath.Join(sm.storage, stem+".json")
+}
+
+func buildSessionMeta(s *Session) SessionMeta {
+	meta := SessionMeta{
+		Key:           s.Key,
+		Summary:       s.Summary,
+		Created:       s.Created,
+		Updated:       s.Updated,
+		LastEventID:   strings.TrimSpace(s.LastEventID),
+		MessagesCount: len(s.Messages),
+	}
+	return meta
+}
+
 func (sm *SessionManager) Save(key string) error {
 	if sm.storage == "" {
 		return nil
 	}
 
-	filename := sanitizeFilename(key)
-
-	// filepath.IsLocal rejects empty names, "..", absolute paths, and
-	// OS-reserved device names (NUL, COM1 … on Windows).
-	// The extra checks reject "." and any directory separators so that
-	// the session file is always written directly inside sm.storage.
-	if filename == "." || !filepath.IsLocal(filename) || strings.ContainsAny(filename, `/\`) {
+	filename, ok := fileStemForKey(key)
+	if !ok {
 		return os.ErrInvalid
 	}
 
-	// Snapshot under read lock, then perform slow file I/O after unlock.
+	// Lightweight persistence: write a small meta snapshot for the console/ops UI.
 	sm.mu.RLock()
 	stored, ok := sm.sessions[key]
-	if !ok {
+	if !ok || stored == nil {
 		sm.mu.RUnlock()
 		return nil
 	}
-
-	snapshot := Session{
-		Key:                        stored.Key,
-		Summary:                    stored.Summary,
-		CompactionCount:            stored.CompactionCount,
-		MemoryFlushAt:              stored.MemoryFlushAt,
-		MemoryFlushCompactionCount: stored.MemoryFlushCompactionCount,
-		Created:                    stored.Created,
-		Updated:                    stored.Updated,
-	}
-	if len(stored.Messages) > 0 {
-		snapshot.Messages = make([]providers.Message, len(stored.Messages))
-		copy(snapshot.Messages, stored.Messages)
-	} else {
-		snapshot.Messages = []providers.Message{}
-	}
+	meta := buildSessionMeta(stored)
 	sm.mu.RUnlock()
 
-	data, err := json.MarshalIndent(snapshot, "", "  ")
-	if err != nil {
-		return err
-	}
-
-	sessionPath := filepath.Join(sm.storage, filename+".json")
-	tmpFile, err := os.CreateTemp(sm.storage, "session-*.tmp")
-	if err != nil {
-		return err
-	}
-
-	tmpPath := tmpFile.Name()
-	cleanup := true
-	defer func() {
-		if cleanup {
-			_ = os.Remove(tmpPath)
-		}
-	}()
-
-	if _, err := tmpFile.Write(data); err != nil {
-		_ = tmpFile.Close()
-		return err
-	}
-	if err := tmpFile.Chmod(0o644); err != nil {
-		_ = tmpFile.Close()
-		return err
-	}
-	if err := tmpFile.Sync(); err != nil {
-		_ = tmpFile.Close()
-		return err
-	}
-	if err := tmpFile.Close(); err != nil {
-		return err
-	}
-
-	if err := os.Rename(tmpPath, sessionPath); err != nil {
-		return err
-	}
-	cleanup = false
-	return nil
+	return writeMetaFile(filepath.Join(sm.storage, filename+".meta.json"), meta)
 }
 
 func (sm *SessionManager) loadSessions() error {
@@ -283,29 +411,310 @@ func (sm *SessionManager) loadSessions() error {
 		return err
 	}
 
-	for _, file := range files {
-		if file.IsDir() {
-			continue
-		}
-
-		if filepath.Ext(file.Name()) != ".json" {
-			continue
-		}
-
-		sessionPath := filepath.Join(sm.storage, file.Name())
-		data, err := os.ReadFile(sessionPath)
-		if err != nil {
-			continue
-		}
-
-		var session Session
-		if err := json.Unmarshal(data, &session); err != nil {
-			continue
-		}
-
-		sm.sessions[session.Key] = &session
+	type sessFiles struct {
+		base   string
+		meta   string
+		jsonl  string
+		legacy string
 	}
 
+	byBase := map[string]*sessFiles{}
+
+	get := func(base string) *sessFiles {
+		if base == "" {
+			return nil
+		}
+		sf := byBase[base]
+		if sf == nil {
+			sf = &sessFiles{base: base}
+			byBase[base] = sf
+		}
+		return sf
+	}
+
+	for _, ent := range files {
+		if ent == nil || ent.IsDir() {
+			continue
+		}
+		name := strings.TrimSpace(ent.Name())
+		if name == "" || strings.HasPrefix(name, ".") {
+			continue
+		}
+		lower := strings.ToLower(name)
+
+		switch {
+		case strings.HasSuffix(lower, ".meta.json"):
+			base := strings.TrimSuffix(name, name[len(name)-len(".meta.json"):])
+			if sf := get(base); sf != nil {
+				sf.meta = filepath.Join(sm.storage, name)
+			}
+		case strings.HasSuffix(lower, ".jsonl"):
+			base := strings.TrimSuffix(name, name[len(name)-len(".jsonl"):])
+			if sf := get(base); sf != nil {
+				sf.jsonl = filepath.Join(sm.storage, name)
+			}
+		case strings.HasSuffix(lower, ".json"):
+			// Legacy full snapshot (*.json) from older versions.
+			// Exclude meta snapshots (*.meta.json).
+			if strings.HasSuffix(lower, ".meta.json") {
+				continue
+			}
+			base := strings.TrimSuffix(name, name[len(name)-len(".json"):])
+			if sf := get(base); sf != nil {
+				sf.legacy = filepath.Join(sm.storage, name)
+			}
+		default:
+			continue
+		}
+	}
+
+	loadMeta := func(path string) (*SessionMeta, error) {
+		if strings.TrimSpace(path) == "" {
+			return nil, os.ErrNotExist
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return nil, err
+		}
+		var meta SessionMeta
+		if err := json.Unmarshal(data, &meta); err != nil {
+			return nil, err
+		}
+		if strings.TrimSpace(meta.Key) == "" {
+			return nil, fmt.Errorf("meta missing key")
+		}
+		return &meta, nil
+	}
+
+	loadLegacy := func(path string) (*Session, error) {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return nil, err
+		}
+		var sess Session
+		if err := json.Unmarshal(data, &sess); err != nil {
+			return nil, err
+		}
+		if strings.TrimSpace(sess.Key) == "" {
+			return nil, fmt.Errorf("legacy snapshot missing key")
+		}
+		if sess.Messages == nil {
+			sess.Messages = []providers.Message{}
+		}
+		return &sess, nil
+	}
+
+	applyEvents := func(sess *Session, path string) error {
+		if sess == nil {
+			return fmt.Errorf("session is nil")
+		}
+		if strings.TrimSpace(path) == "" {
+			return os.ErrNotExist
+		}
+		events, err := readJSONLEvents(path)
+		if err != nil {
+			return err
+		}
+
+		// Derive timestamps when meta is missing.
+		var minTSMS, maxTSMS int64
+		for _, ev := range events {
+			if ev.TSMS > 0 {
+				if minTSMS == 0 || ev.TSMS < minTSMS {
+					minTSMS = ev.TSMS
+				}
+				if ev.TSMS > maxTSMS {
+					maxTSMS = ev.TSMS
+				}
+			}
+
+			switch ev.Type {
+			case EventSessionMessage:
+				if ev.Message != nil {
+					sess.Messages = append(sess.Messages, *ev.Message)
+				}
+			case EventSessionSummary:
+				sess.Summary = ev.Summary
+			case EventSessionHistorySet:
+				if ev.History != nil {
+					msgs := make([]providers.Message, len(ev.History))
+					copy(msgs, ev.History)
+					sess.Messages = msgs
+				}
+			case EventSessionHistoryTrunc:
+				if ev.KeepLast <= 0 {
+					sess.Messages = []providers.Message{}
+				} else if len(sess.Messages) > ev.KeepLast {
+					sess.Messages = sess.Messages[len(sess.Messages)-ev.KeepLast:]
+				}
+			case EventSessionCompactionInc:
+				if ev.CompactionCount > sess.CompactionCount {
+					sess.CompactionCount = ev.CompactionCount
+				}
+			case EventSessionMemoryFlush:
+				if !ev.MemoryFlushAt.IsZero() {
+					sess.MemoryFlushAt = ev.MemoryFlushAt
+				}
+				if ev.MemoryFlushCompactionCount != 0 {
+					sess.MemoryFlushCompactionCount = ev.MemoryFlushCompactionCount
+				}
+			default:
+				// Ignore unknown event types for forward compatibility.
+			}
+
+			if strings.TrimSpace(ev.ID) != "" {
+				sess.LastEventID = strings.TrimSpace(ev.ID)
+			}
+		}
+
+		if sess.Created.IsZero() && minTSMS > 0 {
+			sess.Created = time.UnixMilli(minTSMS)
+		}
+		if sess.Updated.IsZero() && maxTSMS > 0 {
+			sess.Updated = time.UnixMilli(maxTSMS)
+		} else if maxTSMS > 0 {
+			// If meta-derived Updated is older than the events file, prefer the events.
+			evUpdated := time.UnixMilli(maxTSMS)
+			if sess.Updated.Before(evUpdated) {
+				sess.Updated = evUpdated
+			}
+		}
+		return nil
+	}
+
+	// Populate sm.sessions from JSONL or legacy snapshots.
+	for _, sf := range byBase {
+		if sf == nil {
+			continue
+		}
+
+		var meta *SessionMeta
+		if m, err := loadMeta(sf.meta); err == nil {
+			meta = m
+		}
+
+		// Determine key and initial session skeleton.
+		key := ""
+		if meta != nil {
+			key = strings.TrimSpace(meta.Key)
+		}
+
+		var sess *Session
+
+		// Prefer JSONL when present.
+		if strings.TrimSpace(sf.jsonl) != "" {
+			if key == "" && meta == nil {
+				// Best-effort: attempt to infer key from legacy snapshot.
+				if strings.TrimSpace(sf.legacy) != "" {
+					if legacy, err := loadLegacy(sf.legacy); err == nil {
+						key = strings.TrimSpace(legacy.Key)
+					}
+				}
+			}
+			if key == "" {
+				// Fallback: use base token (not ideal, but keeps data accessible).
+				key = sf.base
+			}
+
+			sess = &Session{
+				Key:      key,
+				Messages: []providers.Message{},
+				Created:  time.Now(),
+				Updated:  time.Now(),
+			}
+			if meta != nil {
+				sess.Summary = strings.TrimSpace(meta.Summary)
+				sess.Created = meta.Created
+				sess.Updated = meta.Updated
+				sess.LastEventID = strings.TrimSpace(meta.LastEventID)
+			}
+
+			_ = applyEvents(sess, sf.jsonl)
+
+			sm.sessions[sess.Key] = sess
+			continue
+		}
+
+		// Legacy-only session: load full snapshot, then migrate into JSONL/meta.
+		if strings.TrimSpace(sf.legacy) != "" {
+			legacy, err := loadLegacy(sf.legacy)
+			if err != nil {
+				continue
+			}
+			sess = legacy
+
+			// Best-effort: migrate legacy snapshot into JSONL for future durability.
+			if sm.storage != "" {
+				_ = sm.migrateLegacyToJSONL(sess)
+			}
+
+			sm.sessions[sess.Key] = sess
+			continue
+		}
+	}
+
+	return nil
+}
+
+func (sm *SessionManager) migrateLegacyToJSONL(sess *Session) error {
+	if sm == nil || strings.TrimSpace(sm.storage) == "" || sess == nil {
+		return nil
+	}
+	key := strings.TrimSpace(sess.Key)
+	if key == "" {
+		return nil
+	}
+	jsonlPath := sm.eventsPath(key)
+	if strings.TrimSpace(jsonlPath) == "" {
+		return nil
+	}
+	if _, err := os.Stat(jsonlPath); err == nil {
+		// Already migrated.
+		return nil
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+
+	now := time.Now()
+	parent := strings.TrimSpace(sess.LastEventID)
+	for _, msg := range sess.Messages {
+		msgCopy := msg
+		ev := SessionEvent{
+			Type:       EventSessionMessage,
+			ID:         newEventID(),
+			ParentID:   parent,
+			TS:         now.UTC().Format(time.RFC3339Nano),
+			TSMS:       now.UnixMilli(),
+			SessionKey: key,
+			Message:    &msgCopy,
+		}
+		if err := appendJSONLEvent(jsonlPath, ev); err != nil {
+			return err
+		}
+		parent = ev.ID
+		sess.LastEventID = ev.ID
+	}
+
+	if strings.TrimSpace(sess.Summary) != "" {
+		ev := SessionEvent{
+			Type:       EventSessionSummary,
+			ID:         newEventID(),
+			ParentID:   parent,
+			TS:         now.UTC().Format(time.RFC3339Nano),
+			TSMS:       now.UnixMilli(),
+			SessionKey: key,
+			Summary:    sess.Summary,
+		}
+		if err := appendJSONLEvent(jsonlPath, ev); err != nil {
+			return err
+		}
+		sess.LastEventID = ev.ID
+	}
+
+	// Write a meta snapshot for the console.
+	if path := sm.metaPath(key); path != "" {
+		_ = writeMetaFile(path, buildSessionMeta(sess))
+	}
 	return nil
 }
 
@@ -321,7 +730,30 @@ func (sm *SessionManager) SetHistory(key string, history []providers.Message) {
 		msgs := make([]providers.Message, len(history))
 		copy(msgs, history)
 		session.Messages = msgs
-		session.Updated = time.Now()
+		now := time.Now()
+		session.Updated = now
+
+		if sm.storage == "" {
+			return
+		}
+
+		ev := SessionEvent{
+			Type:       EventSessionHistorySet,
+			ID:         newEventID(),
+			ParentID:   strings.TrimSpace(session.LastEventID),
+			TS:         now.UTC().Format(time.RFC3339Nano),
+			TSMS:       now.UnixMilli(),
+			SessionKey: strings.TrimSpace(key),
+			History:    msgs,
+		}
+		if path := sm.eventsPath(key); path != "" {
+			if err := appendJSONLEvent(path, ev); err == nil {
+				session.LastEventID = ev.ID
+			}
+		}
+		if path := sm.metaPath(key); path != "" {
+			_ = writeMetaFile(path, buildSessionMeta(session))
+		}
 	}
 }
 

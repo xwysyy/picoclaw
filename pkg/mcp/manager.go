@@ -30,6 +30,64 @@ func (m *Manager) Enabled() bool {
 	return m != nil && m.cfg.Enabled
 }
 
+// ToolPrefixes returns the effective tool name prefixes for all configured MCP servers.
+// It is used for hot reload to unregister previously registered MCP tools.
+func (m *Manager) ToolPrefixes() []string {
+	if m == nil {
+		return nil
+	}
+
+	m.mu.Lock()
+	cfg := m.cfg
+	m.mu.Unlock()
+
+	prefixes := make([]string, 0, len(cfg.Servers))
+	seen := map[string]struct{}{}
+	for _, raw := range cfg.Servers {
+		name := strings.TrimSpace(raw.Name)
+		if name == "" {
+			continue
+		}
+		p := strings.TrimSpace(raw.ToolPrefix)
+		if p == "" {
+			p = "mcp_" + name + "_"
+		}
+		p = sanitizeToolName(p)
+		if p != "" && !strings.HasSuffix(p, "_") {
+			p += "_"
+		}
+		if p == "" {
+			continue
+		}
+		if _, ok := seen[p]; ok {
+			continue
+		}
+		seen[p] = struct{}{}
+		prefixes = append(prefixes, p)
+	}
+	sort.Strings(prefixes)
+	return prefixes
+}
+
+// ApplyConfig swaps the MCP config and resets cached servers/tools.
+// Any existing server connections are best-effort closed.
+func (m *Manager) ApplyConfig(cfg config.MCPToolsConfig) {
+	if m == nil {
+		return
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	for _, s := range m.servers {
+		if s != nil {
+			_ = s.Close()
+		}
+	}
+	m.servers = map[string]*Server{}
+	m.cfg = cfg
+}
+
 func (m *Manager) Init(ctx context.Context) {
 	if m == nil || !m.cfg.Enabled {
 		return

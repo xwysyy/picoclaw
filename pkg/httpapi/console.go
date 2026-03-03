@@ -182,6 +182,7 @@ func (h *ConsoleHandler) serveAPI(w http.ResponseWriter, r *http.Request) {
 				"/api/console/tools",
 				"/api/console/file?path=<relative-path>",
 				"/api/console/tail?path=<relative-path>&lines=200",
+				"/api/console/stream?path=<relative-path>&tail=200",
 			},
 		})
 		return
@@ -232,6 +233,10 @@ func (h *ConsoleHandler) serveAPI(w http.ResponseWriter, r *http.Request) {
 
 	case "tail":
 		h.handleTail(w, r)
+		return
+
+	case "stream":
+		h.handleStream(w, r)
 		return
 
 	default:
@@ -354,7 +359,13 @@ type sessionListItem struct {
 	Summary string `json:"summary,omitempty"`
 	Created string `json:"created,omitempty"`
 	Updated string `json:"updated,omitempty"`
-	File    string `json:"file,omitempty"`
+
+	// File points to a small JSON snapshot suitable for download in the console UI.
+	// New format: sessions/*.meta.json. Legacy: sessions/*.json.
+	File string `json:"file,omitempty"`
+
+	// EventsFile points to the append-only JSONL event log (sessions/*.jsonl).
+	EventsFile string `json:"events_file,omitempty"`
 }
 
 func (h *ConsoleHandler) handleSessions(w http.ResponseWriter, _ *http.Request) {
@@ -370,15 +381,19 @@ func (h *ConsoleHandler) handleSessions(w http.ResponseWriter, _ *http.Request) 
 	}
 
 	items := make([]sessionListItem, 0, len(entries))
+
+	// Prefer new lightweight meta snapshots (*.meta.json) and attach JSONL event log when present.
+	seenBase := make(map[string]struct{}, len(entries))
 	for _, ent := range entries {
 		if ent.IsDir() {
 			continue
 		}
-		name := ent.Name()
+		name := strings.TrimSpace(ent.Name())
 		if name == "" || strings.HasPrefix(name, ".") {
 			continue
 		}
-		if strings.ToLower(filepath.Ext(name)) != ".json" {
+		lower := strings.ToLower(name)
+		if !strings.HasSuffix(lower, ".meta.json") {
 			continue
 		}
 
@@ -389,22 +404,85 @@ func (h *ConsoleHandler) handleSessions(w http.ResponseWriter, _ *http.Request) 
 		}
 
 		var meta struct {
-			Key     string    `json:"key"`
-			Summary string    `json:"summary,omitempty"`
-			Created time.Time `json:"created"`
-			Updated time.Time `json:"updated"`
+			Key           string    `json:"key"`
+			Summary       string    `json:"summary,omitempty"`
+			Created       time.Time `json:"created"`
+			Updated       time.Time `json:"updated"`
+			LastEventID   string    `json:"last_event_id,omitempty"`
+			MessagesCount int       `json:"messages_count,omitempty"`
 		}
 		if json.Unmarshal(data, &meta) != nil {
 			continue
 		}
 
-		items = append(items, sessionListItem{
+		base := strings.TrimSuffix(name, name[len(name)-len(".meta.json"):])
+		if base != "" {
+			seenBase[base] = struct{}{}
+		}
+
+		item := sessionListItem{
 			Key:     strings.TrimSpace(meta.Key),
 			Summary: strings.TrimSpace(meta.Summary),
 			Created: meta.Created.UTC().Format(time.RFC3339Nano),
 			Updated: meta.Updated.UTC().Format(time.RFC3339Nano),
 			File:    filepath.ToSlash(filepath.Join("sessions", name)),
-		})
+		}
+
+		eventsName := base + ".jsonl"
+		if base != "" {
+			if _, err := os.Stat(filepath.Join(sessionsDir, eventsName)); err == nil {
+				item.EventsFile = filepath.ToSlash(filepath.Join("sessions", eventsName))
+			}
+		}
+
+		items = append(items, item)
+	}
+
+	// Backward compatibility: legacy full session snapshots (*.json) when meta is absent.
+	for _, ent := range entries {
+		if ent.IsDir() {
+			continue
+		}
+		name := strings.TrimSpace(ent.Name())
+		if name == "" || strings.HasPrefix(name, ".") {
+			continue
+		}
+		lower := strings.ToLower(name)
+		if !strings.HasSuffix(lower, ".json") || strings.HasSuffix(lower, ".meta.json") {
+			continue
+		}
+		base := strings.TrimSuffix(name, name[len(name)-len(".json"):])
+		if _, ok := seenBase[base]; ok {
+			continue
+		}
+
+		path := filepath.Join(sessionsDir, name)
+		data, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+
+		var legacy struct {
+			Key     string    `json:"key"`
+			Summary string    `json:"summary,omitempty"`
+			Created time.Time `json:"created"`
+			Updated time.Time `json:"updated"`
+		}
+		if json.Unmarshal(data, &legacy) != nil {
+			continue
+		}
+
+		item := sessionListItem{
+			Key:     strings.TrimSpace(legacy.Key),
+			Summary: strings.TrimSpace(legacy.Summary),
+			Created: legacy.Created.UTC().Format(time.RFC3339Nano),
+			Updated: legacy.Updated.UTC().Format(time.RFC3339Nano),
+			File:    filepath.ToSlash(filepath.Join("sessions", name)),
+		}
+		if _, err := os.Stat(filepath.Join(sessionsDir, base+".jsonl")); err == nil {
+			item.EventsFile = filepath.ToSlash(filepath.Join("sessions", base+".jsonl"))
+		}
+		items = append(items, item)
 	}
 
 	sort.Slice(items, func(i, j int) bool {
@@ -694,6 +772,154 @@ func (h *ConsoleHandler) handleTail(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (h *ConsoleHandler) handleStream(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", "GET")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		_ = json.NewEncoder(w).Encode(map[string]any{"ok": false, "error": "method not allowed"})
+		return
+	}
+
+	rel := strings.TrimSpace(r.URL.Query().Get("path"))
+	if rel == "" {
+		h.writeJSON(w, http.StatusBadRequest, map[string]any{"ok": false, "error": "path is required"})
+		return
+	}
+
+	tail := 200
+	if v := strings.TrimSpace(r.URL.Query().Get("tail")); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			tail = n
+		}
+	}
+	if tail < 0 {
+		tail = 0
+	}
+	if tail > 500 {
+		tail = 500
+	}
+
+	abs, relClean, err := h.resolveConsolePath(rel)
+	if err != nil {
+		h.writeJSON(w, http.StatusBadRequest, map[string]any{"ok": false, "error": err.Error()})
+		return
+	}
+
+	f, err := os.Open(abs)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			h.writeJSON(w, http.StatusNotFound, map[string]any{"ok": false, "error": "file not found"})
+			return
+		}
+		h.writeJSON(w, http.StatusInternalServerError, map[string]any{"ok": false, "error": err.Error()})
+		return
+	}
+	defer f.Close()
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		h.writeJSON(w, http.StatusInternalServerError, map[string]any{"ok": false, "error": "streaming not supported"})
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("X-Accel-Buffering", "no")
+	w.WriteHeader(http.StatusOK)
+	flusher.Flush()
+
+	// Initial tail from the end of the file (bounded).
+	if tail > 0 {
+		const maxBytes = int64(1 << 20) // 1MiB
+		if st, err := f.Stat(); err == nil && st != nil && st.Size() > 0 {
+			start := st.Size() - maxBytes
+			if start < 0 {
+				start = 0
+			}
+			if _, err := f.Seek(start, io.SeekStart); err == nil {
+				buf, _ := io.ReadAll(f)
+				lines := strings.Split(string(buf), "\n")
+				// Drop an incomplete first line when we seek into the middle.
+				if start > 0 && len(lines) > 0 {
+					lines = lines[1:]
+				}
+				trimmed := make([]string, 0, len(lines))
+				for _, line := range lines {
+					line = strings.TrimSpace(line)
+					if line == "" {
+						continue
+					}
+					trimmed = append(trimmed, line)
+				}
+				if len(trimmed) > tail {
+					trimmed = trimmed[len(trimmed)-tail:]
+				}
+				for _, line := range trimmed {
+					_, _ = io.WriteString(w, line+"\n")
+				}
+				flusher.Flush()
+			}
+		}
+	}
+
+	// Follow appended lines.
+	reader := bufio.NewReader(f)
+	lastKeepAlive := time.Now()
+	lastStat := time.Now()
+	var lastSize int64
+	if st, err := f.Stat(); err == nil && st != nil {
+		lastSize = st.Size()
+	}
+
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		default:
+			line, err := reader.ReadString('\n')
+			if err == nil {
+				line = strings.TrimSpace(line)
+				if line != "" {
+					_, _ = io.WriteString(w, line+"\n")
+					flusher.Flush()
+				}
+				continue
+			}
+
+			if !errors.Is(err, io.EOF) {
+				_, _ = io.WriteString(w, fmt.Sprintf("{\"ok\":false,\"error\":%q,\"path\":%q}\n", err.Error(), relClean))
+				flusher.Flush()
+				return
+			}
+
+			// Keepalive (helps reverse proxies and browsers keep the connection).
+			if time.Since(lastKeepAlive) > 10*time.Second {
+				_, _ = io.WriteString(w, "\n")
+				flusher.Flush()
+				lastKeepAlive = time.Now()
+			}
+
+			// Detect truncation/rotation and re-seek to end if needed.
+			if time.Since(lastStat) > 2*time.Second {
+				lastStat = time.Now()
+				if st, err := os.Stat(abs); err == nil && st != nil {
+					if st.Size() < lastSize {
+						// File truncated: start reading from the beginning.
+						if _, err := f.Seek(0, io.SeekStart); err == nil {
+							reader.Reset(f)
+						}
+					}
+					lastSize = st.Size()
+				}
+			}
+
+			time.Sleep(150 * time.Millisecond)
+		}
+	}
+}
+
 func contentTypeForExt(ext string) string {
 	switch strings.ToLower(strings.TrimSpace(ext)) {
 	case ".json":
@@ -835,10 +1061,17 @@ func (h *ConsoleHandler) countTraceSessions(dir string) int {
 }
 
 func pickConsoleStaticDir() string {
-	candidates := []string{
+	candidates := []string{}
+	if home, _ := os.UserHomeDir(); strings.TrimSpace(home) != "" {
+		candidates = append(candidates,
+			filepath.Join(home, ".picoclaw", "console"),
+			filepath.Join(home, ".local", "share", "picoclaw", "console"),
+		)
+	}
+	candidates = append(candidates,
 		"/usr/local/share/picoclaw/console",
 		filepath.Join("web", "picoclaw-console", "out"),
-	}
+	)
 	for _, p := range candidates {
 		p = strings.TrimSpace(p)
 		if p == "" {

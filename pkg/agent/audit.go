@@ -81,11 +81,12 @@ type supervisorReview struct {
 }
 
 func (al *AgentLoop) runAuditLoop(ctx context.Context) {
-	if al.cfg == nil || !al.cfg.Audit.Enabled {
+	cfg := al.Config()
+	if cfg == nil || !cfg.Audit.Enabled {
 		return
 	}
 
-	intervalMinutes := al.cfg.Audit.IntervalMinutes
+	intervalMinutes := cfg.Audit.IntervalMinutes
 	if intervalMinutes <= 0 {
 		intervalMinutes = 30
 	}
@@ -133,11 +134,12 @@ func (al *AgentLoop) executeAuditCycle(ctx context.Context) {
 }
 
 func (al *AgentLoop) RunTaskAudit(ctx context.Context) (*AuditReport, error) {
-	if al.taskLedger == nil || al.cfg == nil {
+	cfg := al.Config()
+	if al.taskLedger == nil || cfg == nil {
 		return nil, nil
 	}
 
-	lookback := time.Duration(al.cfg.Audit.LookbackMinutes) * time.Minute
+	lookback := time.Duration(cfg.Audit.LookbackMinutes) * time.Minute
 	if lookback <= 0 {
 		lookback = 3 * time.Hour
 	}
@@ -151,16 +153,16 @@ func (al *AgentLoop) RunTaskAudit(ctx context.Context) (*AuditReport, error) {
 	}
 	nowMS := time.Now().UnixMilli()
 
-	timeoutSeconds := al.cfg.Orchestration.DefaultTaskTimeoutSeconds
+	timeoutSeconds := cfg.Orchestration.DefaultTaskTimeoutSeconds
 	if timeoutSeconds <= 0 {
 		timeoutSeconds = 180
 	}
 	timeoutMS := int64(timeoutSeconds) * 1000
-	retryLimit := al.cfg.Orchestration.RetryLimitPerTask
+	retryLimit := cfg.Orchestration.RetryLimitPerTask
 	if retryLimit < 0 {
 		retryLimit = 0
 	}
-	inconsistencyPolicy := strings.ToLower(strings.TrimSpace(al.cfg.Audit.InconsistencyPolicy))
+	inconsistencyPolicy := strings.ToLower(strings.TrimSpace(cfg.Audit.InconsistencyPolicy))
 	if inconsistencyPolicy == "" {
 		inconsistencyPolicy = "strict"
 	}
@@ -228,10 +230,11 @@ func (al *AgentLoop) supervisorModelAudit(
 	ctx context.Context,
 	records []tools.TaskLedgerEntry,
 ) ([]AuditFinding, error) {
-	if al.cfg == nil || !al.cfg.Audit.Supervisor.Enabled {
+	cfg := al.Config()
+	if cfg == nil || !cfg.Audit.Supervisor.Enabled {
 		return nil, nil
 	}
-	modelCfg := al.cfg.Audit.Supervisor.Model
+	modelCfg := cfg.Audit.Supervisor.Model
 	if modelCfg == nil || strings.TrimSpace(modelCfg.Primary) == "" {
 		return nil, fmt.Errorf("audit supervisor model is not configured")
 	}
@@ -247,17 +250,17 @@ func (al *AgentLoop) supervisorModelAudit(
 		defer closable.Close()
 	}
 
-	minConfidence := al.cfg.Audit.MinConfidence
+	minConfidence := cfg.Audit.MinConfidence
 	if minConfidence <= 0 {
 		minConfidence = 0.75
 	}
 
 	options := map[string]any{}
-	if al.cfg.Audit.Supervisor.Temperature != nil {
-		options["temperature"] = *al.cfg.Audit.Supervisor.Temperature
+	if cfg.Audit.Supervisor.Temperature != nil {
+		options["temperature"] = *cfg.Audit.Supervisor.Temperature
 	}
-	if al.cfg.Audit.Supervisor.MaxTokens > 0 {
-		options["max_tokens"] = al.cfg.Audit.Supervisor.MaxTokens
+	if cfg.Audit.Supervisor.MaxTokens > 0 {
+		options["max_tokens"] = cfg.Audit.Supervisor.MaxTokens
 	}
 
 	findings := make([]AuditFinding, 0)
@@ -357,11 +360,12 @@ func parseSupervisorReview(raw string) (*supervisorReview, error) {
 }
 
 func (al *AgentLoop) applyAutoRemediation(ctx context.Context, report *AuditReport) {
-	if report == nil || len(report.Findings) == 0 || al.taskLedger == nil || al.cfg == nil {
+	cfg := al.Config()
+	if report == nil || len(report.Findings) == 0 || al.taskLedger == nil || cfg == nil {
 		return
 	}
 
-	mode := strings.ToLower(strings.TrimSpace(al.cfg.Audit.AutoRemediation))
+	mode := strings.ToLower(strings.TrimSpace(cfg.Audit.AutoRemediation))
 	if mode == "" || mode == "disabled" || mode == "off" || mode == "none" {
 		return
 	}
@@ -393,21 +397,21 @@ func (al *AgentLoop) applyAutoRemediation(ctx context.Context, report *AuditRepo
 		return
 	}
 
-	maxPerCycle := al.cfg.Audit.MaxAutoRemediationsPerCycle
+	maxPerCycle := cfg.Audit.MaxAutoRemediationsPerCycle
 	if maxPerCycle <= 0 {
 		maxPerCycle = 3
 	}
-	cooldownMinutes := al.cfg.Audit.RemediationCooldownMinutes
+	cooldownMinutes := cfg.Audit.RemediationCooldownMinutes
 	if cooldownMinutes <= 0 {
 		cooldownMinutes = 10
 	}
 	cooldownMS := int64(cooldownMinutes) * 60 * 1000
-	retryLimit := al.cfg.Orchestration.RetryLimitPerTask
+	retryLimit := cfg.Orchestration.RetryLimitPerTask
 	if retryLimit < 0 {
 		retryLimit = 0
 	}
 
-	targetAgentID := strings.TrimSpace(al.cfg.Audit.RemediationAgentID)
+	targetAgentID := strings.TrimSpace(cfg.Audit.RemediationAgentID)
 	defaultAgent := al.registry.GetDefaultAgent()
 	if defaultAgent == nil || defaultAgent.SubagentManager == nil {
 		return
@@ -599,11 +603,12 @@ func (al *AgentLoop) publishAuditReport(report *AuditReport) {
 }
 
 func (al *AgentLoop) resolveAuditDestination() (string, string) {
-	if al.cfg == nil {
+	cfg := al.Config()
+	if cfg == nil {
 		return "", ""
 	}
 
-	notify := strings.TrimSpace(al.cfg.Audit.NotifyChannel)
+	notify := strings.TrimSpace(cfg.Audit.NotifyChannel)
 	last := ""
 	if al.state != nil {
 		last = al.state.GetLastChannel()
@@ -636,16 +641,17 @@ func splitChannelChat(value string) (string, string) {
 }
 
 func (al *AgentLoop) createProviderForModelAlias(modelAlias string) (providers.LLMProvider, string, error) {
-	if al.cfg == nil {
+	cfg := al.Config()
+	if cfg == nil {
 		return nil, "", fmt.Errorf("config is nil")
 	}
-	modelCfg, err := al.cfg.GetModelConfig(modelAlias)
+	modelCfg, err := cfg.GetModelConfig(modelAlias)
 	if err != nil {
 		return nil, "", err
 	}
 	cfgCopy := *modelCfg
 	if cfgCopy.Workspace == "" {
-		cfgCopy.Workspace = al.cfg.WorkspacePath()
+		cfgCopy.Workspace = cfg.WorkspacePath()
 	}
 	return providers.CreateProviderFromConfig(&cfgCopy)
 }

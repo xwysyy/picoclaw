@@ -42,6 +42,12 @@ make deps
 make build
 ```
 
+也可以用脚本一键安装到本机（默认安装到 `~/.local/bin/picoclaw`，并初始化 `~/.picoclaw/`）：
+
+```bash
+./scripts/install.sh --from-source
+```
+
 初始化工作区与配置：
 
 ```bash
@@ -63,15 +69,15 @@ vim ~/.picoclaw/config.json
   "agents": {
     "defaults": {
       "workspace": "~/.picoclaw/workspace",
-      "model": "gpt-5.2",
+      "model_name": "gpt-5.2-medium",
       "max_tokens": 8192,
       "max_tool_iterations": 20
     }
   },
   "model_list": [
     {
-      "model_name": "gpt-5.2",
-      "model": "openai/gpt-5.2",
+      "model_name": "gpt-5.2-medium",
+      "model": "openai/gpt-5.2-medium",
       "api_key": "YOUR_API_KEY",
       "api_base": "https://api.openai.com/v1"
     }
@@ -132,13 +138,45 @@ curl -sS http://127.0.0.1:18790/health
 }
 ```
 
+### Gateway 配置热更新（gateway.reload）
+
+为了减少“改配置就得重启/重建容器”的频率，Gateway 支持 **热更新**（仅 Gateway 模式）：
+- **SIGHUP**：收到 `SIGHUP` 时尝试 reload（需要 `gateway.reload.enabled=true`）
+- **watch**：轮询配置文件变更并自动 reload（适合 Docker bind-mount；需要 `gateway.reload.watch=true`）
+
+配置示例：
+
+```json
+{
+  "gateway": {
+    "reload": {
+      "enabled": true,
+      "watch": true,
+      "interval_seconds": 2
+    }
+  }
+}
+```
+
+触发方式：
+
+```bash
+# 方式 1：发 SIGHUP（仅当 enabled=true 时生效）
+kill -HUP <picoclaw_pid>
+```
+
+当前 reload 覆盖范围（刻意保持小而可控）：
+- 会重启 channels + 重新注册 webhook/HTTP handlers（含 `/api/notify`、`/api/console/*` 等）
+- 会把新 config 应用到 agent loop（含 notify/tool policy/MCP server 配置），并刷新 MCP tools 注册表
+- **不会**重启 cron/heartbeat/provider（这些通常需要“更重”的重启语义）
+
 ### Gateway Console（/console/）
 
 Gateway 内置一个**只读 Console**（Web UI，Next.js + shadcn/ui），用于自助查看：
 - `last_active` / 基础状态
 - cron jobs（`cron/jobs.json`）
 - token usage（`state/token_usage.json`，按模型统计累计 tokens）
-- sessions 列表（`sessions/*.json`）
+- sessions 列表（元数据：`sessions/*.meta.json`；事件流：`sessions/*.jsonl`）
 - run trace / tool trace（`<workspace>/.picoclaw/audit/**/events.jsonl`）
 - 健康检查链接（`/health` / `/ready`）
 
@@ -175,6 +213,13 @@ curl -sS -OJ "http://127.0.0.1:18790/api/console/file?path=cron/jobs.json"
 
 ```bash
 curl -sS "http://127.0.0.1:18790/api/console/tail?path=.picoclaw/audit/runs/<session>/events.jsonl&lines=200"
+```
+
+实时跟随（tail -f 风格，适合观察长任务进度；UI 里 Traces 也提供 Live 按钮）：
+
+```bash
+# -N: curl 不缓冲输出
+curl -N -sS "http://127.0.0.1:18790/api/console/stream?path=.picoclaw/audit/runs/<session>/events.jsonl&tail=200"
 ```
 
 ### 通知接口（/api/notify）

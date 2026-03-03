@@ -44,10 +44,16 @@ func TestSave_WithColonInKey(t *testing.T) {
 		t.Fatalf("Save(%q) failed: %v", key, err)
 	}
 
-	// The file on disk should use sanitized name.
-	expectedFile := filepath.Join(tmpDir, "telegram_123456.json")
-	if _, err := os.Stat(expectedFile); os.IsNotExist(err) {
-		t.Fatalf("expected session file %s to exist", expectedFile)
+	// Files on disk should use sanitized name:
+	// - events: <stem>.jsonl (append-only)
+	// - meta:   <stem>.meta.json (lightweight snapshot)
+	expectedEvents := filepath.Join(tmpDir, "telegram_123456.jsonl")
+	if _, err := os.Stat(expectedEvents); os.IsNotExist(err) {
+		t.Fatalf("expected session events file %s to exist", expectedEvents)
+	}
+	expectedMeta := filepath.Join(tmpDir, "telegram_123456.meta.json")
+	if _, err := os.Stat(expectedMeta); os.IsNotExist(err) {
+		t.Fatalf("expected session meta file %s to exist", expectedMeta)
 	}
 
 	// Load into a fresh manager and verify the session round-trips.

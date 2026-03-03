@@ -7,6 +7,9 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
+	"sync"
+	"syscall"
 	"time"
 
 	"github.com/sipeed/picoclaw/cmd/picoclaw/internal"
@@ -39,6 +42,7 @@ import (
 // gatewayServices groups all long-lived services for clean startup/shutdown.
 type gatewayServices struct {
 	cfg              *config.Config
+	configPath       string
 	provider         providers.LLMProvider
 	msgBus           *bus.MessageBus
 	agentLoop        *agent.AgentLoop
@@ -47,6 +51,8 @@ type gatewayServices struct {
 	mediaStore       *media.FileMediaStore
 	channelManager   *channels.Manager
 	healthServer     *health.Server
+
+	reloadMu sync.Mutex
 }
 
 func gatewayCmd(debug bool) error {
@@ -65,6 +71,7 @@ func gatewayCmd(debug bool) error {
 
 // initGatewayServices creates and wires all services needed by the gateway.
 func initGatewayServices(debug bool) (*gatewayServices, error) {
+	configPath := internal.GetConfigPath()
 	cfg, err := internal.LoadConfig()
 	if err != nil {
 		return nil, fmt.Errorf("error loading config: %w", err)
@@ -113,6 +120,7 @@ func initGatewayServices(debug bool) (*gatewayServices, error) {
 
 	return &gatewayServices{
 		cfg:              cfg,
+		configPath:       configPath,
 		provider:         provider,
 		msgBus:           msgBus,
 		agentLoop:        agentLoop,
@@ -156,10 +164,144 @@ func runGateway(svc *gatewayServices) error {
 	go svc.agentLoop.Run(ctx)
 
 	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, os.Interrupt)
-	<-sigChan
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 
-	return shutdownGateway(svc, cancel)
+	// Optional: config hot reload watcher (polling).
+	if svc != nil && svc.cfg != nil && svc.cfg.Gateway.Reload.Enabled && svc.cfg.Gateway.Reload.Watch {
+		interval := time.Duration(svc.cfg.Gateway.Reload.IntervalSeconds) * time.Second
+		if interval <= 0 {
+			interval = 2 * time.Second
+		}
+		go watchConfigFile(ctx, svc.configPath, interval, func() {
+			if err := svc.reload(ctx, "watch"); err != nil {
+				logger.WarnCF("gateway", "Config hot reload failed (watch)", map[string]any{
+					"error": err.Error(),
+				})
+			}
+		})
+	}
+
+	for {
+		sig := <-sigChan
+		if sig == syscall.SIGHUP {
+			if svc != nil && svc.cfg != nil && !svc.cfg.Gateway.Reload.Enabled {
+				logger.InfoCF("gateway", "Ignoring SIGHUP (gateway.reload.enabled=false)", nil)
+				continue
+			}
+			if err := svc.reload(ctx, "signal"); err != nil {
+				logger.WarnCF("gateway", "Config hot reload failed (SIGHUP)", map[string]any{
+					"error": err.Error(),
+				})
+			} else {
+				logger.InfoCF("gateway", "Config hot reload applied", map[string]any{
+					"source": "SIGHUP",
+				})
+			}
+			continue
+		}
+
+		return shutdownGateway(svc, cancel)
+	}
+}
+
+func watchConfigFile(ctx context.Context, path string, interval time.Duration, onChange func()) {
+	path = strings.TrimSpace(path)
+	if path == "" || interval <= 0 || onChange == nil {
+		return
+	}
+
+	lastStamp := ""
+	if fi, err := os.Stat(path); err == nil && fi != nil {
+		lastStamp = fmt.Sprintf("%d:%d", fi.ModTime().UnixNano(), fi.Size())
+	}
+
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			fi, err := os.Stat(path)
+			if err != nil || fi == nil {
+				continue
+			}
+			stamp := fmt.Sprintf("%d:%d", fi.ModTime().UnixNano(), fi.Size())
+			if stamp == lastStamp {
+				continue
+			}
+			lastStamp = stamp
+			onChange()
+		}
+	}
+}
+
+func (svc *gatewayServices) reload(ctx context.Context, reason string) error {
+	if svc == nil {
+		return fmt.Errorf("gateway services is nil")
+	}
+
+	svc.reloadMu.Lock()
+	defer svc.reloadMu.Unlock()
+
+	path := strings.TrimSpace(svc.configPath)
+	if path == "" {
+		path = internal.GetConfigPath()
+	}
+
+	newCfg, err := config.LoadConfig(path)
+	if err != nil {
+		return fmt.Errorf("reload config: %w", err)
+	}
+
+	// Preflight: ensure new config enables at least one channel, otherwise keep the current gateway running.
+	preflightCM, err := channels.NewManager(newCfg, svc.msgBus, svc.mediaStore)
+	if err != nil {
+		return fmt.Errorf("reload: create channel manager: %w", err)
+	}
+	if len(preflightCM.GetEnabledChannels()) == 0 {
+		return fmt.Errorf("reload aborted: no channels enabled in new config")
+	}
+
+	// Apply config to agent loop (tools/policy/notify settings).
+	svc.cfg = newCfg
+	if svc.agentLoop != nil {
+		svc.agentLoop.SetConfig(newCfg)
+		// Refresh MCP tools in-place.
+		svc.agentLoop.ReloadMCPTools(ctx)
+	}
+
+	// Restart channel manager + HTTP server (re-registers webhook handlers + /api/* handlers).
+	if svc.channelManager != nil {
+		stopCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		_ = svc.channelManager.StopAll(stopCtx)
+		cancel()
+	}
+
+	svc.channelManager = preflightCM
+	svc.healthServer = health.NewServer(newCfg.Gateway.Host, newCfg.Gateway.Port)
+
+	if svc.agentLoop != nil {
+		svc.agentLoop.SetChannelManager(svc.channelManager)
+	}
+
+	addr := fmt.Sprintf("%s:%d", newCfg.Gateway.Host, newCfg.Gateway.Port)
+	svc.channelManager.SetupHTTPServer(addr, svc.healthServer)
+	registerGatewayHTTPAPI(svc)
+
+	if err := svc.channelManager.StartAll(ctx); err != nil {
+		return fmt.Errorf("reload: start channels: %w", err)
+	}
+
+	logger.InfoCF("gateway", "Config reloaded", map[string]any{
+		"reason":           reason,
+		"config_path":      path,
+		"enabled_channels": svc.channelManager.GetEnabledChannels(),
+		"listen":           addr,
+	})
+
+	return nil
 }
 
 func registerGatewayHTTPAPI(svc *gatewayServices) {

@@ -630,6 +630,9 @@ type GatewayConfig struct {
 
 	// InboundQueue enables per-session serial processing with a global concurrency cap.
 	InboundQueue GatewayInboundQueueConfig `json:"inbound_queue,omitempty"`
+
+	// Reload controls runtime config hot reload behavior (gateway-only).
+	Reload GatewayReloadConfig `json:"reload,omitempty"`
 }
 
 type GatewayInboundQueueConfig struct {
@@ -642,6 +645,19 @@ type GatewayInboundQueueConfig struct {
 	// PerSessionBuffer caps queued inbound messages per session.
 	// Values <= 0 default to 32.
 	PerSessionBuffer int `json:"per_session_buffer,omitempty"`
+}
+
+type GatewayReloadConfig struct {
+	// Enabled toggles hot reload support. When false, SIGHUP/watch are ignored.
+	Enabled bool `json:"enabled,omitempty"`
+
+	// Watch enables polling-based config file monitoring for automatic reloads.
+	// This avoids requiring container restarts when config.json changes.
+	Watch bool `json:"watch,omitempty"`
+
+	// IntervalSeconds is the poll interval when Watch is enabled.
+	// Values <= 0 default to 2 seconds.
+	IntervalSeconds int `json:"interval_seconds,omitempty"`
 }
 
 type BraveConfig struct {

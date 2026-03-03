@@ -46,6 +46,7 @@ type ConsoleSessionsItem = {
   created?: string;
   updated?: string;
   file?: string;
+  events_file?: string;
 };
 
 type TailResponse = {
@@ -162,6 +163,8 @@ export default function Home() {
   const [viewerResp, setViewerResp] = useState<TailResponse | null>(null);
   const [viewerQuery, setViewerQuery] = useState<string>("");
   const [viewerMode, setViewerMode] = useState<"structured" | "raw">("structured");
+  const [viewerLive, setViewerLive] = useState<boolean>(false);
+  const liveAbortRef = useRef<AbortController | null>(null);
 
   const [cronDetailOpen, setCronDetailOpen] = useState(false);
   const [cronDetailJob, setCronDetailJob] = useState<any>(null);
@@ -177,6 +180,18 @@ export default function Home() {
 
   const didInitRef = useRef(false);
 
+  function stopLiveStream() {
+    if (liveAbortRef.current) {
+      try {
+        liveAbortRef.current.abort();
+      } catch {
+        // ignore
+      }
+      liveAbortRef.current = null;
+    }
+    setViewerLive(false);
+  }
+
   useEffect(() => {
     if (didInitRef.current) return;
     didInitRef.current = true;
@@ -191,6 +206,11 @@ export default function Home() {
     setSavedKey(key);
     void refreshAll(key);
   }, []);
+
+  useEffect(() => {
+    if (!viewerOpen) stopLiveStream();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewerOpen]);
 
   const authBadge = useMemo(() => {
     const hasKey = (apiKey || "").trim().length > 0;
@@ -297,6 +317,7 @@ export default function Home() {
 
   async function openTail(path: string) {
     setErr("");
+    stopLiveStream();
     setViewerTitle("Tail");
     setViewerPath(path);
     setViewerResp(null);
@@ -313,6 +334,7 @@ export default function Home() {
 
   async function openEvents(path: string) {
     setErr("");
+    stopLiveStream();
     setViewerTitle("Events");
     setViewerPath(path);
     setViewerResp(null);
@@ -324,6 +346,85 @@ export default function Home() {
       setViewerResp(resp);
     } catch (e: any) {
       setErr(e?.message ? String(e.message) : String(e));
+    }
+  }
+
+  async function openLive(path: string) {
+    setErr("");
+    stopLiveStream();
+    setViewerLive(true);
+    setViewerTitle("Live");
+    setViewerPath(path);
+    setViewerResp({
+      ok: true,
+      path,
+      lines_requested: 0,
+      truncated: false,
+      lines: [],
+    });
+    setViewerQuery("");
+    setViewerMode("structured");
+    setViewerOpen(true);
+
+    const ac = new AbortController();
+    liveAbortRef.current = ac;
+
+    const url = `/api/console/stream?path=${encodeURIComponent(path)}&tail=260`;
+    try {
+      const res = await fetch(url, {
+        headers: buildHeaders(apiKey),
+        signal: ac.signal,
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`${res.status} ${res.statusText}\n${text}`);
+      }
+      if (!res.body) {
+        throw new Error("stream body is not available");
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = "";
+
+      const flushLines = (lines: string[]) => {
+        if (!lines.length) return;
+        setViewerResp((prev) => {
+          const prevLines = Array.isArray(prev?.lines) ? prev!.lines!.map((s) => String(s)) : [];
+          const next = prevLines.concat(lines);
+          const kept = next.slice(-1200);
+          return {
+            ok: true,
+            path,
+            lines_requested: kept.length,
+            truncated: next.length !== kept.length,
+            lines: kept,
+          };
+        });
+      };
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const out: string[] = [];
+        while (true) {
+          const idx = buf.indexOf("\n");
+          if (idx < 0) break;
+          const line = buf.slice(0, idx);
+          buf = buf.slice(idx + 1);
+          const t = (line || "").trim();
+          if (!t) continue;
+          out.push(t);
+        }
+        flushLines(out);
+      }
+    } catch (e: any) {
+      if (ac.signal.aborted) return;
+      setErr(e?.message ? String(e.message) : String(e));
+    } finally {
+      if (liveAbortRef.current === ac) liveAbortRef.current = null;
+      setViewerLive(false);
     }
   }
 
@@ -383,7 +484,7 @@ export default function Home() {
     const q = sessionsQuery.trim().toLowerCase();
     if (!q) return list;
     return list.filter((s) => {
-      const hay = [s.key, s.summary, s.created, s.updated, s.file]
+      const hay = [s.key, s.summary, s.created, s.updated, s.file, s.events_file]
         .filter(Boolean)
         .map((v) => String(v).toLowerCase())
         .join(" ");
@@ -888,9 +989,9 @@ export default function Home() {
                 <CardTitle className="text-sm">Sessions</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                  <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                   <div className="text-xs text-muted-foreground">
-                    stored in <code>sessions/*.json</code>
+                    stored in <code>sessions/*.meta.json</code> · events in <code>sessions/*.jsonl</code>
                   </div>
                   <div className="relative">
                     <Search className="pointer-events-none absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -960,8 +1061,19 @@ export default function Home() {
                               {s.file ? (
                                 <Button variant="outline" size="sm" onClick={() => download(s.file!)}>
                                   <Download className="mr-2 h-4 w-4" />
-                                  JSON
+                                  Meta
                                 </Button>
+                              ) : null}
+                              {s.events_file ? (
+                                <>
+                                  <Button variant="outline" size="sm" onClick={() => openTail(s.events_file!)}>
+                                    Tail
+                                  </Button>
+                                  <Button variant="outline" size="sm" onClick={() => download(s.events_file!)}>
+                                    <Download className="mr-2 h-4 w-4" />
+                                    Events
+                                  </Button>
+                                </>
                               ) : null}
                             </div>
                           </TableCell>
@@ -1013,6 +1125,7 @@ export default function Home() {
                       onDownload={download}
                       onTail={openTail}
                       onEvents={openEvents}
+                      onLive={openLive}
                     />
                   </TabsContent>
                   <TabsContent value="tools" className="mt-4 space-y-4">
@@ -1022,6 +1135,7 @@ export default function Home() {
                       onDownload={download}
                       onTail={openTail}
                       onEvents={openEvents}
+                      onLive={openLive}
                     />
                   </TabsContent>
                 </Tabs>
@@ -1094,6 +1208,11 @@ export default function Home() {
                 <Download className="mr-2 h-4 w-4" />
                 Download
               </Button>
+              {viewerLive ? (
+                <Button variant="destructive" onClick={stopLiveStream}>
+                  Stop live
+                </Button>
+              ) : null}
             </div>
           </div>
 
@@ -1377,7 +1496,15 @@ export default function Home() {
               <>
                 <span>·</span>
                 <span>
-                  file: <code>{sessionDetail.file}</code>
+                  meta: <code>{sessionDetail.file}</code>
+                </span>
+              </>
+            ) : null}
+            {sessionDetail?.events_file ? (
+              <>
+                <span>·</span>
+                <span>
+                  events: <code>{sessionDetail.events_file}</code>
                 </span>
               </>
             ) : null}
@@ -1395,8 +1522,19 @@ export default function Home() {
             {sessionDetail?.file ? (
               <Button variant="outline" onClick={() => download(sessionDetail.file!)}>
                 <Download className="mr-2 h-4 w-4" />
-                Download JSON
+                Download Meta
               </Button>
+            ) : null}
+            {sessionDetail?.events_file ? (
+              <>
+                <Button variant="outline" onClick={() => openTail(sessionDetail.events_file!)}>
+                  Tail events
+                </Button>
+                <Button variant="outline" onClick={() => download(sessionDetail.events_file!)}>
+                  <Download className="mr-2 h-4 w-4" />
+                  Download Events
+                </Button>
+              </>
             ) : null}
           </div>
         </DialogContent>
@@ -1547,12 +1685,14 @@ function TraceTable({
   onDownload,
   onTail,
   onEvents,
+  onLive,
 }: {
   title: string;
   items: ConsoleTraceItem[];
   onDownload: (path: string) => void;
   onTail: (path: string) => void;
   onEvents: (path: string) => void;
+  onLive: (path: string) => void;
 }) {
   return (
     <Card>
@@ -1599,6 +1739,9 @@ function TraceTable({
                     <div className="flex flex-wrap gap-2">
                       <Button variant="secondary" size="sm" onClick={() => onEvents(it.events_path)}>
                         View
+                      </Button>
+                      <Button variant="default" size="sm" onClick={() => onLive(it.events_path)}>
+                        Live
                       </Button>
                       <Button variant="outline" size="sm" onClick={() => onDownload(it.events_path)}>
                         <Download className="mr-2 h-4 w-4" />

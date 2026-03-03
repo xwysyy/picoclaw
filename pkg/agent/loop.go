@@ -35,6 +35,7 @@ import (
 
 type AgentLoop struct {
 	bus            *bus.MessageBus
+	cfgMu          sync.RWMutex
 	cfg            *config.Config
 	registry       *AgentRegistry
 	state          *state.Manager
@@ -44,6 +45,7 @@ type AgentLoop struct {
 	fallback       *providers.FallbackChain
 	channelManager *channels.Manager
 	mediaStore     media.MediaStore
+	mcpMgr         *mcp.Manager
 
 	tokenUsageMu     sync.Mutex
 	tokenUsageStores map[string]*tokenUsageStore // workspace → store
@@ -60,6 +62,11 @@ type processOptions struct {
 	EnableSummary   bool   // Whether to trigger summarization
 	SendResponse    bool   // Whether to send response via bus
 	NoHistory       bool   // If true, don't load session history (for heartbeat)
+
+	// Steering provides out-of-band user messages delivered while this run is still
+	// executing. It is used by the Gateway inbound queue to support "/steer ..."
+	// without waiting for the current run to finish.
+	Steering <-chan bus.InboundMessage
 
 	// PlanMode enables "plan" permission mode (ROADMAP.md:1225).
 	// When true, side-effect tools are denied by the tool executor.
@@ -113,6 +120,9 @@ func NewAgentLoop(cfg *config.Config, msgBus *bus.MessageBus, provider providers
 	cooldown := providers.NewCooldownTracker()
 	fallbackChain := providers.NewFallbackChain(cooldown)
 
+	// MCP Bridge manager (Phase D1/D2).
+	mcpMgr := mcp.NewManager(cfg.Tools.MCP)
+
 	// Create state manager using default agent's workspace for channel recording
 	defaultAgent := registry.GetDefaultAgent()
 	var stateManager *state.Manager
@@ -131,14 +141,90 @@ func NewAgentLoop(cfg *config.Config, msgBus *bus.MessageBus, provider providers
 		taskLedger:  taskLedger,
 		summarizing: sync.Map{},
 		fallback:    fallbackChain,
+		mcpMgr:      mcpMgr,
 
 		tokenUsageStores: make(map[string]*tokenUsageStore),
 	}
 
 	// Register shared tools to all agents.
-	registerSharedTools(cfg, msgBus, registry, provider, al, taskLedger)
+	registerSharedTools(cfg, msgBus, registry, provider, al, taskLedger, mcpMgr)
 
 	return al
+}
+
+// Config returns the current configuration snapshot for the agent loop.
+func (al *AgentLoop) Config() *config.Config {
+	if al == nil {
+		return nil
+	}
+	al.cfgMu.RLock()
+	defer al.cfgMu.RUnlock()
+	return al.cfg
+}
+
+// SetConfig swaps the configuration pointer used by the agent loop.
+// This is used by the gateway config hot reload path.
+func (al *AgentLoop) SetConfig(cfg *config.Config) {
+	if al == nil {
+		return
+	}
+	al.cfgMu.Lock()
+	al.cfg = cfg
+	al.cfgMu.Unlock()
+}
+
+// ReloadMCPTools refreshes MCP servers and re-registers tools into each agent registry.
+// This is best-effort and safe to call multiple times.
+func (al *AgentLoop) ReloadMCPTools(ctx context.Context) {
+	if al == nil || al.registry == nil || al.mcpMgr == nil {
+		return
+	}
+
+	cfg := al.Config()
+	if cfg == nil {
+		return
+	}
+
+	oldPrefixes := al.mcpMgr.ToolPrefixes()
+	al.mcpMgr.ApplyConfig(cfg.Tools.MCP)
+	newPrefixes := al.mcpMgr.ToolPrefixes()
+
+	prefixSet := map[string]struct{}{}
+	for _, p := range oldPrefixes {
+		prefixSet[p] = struct{}{}
+	}
+	for _, p := range newPrefixes {
+		prefixSet[p] = struct{}{}
+	}
+	prefixes := make([]string, 0, len(prefixSet))
+	for p := range prefixSet {
+		prefixes = append(prefixes, p)
+	}
+	sort.Strings(prefixes)
+
+	for _, agentID := range al.registry.ListAgentIDs() {
+		agent, ok := al.registry.GetAgent(agentID)
+		if !ok || agent == nil || agent.Tools == nil {
+			continue
+		}
+
+		for _, p := range prefixes {
+			agent.Tools.UnregisterPrefix(p)
+		}
+
+		if al.mcpMgr.Enabled() {
+			if err := al.mcpMgr.RegisterTools(ctx, agent.Tools); err != nil {
+				logger.WarnCF("agent", "MCP tools reload failed (best-effort)", map[string]any{
+					"agent_id": agentID,
+					"error":    err.Error(),
+				})
+			}
+		}
+
+		if agent.ContextBuilder != nil {
+			agent.ContextBuilder.InvalidateCache()
+		}
+	}
 }
 
 func (al *AgentLoop) tokenUsageStore(workspace string) *tokenUsageStore {
@@ -172,9 +258,8 @@ func registerSharedTools(
 	provider providers.LLMProvider,
 	sessionsExecutor tools.SessionsSendExecutor,
 	taskLedger *tools.TaskLedger,
+	mcpMgr *mcp.Manager,
 ) {
-	mcpMgr := mcp.NewManager(cfg.Tools.MCP)
-
 	for _, agentID := range registry.ListAgentIDs() {
 		agent, ok := registry.GetAgent(agentID)
 		if !ok {
@@ -416,17 +501,18 @@ func handleSubagentTaskEvent(ledger *tools.TaskLedger, cfg *config.Config, event
 
 func (al *AgentLoop) Run(ctx context.Context) error {
 	al.running.Store(true)
-	if al.cfg != nil && al.cfg.Audit.Enabled {
+	cfg := al.Config()
+	if cfg != nil && cfg.Audit.Enabled {
 		go al.runAuditLoop(ctx)
 	}
 
 	queueEnabled := true
 	maxConc := 1
 	perSessionBuf := 32
-	if al.cfg != nil {
-		queueEnabled = al.cfg.Gateway.InboundQueue.Enabled
-		maxConc = al.cfg.Gateway.InboundQueue.MaxConcurrency
-		perSessionBuf = al.cfg.Gateway.InboundQueue.PerSessionBuffer
+	if cfg != nil {
+		queueEnabled = cfg.Gateway.InboundQueue.Enabled
+		maxConc = cfg.Gateway.InboundQueue.MaxConcurrency
+		perSessionBuf = cfg.Gateway.InboundQueue.PerSessionBuffer
 	}
 	if maxConc <= 0 {
 		maxConc = 1
@@ -435,9 +521,10 @@ func (al *AgentLoop) Run(ctx context.Context) error {
 		perSessionBuf = 32
 	}
 
-	processOne := func(msg bus.InboundMessage) {
+	processOne := func(msg bus.InboundMessage, steering <-chan bus.InboundMessage) {
 		roundTracker := &tools.MessageRoundTracker{}
 		msgCtx := tools.WithMessageRoundTracker(ctx, roundTracker)
+		msgCtx = withSteeringInbox(msgCtx, steering)
 
 		response, err := al.processMessage(msgCtx, msg)
 		if err != nil {
@@ -474,13 +561,15 @@ func (al *AgentLoop) Run(ctx context.Context) error {
 			if !ok {
 				return nil
 			}
-			processOne(msg)
+			processOne(msg, nil)
 		}
 		return nil
 	}
 
 	type bucket struct {
-		ch chan bus.InboundMessage
+		ch     chan bus.InboundMessage
+		steer  chan bus.InboundMessage
+		active atomic.Bool
 	}
 
 	globalSem := make(chan struct{}, maxConc)
@@ -523,7 +612,10 @@ func (al *AgentLoop) Run(ctx context.Context) error {
 		bucketsMu.Lock()
 		b := buckets[key]
 		if b == nil {
-			b = &bucket{ch: make(chan bus.InboundMessage, perSessionBuf)}
+			b = &bucket{
+				ch:    make(chan bus.InboundMessage, perSessionBuf),
+				steer: make(chan bus.InboundMessage, 16),
+			}
 			buckets[key] = b
 
 			// One worker per session key: strict in-order processing within the session.
@@ -533,16 +625,46 @@ func (al *AgentLoop) Run(ctx context.Context) error {
 					case <-ctx.Done():
 						return
 					case msg := <-b.ch:
+						// Drop any steering messages that arrived after the last run completed.
+						for {
+							select {
+							case <-b.steer:
+								// discard
+							default:
+								goto drained
+							}
+						}
+					drained:
+
+						b.active.Store(true)
 						globalSem <- struct{}{}
 						func() {
-							defer func() { <-globalSem }()
-							processOne(msg)
+							defer func() {
+								<-globalSem
+								b.active.Store(false)
+							}()
+							processOne(msg, b.steer)
 						}()
 					}
 				}
 			}(key, b)
 		}
 		bucketsMu.Unlock()
+
+		// Steering: while a session is actively running, allow out-of-band "/steer ..."
+		// messages to be injected into the current run rather than queued behind it.
+		if b != nil && b.active.Load() {
+			if body, ok := extractSteeringContent(msg.Content); ok {
+				steerMsg := msg
+				steerMsg.Content = body
+				select {
+				case b.steer <- steerMsg:
+					return
+				default:
+					// If the steering inbox is full, fall back to normal enqueue to avoid losing input.
+				}
+			}
+		}
 
 		// Backpressure: if this session queue is full, we block here. This keeps
 		// strict ordering and prevents unbounded memory growth.
@@ -792,6 +914,11 @@ func (al *AgentLoop) processMessage(ctx context.Context, msg bus.InboundMessage)
 		})
 
 	userMessage := msg.Content
+	// "/steer <msg>" behaves as a normal message when no run is active (it will be
+	// treated as steering only when injected via the inbound session bucket).
+	if body, ok := extractSteeringContent(userMessage); ok {
+		userMessage = body
+	}
 	if note := al.importInboundMediaAndBuildNote(agent, msg); note != "" {
 		if strings.TrimSpace(userMessage) != "" {
 			userMessage += "\n\n" + note
@@ -801,9 +928,10 @@ func (al *AgentLoop) processMessage(ctx context.Context, msg bus.InboundMessage)
 	}
 
 	planMode := false
-	if al.cfg != nil && al.cfg.Tools.PlanMode.Enabled {
+	cfg := al.Config()
+	if cfg != nil && cfg.Tools.PlanMode.Enabled {
 		defaultMode := sessionPermissionModeRun
-		if strings.EqualFold(strings.TrimSpace(al.cfg.Tools.PlanMode.DefaultMode), "plan") {
+		if strings.EqualFold(strings.TrimSpace(cfg.Tools.PlanMode.DefaultMode), "plan") {
 			defaultMode = sessionPermissionModePlan
 		}
 		perm := loadSessionPermissionStateWithDefault(agent.Workspace, sessionKey, defaultMode)
@@ -830,6 +958,7 @@ func (al *AgentLoop) processMessage(ctx context.Context, msg bus.InboundMessage)
 		DefaultResponse: defaultResponse,
 		EnableSummary:   true,
 		SendResponse:    false,
+		Steering:        steeringInboxFromContext(ctx),
 		PlanMode:        planMode,
 	})
 }
@@ -895,6 +1024,8 @@ func (al *AgentLoop) processSystemMessage(ctx context.Context, msg bus.InboundMe
 
 // runAgentLoop is the core message processing logic.
 func (al *AgentLoop) runAgentLoop(ctx context.Context, agent *AgentInstance, opts processOptions) (string, error) {
+	cfg := al.Config()
+
 	// 0. Record last channel for heartbeat notifications (skip internal channels)
 	if opts.Channel != "" && opts.ChatID != "" {
 		// Don't record internal channels (cli, system, subagent)
@@ -921,8 +1052,8 @@ func (al *AgentLoop) runAgentLoop(ctx context.Context, agent *AgentInstance, opt
 	llmUserMessage := opts.UserMessage
 	if opts.PlanMode {
 		restricted := "exec/edit_file/write_file/append_file"
-		if al.cfg != nil && len(al.cfg.Tools.PlanMode.RestrictedTools) > 0 {
-			restricted = strings.Join(al.cfg.Tools.PlanMode.RestrictedTools, ", ")
+		if cfg != nil && len(cfg.Tools.PlanMode.RestrictedTools) > 0 {
+			restricted = strings.Join(cfg.Tools.PlanMode.RestrictedTools, ", ")
 		}
 		llmUserMessage = fmt.Sprintf(
 			"[PLAN MODE]\nYou are currently in PLAN mode for this session.\n"+
@@ -945,7 +1076,7 @@ func (al *AgentLoop) runAgentLoop(ctx context.Context, agent *AgentInstance, opt
 	)
 
 	// Phase E1: durable run checkpoint (append-only JSONL event stream).
-	runTraceEnabled := al.cfg != nil && al.cfg.Tools.Trace.Enabled
+	runTraceEnabled := cfg != nil && cfg.Tools.Trace.Enabled
 	runTrace := newRunTraceWriter(agent.Workspace, runTraceEnabled, opts, agent.ID, agent.Model)
 	if runTrace != nil {
 		if opts.Resume {
@@ -1018,7 +1149,7 @@ func (al *AgentLoop) runAgentLoop(ctx context.Context, agent *AgentInstance, opt
 
 	// Optional notification hook (ROADMAP.md:1226): when a run completes in an
 	// internal channel (system/cli/subagent), notify the last active external chat.
-	if al.cfg != nil && al.cfg.Notify.OnTaskComplete && constants.IsInternalChannel(opts.Channel) {
+	if cfg != nil && cfg.Notify.OnTaskComplete && constants.IsInternalChannel(opts.Channel) {
 		trimmedResult := strings.TrimSpace(finalContent)
 		// Quiet-by-default: allow background tasks (cron/heartbeat/etc.) to opt out
 		// by returning a deterministic sentinel.
@@ -1341,6 +1472,60 @@ func (al *AgentLoop) runLLMIteration(
 			totalCompletionTokens += response.Usage.CompletionTokens
 		}
 
+		// Steering messages: if a user injects "/steer ..." while a run is still
+		// executing, incorporate that message and re-run this iteration instead
+		// of executing possibly-stale tool calls.
+		if opts.Steering != nil {
+			steeringMsgs := make([]bus.InboundMessage, 0, 4)
+			for {
+				select {
+				case sm := <-opts.Steering:
+					steeringMsgs = append(steeringMsgs, sm)
+				default:
+					goto steeringDrained
+				}
+			}
+		steeringDrained:
+			if len(steeringMsgs) > 0 {
+				for _, sm := range steeringMsgs {
+					content := strings.TrimSpace(sm.Content)
+					if content == "" {
+						continue
+					}
+					agent.Sessions.AddMessage(opts.SessionKey, "user", content)
+					// Best-effort WAL for steering messages as well.
+					_ = agent.Sessions.Save(opts.SessionKey)
+					messages = append(messages, providers.Message{
+						Role:    "user",
+						Content: content,
+					})
+					if trace != nil {
+						trace.appendEvent(runTraceEvent{
+							Type: "steering.message",
+
+							TS:   time.Now().UTC().Format(time.RFC3339Nano),
+							TSMS: time.Now().UnixMilli(),
+
+							RunID:      trace.runID,
+							SessionKey: opts.SessionKey,
+							Channel:    strings.TrimSpace(opts.Channel),
+							ChatID:     strings.TrimSpace(opts.ChatID),
+							SenderID:   strings.TrimSpace(opts.SenderID),
+
+							AgentID: strings.TrimSpace(agent.ID),
+							Model:   strings.TrimSpace(usedModel),
+
+							Iteration: iteration,
+
+							UserMessagePreview: utils.Truncate(content, 400),
+							UserMessageChars:   len(content),
+						})
+					}
+				}
+				continue
+			}
+		}
+
 		go al.handleReasoning(ctx, response.Reasoning, opts.Channel, al.targetReasoningChannelID(opts.Channel))
 
 		logger.DebugCF("agent", "LLM response",
@@ -1478,30 +1663,31 @@ func (al *AgentLoop) runLLMIteration(
 		// Save assistant message with tool calls to session
 		agent.Sessions.AddFullMessage(opts.SessionKey, assistantMsg)
 
+		cfg := al.Config()
 		parallelCfg := tools.ToolCallParallelConfig{
-			Enabled:        al.cfg != nil && al.cfg.Orchestration.ToolCallsParallelEnabled,
+			Enabled:        cfg != nil && cfg.Orchestration.ToolCallsParallelEnabled,
 			MaxConcurrency: 0,
 			Mode:           "",
 		}
-		if al.cfg != nil {
-			parallelCfg.MaxConcurrency = al.cfg.Orchestration.MaxToolCallConcurrency
-			parallelCfg.Mode = al.cfg.Orchestration.ParallelToolsMode
-			parallelCfg.ToolPolicyOverrides = al.cfg.Orchestration.ToolParallelOverrides
+		if cfg != nil {
+			parallelCfg.MaxConcurrency = cfg.Orchestration.MaxToolCallConcurrency
+			parallelCfg.Mode = cfg.Orchestration.ParallelToolsMode
+			parallelCfg.ToolPolicyOverrides = cfg.Orchestration.ToolParallelOverrides
 		}
 
 		traceOpts := tools.ToolTraceOptions{}
-		if al.cfg != nil {
-			traceOpts.Enabled = al.cfg.Tools.Trace.Enabled
-			traceOpts.Dir = al.cfg.Tools.Trace.Dir
-			traceOpts.WritePerCallFiles = al.cfg.Tools.Trace.WritePerCallFiles
-			traceOpts.MaxArgPreviewChars = al.cfg.Tools.Trace.MaxArgPreviewChars
-			traceOpts.MaxResultPreviewChars = al.cfg.Tools.Trace.MaxResultPreviewChars
+		if cfg != nil {
+			traceOpts.Enabled = cfg.Tools.Trace.Enabled
+			traceOpts.Dir = cfg.Tools.Trace.Dir
+			traceOpts.WritePerCallFiles = cfg.Tools.Trace.WritePerCallFiles
+			traceOpts.MaxArgPreviewChars = cfg.Tools.Trace.MaxArgPreviewChars
+			traceOpts.MaxResultPreviewChars = cfg.Tools.Trace.MaxResultPreviewChars
 		}
 
 		errorTemplateOpts := tools.ToolErrorTemplateOptions{}
-		if al.cfg != nil {
-			errorTemplateOpts.Enabled = al.cfg.Tools.ErrorTemplate.Enabled
-			errorTemplateOpts.IncludeSchema = al.cfg.Tools.ErrorTemplate.IncludeSchema
+		if cfg != nil {
+			errorTemplateOpts.Enabled = cfg.Tools.ErrorTemplate.Enabled
+			errorTemplateOpts.IncludeSchema = cfg.Tools.ErrorTemplate.IncludeSchema
 			// Include tool list for "tool not found" to help the model self-correct.
 			errorTemplateOpts.IncludeAvailableTools = true
 		}
@@ -1513,20 +1699,20 @@ func (al *AgentLoop) runLLMIteration(
 
 		policyCfg := config.ToolPolicyConfig{}
 		policyTags := map[string]string(nil)
-		if al.cfg != nil {
-			policyCfg = al.cfg.Tools.Policy
-			policyTags = al.cfg.Tools.Policy.Audit.Tags
+		if cfg != nil {
+			policyCfg = cfg.Tools.Policy
+			policyTags = cfg.Tools.Policy.Audit.Tags
 		}
 		estopCfg := config.EstopConfig{}
-		if al.cfg != nil {
-			estopCfg = al.cfg.Tools.Estop
+		if cfg != nil {
+			estopCfg = cfg.Tools.Estop
 		}
 
 		planRestrictedTools := []string(nil)
 		planRestrictedPrefixes := []string(nil)
-		if al.cfg != nil {
-			planRestrictedTools = al.cfg.Tools.PlanMode.RestrictedTools
-			planRestrictedPrefixes = al.cfg.Tools.PlanMode.RestrictedPrefixes
+		if cfg != nil {
+			planRestrictedTools = cfg.Tools.PlanMode.RestrictedTools
+			planRestrictedPrefixes = cfg.Tools.PlanMode.RestrictedPrefixes
 		}
 
 		toolExecutions := tools.ExecuteToolCalls(ctx, agent.Tools, normalizedToolCalls, tools.ToolCallExecutionOptions{
@@ -1981,6 +2167,8 @@ func (al *AgentLoop) estimateMessageTokens(message providers.Message) int {
 }
 
 func (al *AgentLoop) handleCommand(ctx context.Context, msg bus.InboundMessage, agent *AgentInstance, sessionKey string) (string, bool) {
+	cfg := al.Config()
+
 	content := strings.TrimSpace(msg.Content)
 	if !strings.HasPrefix(content, "/") {
 		return "", false
@@ -1996,7 +2184,7 @@ func (al *AgentLoop) handleCommand(ctx context.Context, msg bus.InboundMessage, 
 
 	switch cmd {
 	case "/plan":
-		if al.cfg == nil || !al.cfg.Tools.PlanMode.Enabled {
+		if cfg == nil || !cfg.Tools.PlanMode.Enabled {
 			return "Plan mode is disabled (set tools.plan_mode.enabled=true in config.json)", true
 		}
 		if agent == nil {
@@ -2010,7 +2198,7 @@ func (al *AgentLoop) handleCommand(ctx context.Context, msg bus.InboundMessage, 
 		}
 
 		defaultMode := sessionPermissionModeRun
-		if strings.EqualFold(strings.TrimSpace(al.cfg.Tools.PlanMode.DefaultMode), "plan") {
+		if strings.EqualFold(strings.TrimSpace(cfg.Tools.PlanMode.DefaultMode), "plan") {
 			defaultMode = sessionPermissionModePlan
 		}
 		perm := loadSessionPermissionStateWithDefault(agent.Workspace, sessionKey, defaultMode)
@@ -2053,7 +2241,7 @@ func (al *AgentLoop) handleCommand(ctx context.Context, msg bus.InboundMessage, 
 		return "Plan mode enabled for this session. Send your task, then send /approve (or /run) to execute.", true
 
 	case "/approve", "/run":
-		if al.cfg == nil || !al.cfg.Tools.PlanMode.Enabled {
+		if cfg == nil || !cfg.Tools.PlanMode.Enabled {
 			return "Plan mode is disabled (set tools.plan_mode.enabled=true in config.json)", true
 		}
 		if agent == nil {
@@ -2067,7 +2255,7 @@ func (al *AgentLoop) handleCommand(ctx context.Context, msg bus.InboundMessage, 
 		}
 
 		defaultMode := sessionPermissionModeRun
-		if strings.EqualFold(strings.TrimSpace(al.cfg.Tools.PlanMode.DefaultMode), "plan") {
+		if strings.EqualFold(strings.TrimSpace(cfg.Tools.PlanMode.DefaultMode), "plan") {
 			defaultMode = sessionPermissionModePlan
 		}
 		perm := loadSessionPermissionStateWithDefault(agent.Workspace, sessionKey, defaultMode)
@@ -2109,7 +2297,7 @@ func (al *AgentLoop) handleCommand(ctx context.Context, msg bus.InboundMessage, 
 		return response, true
 
 	case "/cancel":
-		if al.cfg == nil || !al.cfg.Tools.PlanMode.Enabled {
+		if cfg == nil || !cfg.Tools.PlanMode.Enabled {
 			return "Plan mode is disabled (set tools.plan_mode.enabled=true in config.json)", true
 		}
 		if agent == nil {
@@ -2123,7 +2311,7 @@ func (al *AgentLoop) handleCommand(ctx context.Context, msg bus.InboundMessage, 
 		}
 
 		defaultMode := sessionPermissionModeRun
-		if strings.EqualFold(strings.TrimSpace(al.cfg.Tools.PlanMode.DefaultMode), "plan") {
+		if strings.EqualFold(strings.TrimSpace(cfg.Tools.PlanMode.DefaultMode), "plan") {
 			defaultMode = sessionPermissionModePlan
 		}
 		perm := loadSessionPermissionStateWithDefault(agent.Workspace, sessionKey, defaultMode)
@@ -2138,7 +2326,7 @@ func (al *AgentLoop) handleCommand(ctx context.Context, msg bus.InboundMessage, 
 		return "Plan mode cancelled; pending task cleared.", true
 
 	case "/mode":
-		if al.cfg == nil || !al.cfg.Tools.PlanMode.Enabled {
+		if cfg == nil || !cfg.Tools.PlanMode.Enabled {
 			return "Plan mode is disabled (tools.plan_mode.enabled=false)", true
 		}
 		if agent == nil {
@@ -2152,7 +2340,7 @@ func (al *AgentLoop) handleCommand(ctx context.Context, msg bus.InboundMessage, 
 		}
 
 		defaultMode := sessionPermissionModeRun
-		if strings.EqualFold(strings.TrimSpace(al.cfg.Tools.PlanMode.DefaultMode), "plan") {
+		if strings.EqualFold(strings.TrimSpace(cfg.Tools.PlanMode.DefaultMode), "plan") {
 			defaultMode = sessionPermissionModePlan
 		}
 		perm := loadSessionPermissionStateWithDefault(agent.Workspace, sessionKey, defaultMode)

@@ -185,9 +185,13 @@ func TestConsoleHandler_SessionsList(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(ws, "sessions"), 0o755); err != nil {
 		t.Fatalf("mkdir sessions: %v", err)
 	}
-	body := `{"key":"feishu:oc_test","summary":"hello","created":"2026-03-03T00:00:00Z","updated":"2026-03-03T00:00:01Z","messages":[]}`
-	if err := os.WriteFile(filepath.Join(ws, "sessions", "feishu_oc_test.json"), []byte(body), 0o644); err != nil {
-		t.Fatalf("write session: %v", err)
+	meta := `{"key":"feishu:oc_test","summary":"hello","created":"2026-03-03T00:00:00Z","updated":"2026-03-03T00:00:01Z","messages_count":1}`
+	if err := os.WriteFile(filepath.Join(ws, "sessions", "feishu_oc_test.meta.json"), []byte(meta), 0o644); err != nil {
+		t.Fatalf("write session meta: %v", err)
+	}
+	events := "{\"type\":\"session.message\",\"id\":\"e1\",\"ts\":\"2026-03-03T00:00:00Z\",\"ts_ms\":0,\"session_key\":\"feishu:oc_test\"}\n"
+	if err := os.WriteFile(filepath.Join(ws, "sessions", "feishu_oc_test.jsonl"), []byte(events), 0o644); err != nil {
+		t.Fatalf("write session events: %v", err)
 	}
 
 	h := NewConsoleHandler(ConsoleHandlerOptions{Workspace: ws})
@@ -216,8 +220,11 @@ func TestConsoleHandler_SessionsList(t *testing.T) {
 	if payload.Items[0].Key != "feishu:oc_test" {
 		t.Fatalf("expected key, got %q", payload.Items[0].Key)
 	}
-	if payload.Items[0].File != "sessions/feishu_oc_test.json" {
+	if payload.Items[0].File != "sessions/feishu_oc_test.meta.json" {
 		t.Fatalf("unexpected file path: %q", payload.Items[0].File)
+	}
+	if payload.Items[0].EventsFile != "sessions/feishu_oc_test.jsonl" {
+		t.Fatalf("unexpected events file path: %q", payload.Items[0].EventsFile)
 	}
 }
 

@@ -351,6 +351,11 @@ func DefaultConfig() *Config {
 				MaxConcurrency:   4,
 				PerSessionBuffer: 32,
 			},
+			Reload: GatewayReloadConfig{
+				Enabled:         true,
+				Watch:           false,
+				IntervalSeconds: 2,
+			},
 		},
 		Notify: NotifyConfig{
 			OnTaskComplete: false,

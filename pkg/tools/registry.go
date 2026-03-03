@@ -29,6 +29,41 @@ func (r *ToolRegistry) Register(tool Tool) {
 	r.tools[tool.Name()] = tool
 }
 
+// Unregister removes a tool by name. It returns true if a tool existed.
+func (r *ToolRegistry) Unregister(name string) bool {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return false
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if _, ok := r.tools[name]; !ok {
+		return false
+	}
+	delete(r.tools, name)
+	return true
+}
+
+// UnregisterPrefix removes all tools whose names start with prefix.
+// Returns how many tools were removed.
+func (r *ToolRegistry) UnregisterPrefix(prefix string) int {
+	prefix = strings.TrimSpace(prefix)
+	if prefix == "" {
+		return 0
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	removed := 0
+	for name := range r.tools {
+		if strings.HasPrefix(name, prefix) {
+			delete(r.tools, name)
+			removed++
+		}
+	}
+	return removed
+}
+
 func (r *ToolRegistry) Get(name string) (Tool, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
