@@ -99,6 +99,39 @@ func TestCronToolExecuteJob_DeliverFalsePublishesToLastActive(t *testing.T) {
 	}
 }
 
+func TestCronToolExecuteJob_DeliverFalseNoUpdateIsSilent(t *testing.T) {
+	mb := bus.NewMessageBus()
+	exec := &stubCronExecutor{
+		lastCh:   "feishu",
+		lastID:   "oc_test",
+		response: "NO_UPDATE",
+	}
+	tool := newCronToolWithExecutorForTest(t, exec, mb)
+
+	job := &cronpkg.CronJob{
+		ID:   "job_no_update",
+		Name: "watcher",
+		Payload: cronpkg.CronPayload{
+			Message: "check updates",
+			Deliver: false,
+		},
+	}
+
+	out, err := tool.ExecuteJob(context.Background(), job)
+	if err != nil {
+		t.Fatalf("expected success, got error: %v", err)
+	}
+	if strings.TrimSpace(out) != "NO_UPDATE" {
+		t.Fatalf("unexpected output: %q", out)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 80*time.Millisecond)
+	defer cancel()
+	if msg, ok := mb.SubscribeOutbound(ctx); ok {
+		t.Fatalf("expected no outbound message, got: %+v", msg)
+	}
+}
+
 func TestCronToolExecuteJob_DeliverTrueUsesLastActive(t *testing.T) {
 	mb := bus.NewMessageBus()
 	exec := &stubCronExecutor{
