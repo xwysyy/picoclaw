@@ -114,9 +114,10 @@ Check runtime status (includes `last_active` / cron / trace, etc.):
 
 ### Gateway Console (`/console/`)
 
-Gateway includes a **read-only Console** (Web UI) for self-serve operations:
+Gateway includes a **read-only Console** (Web UI, Next.js + shadcn/ui) for self-serve operations:
 - basic status + `last_active`
 - cron jobs (`cron/jobs.json`)
+- sessions list (`sessions/*.json`)
 - run trace / tool trace (`<workspace>/.picoclaw/audit/**/events.jsonl`)
 - health links (`/health` / `/ready`)
 
@@ -126,15 +127,17 @@ Open in a browser:
 http://127.0.0.1:18790/console/
 ```
 
-Auth policy is the same as `/api/notify`:
-- If `gateway.api_key` is empty: loopback only
-- If `gateway.api_key` is set: require `Authorization: Bearer <api_key>`
+Auth policy:
+- If `gateway.api_key` is empty: `/console/` and `/api/console/*` are loopback-only
+- If `gateway.api_key` is set: `/console/` is browser-friendly, but `/api/console/*` requires `Authorization: Bearer <api_key>`  
+  (the UI has an API key input and sends Bearer headers when fetching data)
 
 JSON endpoints (for scripting):
 
 ```bash
 curl -sS http://127.0.0.1:18790/api/console/status
 curl -sS http://127.0.0.1:18790/api/console/cron
+curl -sS http://127.0.0.1:18790/api/console/sessions
 curl -sS http://127.0.0.1:18790/api/console/runs
 curl -sS http://127.0.0.1:18790/api/console/tools
 ```
@@ -143,6 +146,12 @@ Download workspace audit/state files (only allows whitelisted paths under `.pico
 
 ```bash
 curl -sS -OJ "http://127.0.0.1:18790/api/console/file?path=cron/jobs.json"
+```
+
+Tail last N lines (useful for `events.jsonl` without downloading the whole file):
+
+```bash
+curl -sS "http://127.0.0.1:18790/api/console/tail?path=.picoclaw/audit/runs/<session>/events.jsonl&lines=200"
 ```
 
 ### Notification API (`/api/notify`)

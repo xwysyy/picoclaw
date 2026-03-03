@@ -134,9 +134,10 @@ curl -sS http://127.0.0.1:18790/health
 
 ### Gateway Console（/console/）
 
-Gateway 内置一个**只读 Console**（Web UI），用于自助查看：
+Gateway 内置一个**只读 Console**（Web UI，Next.js + shadcn/ui），用于自助查看：
 - `last_active` / 基础状态
 - cron jobs（`cron/jobs.json`）
+- sessions 列表（`sessions/*.json`）
 - run trace / tool trace（`<workspace>/.picoclaw/audit/**/events.jsonl`）
 - 健康检查链接（`/health` / `/ready`）
 
@@ -148,14 +149,16 @@ http://127.0.0.1:18790/console/
 ```
 
 鉴权规则同 `/api/notify`：
-- 当 `gateway.api_key` 为空时，仅允许来自本机 loopback 的访问
-- 当 `gateway.api_key` 非空时，需要携带 `Authorization: Bearer <api_key>`
+- 当 `gateway.api_key` 为空时：`/console/` 与 `/api/console/*` 仅允许来自本机 loopback 的访问
+- 当 `gateway.api_key` 非空时：`/console/` 可以直接在浏览器打开，但 `/api/console/*` 需要携带 `Authorization: Bearer <api_key>`  
+  （UI 内置了 API key 输入框，会用 Bearer header 拉取数据）
 
 Console 对应的 JSON API（便于脚本化）：
 
 ```bash
 curl -sS http://127.0.0.1:18790/api/console/status
 curl -sS http://127.0.0.1:18790/api/console/cron
+curl -sS http://127.0.0.1:18790/api/console/sessions
 curl -sS http://127.0.0.1:18790/api/console/runs
 curl -sS http://127.0.0.1:18790/api/console/tools
 ```
@@ -164,6 +167,12 @@ curl -sS http://127.0.0.1:18790/api/console/tools
 
 ```bash
 curl -sS -OJ "http://127.0.0.1:18790/api/console/file?path=cron/jobs.json"
+```
+
+仅取末尾 N 行（适合 `events.jsonl`，避免下载整文件）：
+
+```bash
+curl -sS "http://127.0.0.1:18790/api/console/tail?path=.picoclaw/audit/runs/<session>/events.jsonl&lines=200"
 ```
 
 ### 通知接口（/api/notify）

@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -48,6 +49,9 @@ type ConsoleHandler struct {
 	info       ConsoleInfo
 
 	workspaceResolved string
+
+	staticDir string
+	staticFS  http.Handler
 }
 
 func NewConsoleHandler(opts ConsoleHandlerOptions) *ConsoleHandler {
@@ -62,12 +66,20 @@ func NewConsoleHandler(opts ConsoleHandlerOptions) *ConsoleHandler {
 		}
 	}
 
+	staticDir := pickConsoleStaticDir()
+	var staticFS http.Handler
+	if strings.TrimSpace(staticDir) != "" {
+		staticFS = http.StripPrefix("/console", http.FileServer(http.Dir(staticDir)))
+	}
+
 	return &ConsoleHandler{
 		workspace:         workspace,
 		apiKey:            strings.TrimSpace(opts.APIKey),
 		lastActive:        opts.LastActive,
 		info:              opts.Info,
 		workspaceResolved: resolved,
+		staticDir:         staticDir,
+		staticFS:          staticFS,
 	}
 }
 
@@ -82,22 +94,33 @@ func (h *ConsoleHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !authorizeAPIKeyOrLoopback(h.apiKey, r) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusUnauthorized)
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"ok":    false,
-			"error": "unauthorized",
-		})
-		return
-	}
-
 	if strings.HasPrefix(r.URL.Path, "/api/console/") || r.URL.Path == "/api/console" {
+		if !authorizeAPIKeyOrLoopback(h.apiKey, r) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"ok":    false,
+				"error": "unauthorized",
+			})
+			return
+		}
 		h.serveAPI(w, r)
 		return
 	}
 
 	if strings.HasPrefix(r.URL.Path, "/console") {
+		// UI should remain usable in browsers even when gateway.api_key is set.
+		// When api_key is empty: loopback only.
+		// When api_key is set: allow UI page loads, but keep /api/console/* protected.
+		if strings.TrimSpace(h.apiKey) == "" && !isLoopbackRemote(r.RemoteAddr) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"ok":    false,
+				"error": "unauthorized",
+			})
+			return
+		}
 		h.servePage(w, r)
 		return
 	}
@@ -117,6 +140,11 @@ func (h *ConsoleHandler) servePage(w http.ResponseWriter, r *http.Request) {
 	default:
 		w.Header().Set("Allow", "GET, HEAD")
 		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	if h != nil && h.staticFS != nil && strings.TrimSpace(h.staticDir) != "" {
+		h.staticFS.ServeHTTP(w, r)
 		return
 	}
 
@@ -148,9 +176,11 @@ func (h *ConsoleHandler) serveAPI(w http.ResponseWriter, r *http.Request) {
 				"/api/console/status",
 				"/api/console/state",
 				"/api/console/cron",
+				"/api/console/sessions",
 				"/api/console/runs",
 				"/api/console/tools",
 				"/api/console/file?path=<relative-path>",
+				"/api/console/tail?path=<relative-path>&lines=200",
 			},
 		})
 		return
@@ -165,6 +195,10 @@ func (h *ConsoleHandler) serveAPI(w http.ResponseWriter, r *http.Request) {
 
 	case "cron":
 		h.handleCron(w, r)
+		return
+
+	case "sessions":
+		h.handleSessions(w, r)
 		return
 
 	case "runs":
@@ -189,6 +223,10 @@ func (h *ConsoleHandler) serveAPI(w http.ResponseWriter, r *http.Request) {
 
 	case "file":
 		h.handleFile(w, r)
+		return
+
+	case "tail":
+		h.handleTail(w, r)
 		return
 
 	default:
@@ -270,6 +308,74 @@ func (h *ConsoleHandler) handleCron(w http.ResponseWriter, _ *http.Request) {
 		"version": store.Version,
 		"jobs":    store.Jobs,
 	})
+}
+
+type sessionListItem struct {
+	Key     string `json:"key"`
+	Summary string `json:"summary,omitempty"`
+	Created string `json:"created,omitempty"`
+	Updated string `json:"updated,omitempty"`
+	File    string `json:"file,omitempty"`
+}
+
+func (h *ConsoleHandler) handleSessions(w http.ResponseWriter, _ *http.Request) {
+	sessionsDir := filepath.Join(h.workspace, "sessions")
+	entries, err := os.ReadDir(sessionsDir)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			h.writeJSON(w, http.StatusOK, map[string]any{"ok": true, "items": []sessionListItem{}})
+			return
+		}
+		h.writeJSON(w, http.StatusInternalServerError, map[string]any{"ok": false, "error": err.Error()})
+		return
+	}
+
+	items := make([]sessionListItem, 0, len(entries))
+	for _, ent := range entries {
+		if ent.IsDir() {
+			continue
+		}
+		name := ent.Name()
+		if name == "" || strings.HasPrefix(name, ".") {
+			continue
+		}
+		if strings.ToLower(filepath.Ext(name)) != ".json" {
+			continue
+		}
+
+		path := filepath.Join(sessionsDir, name)
+		data, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+
+		var meta struct {
+			Key     string    `json:"key"`
+			Summary string    `json:"summary,omitempty"`
+			Created time.Time `json:"created"`
+			Updated time.Time `json:"updated"`
+		}
+		if json.Unmarshal(data, &meta) != nil {
+			continue
+		}
+
+		items = append(items, sessionListItem{
+			Key:     strings.TrimSpace(meta.Key),
+			Summary: strings.TrimSpace(meta.Summary),
+			Created: meta.Created.UTC().Format(time.RFC3339Nano),
+			Updated: meta.Updated.UTC().Format(time.RFC3339Nano),
+			File:    filepath.ToSlash(filepath.Join("sessions", name)),
+		})
+	}
+
+	sort.Slice(items, func(i, j int) bool {
+		if items[i].Updated == items[j].Updated {
+			return items[i].Key < items[j].Key
+		}
+		return items[i].Updated > items[j].Updated
+	})
+
+	h.writeJSON(w, http.StatusOK, map[string]any{"ok": true, "items": items})
 }
 
 type traceListOptions struct {
@@ -504,6 +610,51 @@ func (h *ConsoleHandler) handleFile(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, abs)
 }
 
+func (h *ConsoleHandler) handleTail(w http.ResponseWriter, r *http.Request) {
+	rel := strings.TrimSpace(r.URL.Query().Get("path"))
+	if rel == "" {
+		h.writeJSON(w, http.StatusBadRequest, map[string]any{"ok": false, "error": "path is required"})
+		return
+	}
+
+	lines := 200
+	if v := strings.TrimSpace(r.URL.Query().Get("lines")); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			lines = n
+		}
+	}
+	if lines <= 0 {
+		lines = 200
+	}
+	if lines > 500 {
+		lines = 500
+	}
+
+	abs, relClean, err := h.resolveConsolePath(rel)
+	if err != nil {
+		h.writeJSON(w, http.StatusBadRequest, map[string]any{"ok": false, "error": err.Error()})
+		return
+	}
+
+	content, truncated, err := tailLines(abs, lines, 1<<20)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			h.writeJSON(w, http.StatusNotFound, map[string]any{"ok": false, "error": "file not found"})
+			return
+		}
+		h.writeJSON(w, http.StatusInternalServerError, map[string]any{"ok": false, "error": err.Error()})
+		return
+	}
+
+	h.writeJSON(w, http.StatusOK, map[string]any{
+		"ok":              true,
+		"path":            relClean,
+		"lines_requested": lines,
+		"truncated":       truncated,
+		"lines":           content,
+	})
+}
+
 func contentTypeForExt(ext string) string {
 	switch strings.ToLower(strings.TrimSpace(ext)) {
 	case ".json":
@@ -537,6 +688,7 @@ func (h *ConsoleHandler) resolveConsolePath(raw string) (abs string, relClean st
 		filepath.Join(".picoclaw", "audit"),
 		"cron",
 		"state",
+		"sessions",
 	}
 	allowed := false
 	for _, p := range allowedPrefixes {
@@ -641,6 +793,88 @@ func (h *ConsoleHandler) countTraceSessions(dir string) int {
 		}
 	}
 	return n
+}
+
+func pickConsoleStaticDir() string {
+	candidates := []string{
+		"/usr/local/share/picoclaw/console",
+		filepath.Join("web", "picoclaw-console", "out"),
+	}
+	for _, p := range candidates {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		if st, err := os.Stat(p); err == nil && st.IsDir() {
+			return p
+		}
+	}
+	return ""
+}
+
+// tailLines returns up to maxLines last non-empty lines from the file.
+// It reads at most maxBytes from the end of the file.
+func tailLines(path string, maxLines int, maxBytes int64) ([]string, bool, error) {
+	if maxLines <= 0 {
+		return []string{}, false, nil
+	}
+	if maxBytes <= 0 {
+		maxBytes = 1 << 20
+	}
+
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, false, err
+	}
+	defer f.Close()
+
+	st, err := f.Stat()
+	if err != nil {
+		return nil, false, err
+	}
+	if st.Size() <= 0 {
+		return []string{}, false, nil
+	}
+
+	n := maxBytes
+	if n > st.Size() {
+		n = st.Size()
+	}
+
+	if _, err := f.Seek(-n, io.SeekEnd); err != nil {
+		return nil, false, err
+	}
+
+	buf := make([]byte, n)
+	if _, err := io.ReadFull(f, buf); err != nil && !errors.Is(err, io.ErrUnexpectedEOF) {
+		return nil, false, err
+	}
+
+	raw := strings.TrimSpace(string(buf))
+	if raw == "" {
+		return []string{}, false, nil
+	}
+
+	lines := strings.Split(raw, "\n")
+	out := make([]string, 0, maxLines)
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := strings.TrimSpace(lines[i])
+		if line == "" {
+			continue
+		}
+		out = append(out, line)
+		if len(out) >= maxLines {
+			break
+		}
+	}
+
+	// Reverse back to chronological order.
+	for i, j := 0, len(out)-1; i < j; i, j = i+1, j-1 {
+		out[i], out[j] = out[j], out[i]
+	}
+
+	truncated := len(out) >= maxLines && len(lines) > maxLines
+	return out, truncated, nil
 }
 
 const consoleHTML = `<!doctype html>

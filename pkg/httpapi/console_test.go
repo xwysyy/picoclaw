@@ -72,6 +72,34 @@ func TestConsoleHandler_APIKeyBearerWorks(t *testing.T) {
 	}
 }
 
+func TestConsoleHandler_UI_LoopbackOnlyWhenNoAPIKey(t *testing.T) {
+	ws := t.TempDir()
+	h := NewConsoleHandler(ConsoleHandlerOptions{Workspace: ws})
+
+	req := httptest.NewRequest(http.MethodGet, "http://example.com/console/", nil)
+	req.RemoteAddr = "203.0.113.10:1234"
+	rr := httptest.NewRecorder()
+
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", rr.Code)
+	}
+}
+
+func TestConsoleHandler_UI_AllowsRemoteWhenAPIKeyConfigured(t *testing.T) {
+	ws := t.TempDir()
+	h := NewConsoleHandler(ConsoleHandlerOptions{Workspace: ws, APIKey: "secret"})
+
+	req := httptest.NewRequest(http.MethodGet, "http://example.com/console/", nil)
+	req.RemoteAddr = "203.0.113.10:1234"
+	rr := httptest.NewRecorder()
+
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+}
+
 func TestConsoleHandler_FileDownloadAllowedPrefixes(t *testing.T) {
 	ws := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(ws, "cron"), 0o755); err != nil {
@@ -149,5 +177,82 @@ func TestConsoleHandler_TraceListIncludesSessionKey(t *testing.T) {
 	}
 	if payload.Items[0].SessionKey != "feishu:oc_test" {
 		t.Fatalf("expected session_key, got %q", payload.Items[0].SessionKey)
+	}
+}
+
+func TestConsoleHandler_SessionsList(t *testing.T) {
+	ws := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(ws, "sessions"), 0o755); err != nil {
+		t.Fatalf("mkdir sessions: %v", err)
+	}
+	body := `{"key":"feishu:oc_test","summary":"hello","created":"2026-03-03T00:00:00Z","updated":"2026-03-03T00:00:01Z","messages":[]}`
+	if err := os.WriteFile(filepath.Join(ws, "sessions", "feishu_oc_test.json"), []byte(body), 0o644); err != nil {
+		t.Fatalf("write session: %v", err)
+	}
+
+	h := NewConsoleHandler(ConsoleHandlerOptions{Workspace: ws})
+	req := httptest.NewRequest(http.MethodGet, "http://example.com/api/console/sessions", nil)
+	req.RemoteAddr = "127.0.0.1:1234"
+	rr := httptest.NewRecorder()
+
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+
+	var payload struct {
+		OK    bool              `json:"ok"`
+		Items []sessionListItem `json:"items"`
+	}
+	if err := json.NewDecoder(rr.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode json: %v", err)
+	}
+	if !payload.OK {
+		t.Fatalf("expected ok=true")
+	}
+	if len(payload.Items) != 1 {
+		t.Fatalf("expected 1 item, got %d", len(payload.Items))
+	}
+	if payload.Items[0].Key != "feishu:oc_test" {
+		t.Fatalf("expected key, got %q", payload.Items[0].Key)
+	}
+	if payload.Items[0].File != "sessions/feishu_oc_test.json" {
+		t.Fatalf("unexpected file path: %q", payload.Items[0].File)
+	}
+}
+
+func TestConsoleHandler_Tail(t *testing.T) {
+	ws := t.TempDir()
+	traceDir := filepath.Join(ws, ".picoclaw", "audit", "runs", "feishu_oc_test")
+	if err := os.MkdirAll(traceDir, 0o755); err != nil {
+		t.Fatalf("mkdir trace: %v", err)
+	}
+	eventsPath := filepath.Join(traceDir, "events.jsonl")
+	body := "{\"n\":1}\n{\"n\":2}\n"
+	if err := os.WriteFile(eventsPath, []byte(body), 0o644); err != nil {
+		t.Fatalf("write events: %v", err)
+	}
+
+	h := NewConsoleHandler(ConsoleHandlerOptions{Workspace: ws})
+	req := httptest.NewRequest(http.MethodGet, "http://example.com/api/console/tail?path=.picoclaw/audit/runs/feishu_oc_test/events.jsonl&lines=1", nil)
+	req.RemoteAddr = "127.0.0.1:1234"
+	rr := httptest.NewRecorder()
+
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	var payload struct {
+		OK    bool     `json:"ok"`
+		Lines []string `json:"lines"`
+	}
+	if err := json.NewDecoder(rr.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode json: %v", err)
+	}
+	if !payload.OK {
+		t.Fatalf("expected ok=true")
+	}
+	if len(payload.Lines) != 1 || strings.TrimSpace(payload.Lines[0]) != "{\"n\":2}" {
+		t.Fatalf("unexpected tail lines: %#v", payload.Lines)
 	}
 }
