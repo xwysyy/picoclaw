@@ -46,7 +46,7 @@ func (t *HandoffTool) Parameters() map[string]any {
 			},
 			"agent_id": map[string]any{
 				"type":        "string",
-				"description": "Alias of agent_name (target agent ID).",
+				"description": "Target agent ID (preferred). Use agents_list to discover available agents.",
 			},
 			"reason": map[string]any{
 				"type":        "string",
@@ -57,12 +57,7 @@ func (t *HandoffTool) Parameters() map[string]any {
 				"description": "If true (default), the new agent should continue immediately in the same turn.",
 			},
 		},
-		"required": []string{"reason"},
-		// Either agent_name or agent_id is required.
-		"anyOf": []any{
-			map[string]any{"required": []string{"agent_name"}},
-			map[string]any{"required": []string{"agent_id"}},
-		},
+		"required": []string{"agent_id", "reason"},
 	}
 }
 
@@ -78,7 +73,7 @@ func (t *HandoffTool) Execute(ctx context.Context, args map[string]any) *ToolRes
 		agentID = strings.TrimSpace(v)
 	}
 	if agentID == "" {
-		return ErrorResult("agent_name is required (use agents_list)")
+		return ErrorResult("agent_id is required (use agents_list)")
 	}
 
 	reason, ok := getStringArg(args, "reason")
