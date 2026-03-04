@@ -1328,7 +1328,7 @@ func (al *AgentLoop) processMessage(ctx context.Context, msg bus.InboundMessage)
 	}
 
 	// Ensure the conversation session has an active agent recorded.
-	if al.sessions != nil && routing.ParseAgentSessionKey(strings.ToLower(sessionKey)) == nil {
+	if al.sessions != nil && routing.ParseAgentSessionKey(sessionKey) == nil {
 		if al.sessions.GetActiveAgentID(sessionKey) == "" {
 			al.sessions.SetActiveAgentID(sessionKey, agent.ID)
 		}
@@ -1487,7 +1487,7 @@ func (al *AgentLoop) processSystemMessage(
 	if agent == nil {
 		return "", fmt.Errorf("no agent available for system message (session_key=%s)", sessionKey)
 	}
-	if al.sessions != nil && routing.ParseAgentSessionKey(strings.ToLower(sessionKey)) == nil {
+	if al.sessions != nil && routing.ParseAgentSessionKey(sessionKey) == nil {
 		if al.sessions.GetActiveAgentID(sessionKey) == "" {
 			al.sessions.SetActiveAgentID(sessionKey, agent.ID)
 		}

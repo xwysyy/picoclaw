@@ -27,7 +27,20 @@ go test -p 1 ./internal/archcheck -count=1
 go test -p 1 ./pkg/utils -count=1
 
 # Agent full-suite may be too heavy in CI sandboxes; run key regression tests.
+set +e
 go test -p 1 ./pkg/agent -run 'TestTargetReasoningChannelID_AllChannels|TestHandleReasoning|TestSanitizeHistoryForProvider' -count=1
+rc=$?
+set -e
+if [[ $rc -ne 0 ]]; then
+  if [[ $rc -eq 137 ]]; then
+    echo "pkg/agent tests were OOM-killed (rc=137); retrying with more aggressive GC..."
+    GOMEMLIMIT="${GOMEMLIMIT_RETRY:-160MiB}" \
+      GOGC="${GOGC_RETRY:-20}" \
+      go test -p 1 ./pkg/agent -run 'TestTargetReasoningChannelID_AllChannels|TestHandleReasoning|TestSanitizeHistoryForProvider' -count=1
+  else
+    exit $rc
+  fi
+fi
 
 # Tools full-suite can be killed in memory-constrained environments; run key regression tests.
 go test -p 1 ./pkg/tools -run 'TestExecuteToolCalls_MaxResultChars_UsesHeadTailTruncation' -count=1

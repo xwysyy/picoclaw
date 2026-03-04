@@ -1,9 +1,13 @@
 package doctor
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/sipeed/picoclaw/cmd/picoclaw/internal"
 	"github.com/sipeed/picoclaw/cmd/picoclaw/internal/cliutil"
@@ -40,6 +44,10 @@ type doctorReport struct {
 	WorkspaceExists bool   `json:"workspace_exists,omitempty"`
 
 	Checks []doctorCheck `json:"checks,omitempty"`
+}
+
+type gatewayStatusResponse struct {
+	Status string `json:"status"`
 }
 
 func doctorCmd(opts doctorOptions) error {
@@ -148,6 +156,49 @@ func doctorCmd(opts doctorOptions) error {
 		})
 	}
 
+	if cfg != nil && strings.TrimSpace(cfg.Gateway.Host) != "" && cfg.Gateway.Port > 0 {
+		host := strings.TrimSpace(cfg.Gateway.Host)
+		if host == "0.0.0.0" || host == "::" {
+			// 0.0.0.0 is a bind address, not a dial target.
+			host = "127.0.0.1"
+		}
+		baseURL := fmt.Sprintf("http://%s:%d", host, cfg.Gateway.Port)
+
+		if ok, msg := probeGatewayStatus(baseURL + "/healthz"); ok {
+			report.Checks = append(report.Checks, doctorCheck{
+				ID:       "gateway.healthz",
+				OK:       true,
+				Severity: severityInfo,
+				Message:  "gateway /healthz reachable",
+			})
+		} else {
+			report.Checks = append(report.Checks, doctorCheck{
+				ID:       "gateway.healthz",
+				OK:       false,
+				Severity: severityWarn,
+				Message:  "gateway /healthz not reachable",
+				Hint:     fmt.Sprintf("%s (%s)", msg, baseURL),
+			})
+		}
+
+		if ok, msg := probeGatewayStatus(baseURL + "/readyz"); ok {
+			report.Checks = append(report.Checks, doctorCheck{
+				ID:       "gateway.readyz",
+				OK:       true,
+				Severity: severityInfo,
+				Message:  "gateway /readyz reachable",
+			})
+		} else {
+			report.Checks = append(report.Checks, doctorCheck{
+				ID:       "gateway.readyz",
+				OK:       false,
+				Severity: severityWarn,
+				Message:  "gateway /readyz not ready or not reachable",
+				Hint:     fmt.Sprintf("%s (%s)", msg, baseURL),
+			})
+		}
+	}
+
 	// Compute overall OK: any severityError makes the report not OK.
 	report.OK = true
 	for _, c := range report.Checks {
@@ -202,4 +253,36 @@ func printDoctorReport(report doctorReport) {
 			fmt.Printf("    hint: %s\n", strings.TrimSpace(c.Hint))
 		}
 	}
+}
+
+func probeGatewayStatus(url string) (bool, string) {
+	url = strings.TrimSpace(url)
+	if url == "" {
+		return false, "url is empty"
+	}
+
+	client := &http.Client{Timeout: 1200 * time.Millisecond}
+	resp, err := client.Get(url)
+	if err != nil {
+		return false, err.Error()
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 64*1024))
+	if resp.StatusCode != http.StatusOK {
+		return false, fmt.Sprintf("http %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+
+	// Best-effort JSON parse for status.
+	var s gatewayStatusResponse
+	if err := json.Unmarshal(body, &s); err == nil {
+		if strings.TrimSpace(s.Status) == "" {
+			return true, "ok"
+		}
+		// /healthz => "ok", /readyz => "ready". We treat either as success
+		// if HTTP is 200, but keep a hint in the message for debugging.
+		return true, strings.TrimSpace(s.Status)
+	}
+
+	return true, "ok"
 }

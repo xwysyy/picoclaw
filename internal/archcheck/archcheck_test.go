@@ -95,3 +95,27 @@ func TestAgentDoesNotImportInfraChannels(t *testing.T) {
 		t.Fatalf("architecture violation: pkg/agent imports infra packages:\n%s", strings.Join(violations, "\n"))
 	}
 }
+
+func TestInternalCoreDoesNotImportAppOrPkg(t *testing.T) {
+	root := findRepoRoot(t)
+	coreDir := filepath.Join(root, "internal", "core")
+
+	importsByFile := scanImports(t, coreDir)
+
+	var violations []string
+	for file, imports := range importsByFile {
+		for _, imp := range imports {
+			// internal/core is our "core boundary": it may only depend on itself
+			// (and stdlib/third-party, though we try to keep it minimal).
+			if strings.HasPrefix(imp, "github.com/sipeed/picoclaw/") &&
+				!strings.HasPrefix(imp, "github.com/sipeed/picoclaw/internal/core/") {
+				rel, _ := filepath.Rel(root, file)
+				violations = append(violations, rel+": "+imp)
+			}
+		}
+	}
+
+	if len(violations) > 0 {
+		t.Fatalf("architecture violation: internal/core imports non-core repo packages:\n%s", strings.Join(violations, "\n"))
+	}
+}
