@@ -648,3 +648,167 @@ func TestDefaultConfig_WorkspacePath_WithPicoclawHome(t *testing.T) {
 		t.Errorf("Workspace path with PICOCLAW_HOME = %q, want %q", cfg.Agents.Defaults.Workspace, want)
 	}
 }
+
+func TestLoadConfig_RejectsPublicGatewayWithoutBreakGlass(t *testing.T) {
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "config.json")
+	if err := os.WriteFile(configPath, []byte(`{"gateway":{"host":"0.0.0.0"}}`), 0o600); err != nil {
+		t.Fatalf("WriteFile() error: %v", err)
+	}
+
+	_, err := LoadConfig(configPath)
+	if err == nil {
+		t.Fatal("LoadConfig() expected error for public gateway bind without break-glass")
+	}
+	if !strings.Contains(err.Error(), "allow_public_gateway") {
+		t.Fatalf("LoadConfig() error = %q, want mention allow_public_gateway", err.Error())
+	}
+}
+
+func TestLoadConfig_AllowsPublicGatewayWithBreakGlass(t *testing.T) {
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "config.json")
+	configJSON := `{
+  "gateway": {"host": "0.0.0.0"},
+  "security": {"break_glass": {"allow_public_gateway": true}}
+}`
+	if err := os.WriteFile(configPath, []byte(configJSON), 0o600); err != nil {
+		t.Fatalf("WriteFile() error: %v", err)
+	}
+
+	if _, err := LoadConfig(configPath); err != nil {
+		t.Fatalf("LoadConfig() error: %v", err)
+	}
+}
+
+func TestLoadConfig_RejectsUnsafeWorkspaceWithoutBreakGlass(t *testing.T) {
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "config.json")
+	configJSON := `{"agents":{"defaults":{"restrict_to_workspace":false}}}`
+	if err := os.WriteFile(configPath, []byte(configJSON), 0o600); err != nil {
+		t.Fatalf("WriteFile() error: %v", err)
+	}
+
+	_, err := LoadConfig(configPath)
+	if err == nil {
+		t.Fatal("LoadConfig() expected error for unsafe workspace without break-glass")
+	}
+	if !strings.Contains(err.Error(), "allow_unsafe_workspace") {
+		t.Fatalf("LoadConfig() error = %q, want mention allow_unsafe_workspace", err.Error())
+	}
+}
+
+func TestLoadConfig_AllowsUnsafeWorkspaceWithBreakGlass(t *testing.T) {
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "config.json")
+	configJSON := `{
+  "agents": {"defaults":{"restrict_to_workspace":false}},
+  "security": {"break_glass": {"allow_unsafe_workspace": true}}
+}`
+	if err := os.WriteFile(configPath, []byte(configJSON), 0o600); err != nil {
+		t.Fatalf("WriteFile() error: %v", err)
+	}
+
+	if _, err := LoadConfig(configPath); err != nil {
+		t.Fatalf("LoadConfig() error: %v", err)
+	}
+}
+
+func TestLoadConfig_RejectsUnsafeExecWithoutBreakGlass(t *testing.T) {
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "config.json")
+	configJSON := `{"tools":{"exec":{"enable_deny_patterns":false}}}`
+	if err := os.WriteFile(configPath, []byte(configJSON), 0o600); err != nil {
+		t.Fatalf("WriteFile() error: %v", err)
+	}
+
+	_, err := LoadConfig(configPath)
+	if err == nil {
+		t.Fatal("LoadConfig() expected error for unsafe exec without break-glass")
+	}
+	if !strings.Contains(err.Error(), "allow_unsafe_exec") {
+		t.Fatalf("LoadConfig() error = %q, want mention allow_unsafe_exec", err.Error())
+	}
+}
+
+func TestLoadConfig_AllowsUnsafeExecWithBreakGlass(t *testing.T) {
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "config.json")
+	configJSON := `{
+  "tools": {"exec":{"enable_deny_patterns":false}},
+  "security": {"break_glass": {"allow_unsafe_exec": true}}
+}`
+	if err := os.WriteFile(configPath, []byte(configJSON), 0o600); err != nil {
+		t.Fatalf("WriteFile() error: %v", err)
+	}
+
+	if _, err := LoadConfig(configPath); err != nil {
+		t.Fatalf("LoadConfig() error: %v", err)
+	}
+}
+
+func TestLoadConfig_RejectsDockerNetworkWithoutBreakGlass(t *testing.T) {
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "config.json")
+	configJSON := `{"tools":{"exec":{"backend":"docker","docker":{"network":"bridge"}}}}`
+	if err := os.WriteFile(configPath, []byte(configJSON), 0o600); err != nil {
+		t.Fatalf("WriteFile() error: %v", err)
+	}
+
+	_, err := LoadConfig(configPath)
+	if err == nil {
+		t.Fatal("LoadConfig() expected error for docker network without break-glass")
+	}
+	if !strings.Contains(err.Error(), "allow_docker_network") {
+		t.Fatalf("LoadConfig() error = %q, want mention allow_docker_network", err.Error())
+	}
+}
+
+func TestLoadConfig_AllowsDockerNetworkWithBreakGlass(t *testing.T) {
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "config.json")
+	configJSON := `{
+  "tools":{"exec":{"backend":"docker","docker":{"network":"bridge"}}},
+  "security": {"break_glass": {"allow_docker_network": true}}
+}`
+	if err := os.WriteFile(configPath, []byte(configJSON), 0o600); err != nil {
+		t.Fatalf("WriteFile() error: %v", err)
+	}
+
+	if _, err := LoadConfig(configPath); err != nil {
+		t.Fatalf("LoadConfig() error: %v", err)
+	}
+}
+
+func TestLoadConfig_RejectsExecInheritEnvWithoutBreakGlass(t *testing.T) {
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "config.json")
+	configJSON := `{"tools":{"exec":{"env":{"mode":"inherit"}}}}`
+	if err := os.WriteFile(configPath, []byte(configJSON), 0o600); err != nil {
+		t.Fatalf("WriteFile() error: %v", err)
+	}
+
+	_, err := LoadConfig(configPath)
+	if err == nil {
+		t.Fatal("LoadConfig() expected error for tools.exec.env.mode=inherit without break-glass")
+	}
+	if !strings.Contains(err.Error(), "allow_exec_inherit_env") {
+		t.Fatalf("LoadConfig() error = %q, want mention allow_exec_inherit_env", err.Error())
+	}
+}
+
+func TestLoadConfig_AllowsExecInheritEnvWithBreakGlass(t *testing.T) {
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "config.json")
+	configJSON := `{
+  "tools":{"exec":{"env":{"mode":"inherit"}}},
+  "security": {"break_glass": {"allow_exec_inherit_env": true}}
+}`
+	if err := os.WriteFile(configPath, []byte(configJSON), 0o600); err != nil {
+		t.Fatalf("WriteFile() error: %v", err)
+	}
+
+	if _, err := LoadConfig(configPath); err != nil {
+		t.Fatalf("LoadConfig() error: %v", err)
+	}
+}

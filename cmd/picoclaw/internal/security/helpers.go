@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -19,11 +20,19 @@ type securityReport struct {
 	Workspace string `json:"workspace,omitempty"`
 	Timestamp string `json:"timestamp,omitempty"`
 
+	Gateway struct {
+		Host       string `json:"host,omitempty"`
+		Port       int    `json:"port,omitempty"`
+		PublicBind bool   `json:"public_bind,omitempty"`
+		APIKeySet  bool   `json:"api_key_set,omitempty"`
+	} `json:"gateway,omitempty"`
+
 	Sandbox struct {
 		RestrictToWorkspace       bool `json:"restrict_to_workspace,omitempty"`
 		AllowReadOutsideWorkspace bool `json:"allow_read_outside_workspace,omitempty"`
 
 		ExecBackend          string `json:"exec_backend,omitempty"`
+		ExecEnvMode          string `json:"exec_env_mode,omitempty"`
 		DockerImage          string `json:"docker_image,omitempty"`
 		DockerNetwork        string `json:"docker_network,omitempty"`
 		DockerReadOnlyRootFS bool   `json:"docker_read_only_rootfs,omitempty"`
@@ -52,6 +61,14 @@ type securityReport struct {
 		State      tools.EstopState `json:"state,omitempty"`
 		StateError string           `json:"state_error,omitempty"`
 	} `json:"estop,omitempty"`
+
+	BreakGlass struct {
+		AllowPublicGateway   bool `json:"allow_public_gateway,omitempty"`
+		AllowUnsafeWorkspace bool `json:"allow_unsafe_workspace,omitempty"`
+		AllowUnsafeExec      bool `json:"allow_unsafe_exec,omitempty"`
+		AllowExecInheritEnv  bool `json:"allow_exec_inherit_env,omitempty"`
+		AllowDockerNetwork   bool `json:"allow_docker_network,omitempty"`
+	} `json:"break_glass,omitempty"`
 
 	Warnings []string `json:"warnings,omitempty"`
 }
@@ -86,6 +103,7 @@ func securityCmd(opts securityOptions) error {
 	fmt.Printf("  restrict_to_workspace: %v\n", report.Sandbox.RestrictToWorkspace)
 	fmt.Printf("  allow_read_outside_workspace: %v\n", report.Sandbox.AllowReadOutsideWorkspace)
 	fmt.Printf("  exec_backend: %s\n", report.Sandbox.ExecBackend)
+	fmt.Printf("  exec_env_mode: %s\n", report.Sandbox.ExecEnvMode)
 	if strings.TrimSpace(report.Sandbox.ExecBackend) == "docker" {
 		fmt.Printf("  docker.image: %s\n", report.Sandbox.DockerImage)
 		fmt.Printf("  docker.network: %s\n", report.Sandbox.DockerNetwork)
@@ -120,6 +138,21 @@ func securityCmd(opts securityOptions) error {
 	}
 	fmt.Println()
 
+	fmt.Println("Gateway:")
+	fmt.Printf("  host: %s\n", report.Gateway.Host)
+	fmt.Printf("  port: %d\n", report.Gateway.Port)
+	fmt.Printf("  public_bind: %v\n", report.Gateway.PublicBind)
+	fmt.Printf("  api_key_set: %v\n", report.Gateway.APIKeySet)
+	fmt.Println()
+
+	fmt.Println("Break-glass:")
+	fmt.Printf("  allow_public_gateway: %v\n", report.BreakGlass.AllowPublicGateway)
+	fmt.Printf("  allow_unsafe_workspace: %v\n", report.BreakGlass.AllowUnsafeWorkspace)
+	fmt.Printf("  allow_unsafe_exec: %v\n", report.BreakGlass.AllowUnsafeExec)
+	fmt.Printf("  allow_exec_inherit_env: %v\n", report.BreakGlass.AllowExecInheritEnv)
+	fmt.Printf("  allow_docker_network: %v\n", report.BreakGlass.AllowDockerNetwork)
+	fmt.Println()
+
 	if len(report.Warnings) == 0 {
 		fmt.Println("Warnings: (none)")
 		return nil
@@ -146,9 +179,21 @@ func buildSecurityReport(cfg *config.Config) securityReport {
 	report.Sandbox.RestrictToWorkspace = cfg.Agents.Defaults.RestrictToWorkspace
 	report.Sandbox.AllowReadOutsideWorkspace = cfg.Agents.Defaults.AllowReadOutsideWorkspace
 	report.Sandbox.ExecBackend = strings.TrimSpace(cfg.Tools.Exec.Backend)
+	report.Sandbox.ExecEnvMode = strings.TrimSpace(cfg.Tools.Exec.Env.Mode)
 	report.Sandbox.DockerImage = strings.TrimSpace(cfg.Tools.Exec.Docker.Image)
 	report.Sandbox.DockerNetwork = strings.TrimSpace(cfg.Tools.Exec.Docker.Network)
 	report.Sandbox.DockerReadOnlyRootFS = cfg.Tools.Exec.Docker.ReadOnlyRootFS
+
+	report.Gateway.Host = strings.TrimSpace(cfg.Gateway.Host)
+	report.Gateway.Port = cfg.Gateway.Port
+	report.Gateway.APIKeySet = strings.TrimSpace(cfg.Gateway.APIKey) != ""
+	report.Gateway.PublicBind = !isLoopbackHost(report.Gateway.Host)
+
+	report.BreakGlass.AllowPublicGateway = cfg.Security.BreakGlass.AllowPublicGateway
+	report.BreakGlass.AllowUnsafeWorkspace = cfg.Security.BreakGlass.AllowUnsafeWorkspace
+	report.BreakGlass.AllowUnsafeExec = cfg.Security.BreakGlass.AllowUnsafeExec
+	report.BreakGlass.AllowExecInheritEnv = cfg.Security.BreakGlass.AllowExecInheritEnv
+	report.BreakGlass.AllowDockerNetwork = cfg.Security.BreakGlass.AllowDockerNetwork
 
 	report.Limits.Enabled = cfg.Limits.Enabled
 	report.Limits.MaxRunWallTimeSeconds = cfg.Limits.MaxRunWallTimeSeconds
@@ -208,6 +253,12 @@ func buildSecurityReport(cfg *config.Config) securityReport {
 	if report.Sandbox.AllowReadOutsideWorkspace {
 		report.Warnings = append(report.Warnings, "allow_read_outside_workspace=true (may leak host files into context)")
 	}
+	if strings.EqualFold(strings.TrimSpace(report.Sandbox.ExecEnvMode), "inherit") {
+		report.Warnings = append(report.Warnings, "exec tool inherits full host env (consider tools.exec.env.mode=\"allowlist\")")
+	}
+	if report.Gateway.PublicBind && !report.BreakGlass.AllowPublicGateway {
+		report.Warnings = append(report.Warnings, "gateway binds non-loopback but break-glass allow_public_gateway is false (config would be rejected)")
+	}
 
 	return report
 }
@@ -221,4 +272,19 @@ func marshalIndentNoEscape(v any) ([]byte, error) {
 		return nil, err
 	}
 	return bytes.TrimRight(buf.Bytes(), "\n"), nil
+}
+
+func isLoopbackHost(host string) bool {
+	host = strings.TrimSpace(host)
+	if host == "" {
+		return false
+	}
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return false
+	}
+	return ip.IsLoopback()
 }

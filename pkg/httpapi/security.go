@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"encoding/json"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -45,11 +46,19 @@ type securityResponse struct {
 	Timestamp string   `json:"timestamp,omitempty"`
 	Warnings  []string `json:"warnings,omitempty"`
 
+	Gateway struct {
+		Host       string `json:"host,omitempty"`
+		Port       int    `json:"port,omitempty"`
+		PublicBind bool   `json:"public_bind,omitempty"`
+		APIKeySet  bool   `json:"api_key_set,omitempty"`
+	} `json:"gateway,omitempty"`
+
 	Sandbox struct {
 		RestrictToWorkspace       bool `json:"restrict_to_workspace,omitempty"`
 		AllowReadOutsideWorkspace bool `json:"allow_read_outside_workspace,omitempty"`
 
 		ExecBackend          string `json:"exec_backend,omitempty"`
+		ExecEnvMode          string `json:"exec_env_mode,omitempty"`
 		DockerImage          string `json:"docker_image,omitempty"`
 		DockerNetwork        string `json:"docker_network,omitempty"`
 		DockerReadOnlyRootFS bool   `json:"docker_read_only_rootfs,omitempty"`
@@ -78,6 +87,14 @@ type securityResponse struct {
 		State      tools.EstopState `json:"state,omitempty"`
 		StateError string           `json:"state_error,omitempty"`
 	} `json:"estop,omitempty"`
+
+	BreakGlass struct {
+		AllowPublicGateway   bool `json:"allow_public_gateway,omitempty"`
+		AllowUnsafeWorkspace bool `json:"allow_unsafe_workspace,omitempty"`
+		AllowUnsafeExec      bool `json:"allow_unsafe_exec,omitempty"`
+		AllowExecInheritEnv  bool `json:"allow_exec_inherit_env,omitempty"`
+		AllowDockerNetwork   bool `json:"allow_docker_network,omitempty"`
+	} `json:"break_glass,omitempty"`
 }
 
 func (h *SecurityHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -133,9 +150,15 @@ func (h *SecurityHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if cfg != nil {
 		resp.Workspace = strings.TrimSpace(cfg.WorkspacePath())
 
+		resp.Gateway.Host = strings.TrimSpace(cfg.Gateway.Host)
+		resp.Gateway.Port = cfg.Gateway.Port
+		resp.Gateway.APIKeySet = strings.TrimSpace(cfg.Gateway.APIKey) != ""
+		resp.Gateway.PublicBind = !isLoopbackHost(resp.Gateway.Host)
+
 		resp.Sandbox.RestrictToWorkspace = cfg.Agents.Defaults.RestrictToWorkspace
 		resp.Sandbox.AllowReadOutsideWorkspace = cfg.Agents.Defaults.AllowReadOutsideWorkspace
 		resp.Sandbox.ExecBackend = strings.TrimSpace(cfg.Tools.Exec.Backend)
+		resp.Sandbox.ExecEnvMode = strings.TrimSpace(cfg.Tools.Exec.Env.Mode)
 		resp.Sandbox.DockerImage = strings.TrimSpace(cfg.Tools.Exec.Docker.Image)
 		resp.Sandbox.DockerNetwork = strings.TrimSpace(cfg.Tools.Exec.Docker.Network)
 		resp.Sandbox.DockerReadOnlyRootFS = cfg.Tools.Exec.Docker.ReadOnlyRootFS
@@ -153,6 +176,12 @@ func (h *SecurityHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 		resp.Estop.Enabled = cfg.Tools.Estop.Enabled
 		resp.Estop.FailClosed = cfg.Tools.Estop.FailClosed
+
+		resp.BreakGlass.AllowPublicGateway = cfg.Security.BreakGlass.AllowPublicGateway
+		resp.BreakGlass.AllowUnsafeWorkspace = cfg.Security.BreakGlass.AllowUnsafeWorkspace
+		resp.BreakGlass.AllowUnsafeExec = cfg.Security.BreakGlass.AllowUnsafeExec
+		resp.BreakGlass.AllowExecInheritEnv = cfg.Security.BreakGlass.AllowExecInheritEnv
+		resp.BreakGlass.AllowDockerNetwork = cfg.Security.BreakGlass.AllowDockerNetwork
 	}
 
 	workspace := strings.TrimSpace(resp.Workspace)
@@ -205,7 +234,28 @@ func (h *SecurityHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if resp.Sandbox.AllowReadOutsideWorkspace {
 		resp.Warnings = append(resp.Warnings, "allow_read_outside_workspace=true (may leak host files into context)")
 	}
+	if strings.EqualFold(strings.TrimSpace(resp.Sandbox.ExecEnvMode), "inherit") {
+		resp.Warnings = append(resp.Warnings, "exec tool inherits full host env (consider tools.exec.env.mode=\"allowlist\")")
+	}
+	if resp.Gateway.PublicBind && !resp.BreakGlass.AllowPublicGateway {
+		resp.Warnings = append(resp.Warnings, "gateway binds non-loopback but break-glass allow_public_gateway is false (config would be rejected)")
+	}
 
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(resp)
+}
+
+func isLoopbackHost(host string) bool {
+	host = strings.TrimSpace(host)
+	if host == "" {
+		return false
+	}
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return false
+	}
+	return ip.IsLoopback()
 }

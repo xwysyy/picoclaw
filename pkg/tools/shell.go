@@ -29,6 +29,9 @@ type ExecTool struct {
 
 	backend string // host | docker
 
+	envMode  string
+	envAllow map[string]bool
+
 	dockerImage          string
 	dockerNetwork        string
 	dockerReadOnlyRootFS bool
@@ -113,6 +116,8 @@ func NewExecToolWithConfig(workingDir string, restrict bool, config *config.Conf
 	denyPatterns := make([]*regexp.Regexp, 0)
 	customAllowPatterns := make([]*regexp.Regexp, 0)
 	backend := "host"
+	envMode := "inherit"
+	envAllow := map[string]bool{}
 	dockerImage := ""
 	dockerNetwork := ""
 	dockerReadOnly := false
@@ -158,6 +163,18 @@ func NewExecToolWithConfig(workingDir string, restrict bool, config *config.Conf
 			return nil, fmt.Errorf("invalid tools.exec.backend %q (expected \"host\" or \"docker\")", execConfig.Backend)
 		}
 
+		envMode = strings.ToLower(strings.TrimSpace(execConfig.Env.Mode))
+		if envMode == "" {
+			envMode = "inherit"
+		}
+		switch envMode {
+		case "inherit", "allowlist":
+			// ok
+		default:
+			return nil, fmt.Errorf("invalid tools.exec.env.mode %q (expected \"inherit\" or \"allowlist\")", execConfig.Env.Mode)
+		}
+		envAllow = buildExecEnvAllowMap(execConfig.Env.EnvAllow)
+
 		dockerImage = strings.TrimSpace(execConfig.Docker.Image)
 		dockerNetwork = strings.TrimSpace(execConfig.Docker.Network)
 		if dockerNetwork == "" {
@@ -180,6 +197,8 @@ func NewExecToolWithConfig(workingDir string, restrict bool, config *config.Conf
 		restrictToWorkspace:  restrict,
 		processes:            NewProcessManager(defaultProcessMaxOutputChars),
 		backend:              backend,
+		envMode:              envMode,
+		envAllow:             envAllow,
 		dockerImage:          dockerImage,
 		dockerNetwork:        dockerNetwork,
 		dockerReadOnlyRootFS: dockerReadOnly,
@@ -187,6 +206,82 @@ func NewExecToolWithConfig(workingDir string, restrict bool, config *config.Conf
 		dockerCPUs:           dockerCPUs,
 		dockerPidsLimit:      dockerPidsLimit,
 	}, nil
+}
+
+var platformExecEnvAllow = []string{
+	"PATH",
+	"HOME",
+	"USER",
+	"LOGNAME",
+	"SHELL",
+	"LANG",
+	"LC_ALL",
+	"LC_CTYPE",
+	"TERM",
+	"TZ",
+	"TMPDIR",
+	// Proxy support.
+	"HTTP_PROXY",
+	"HTTPS_PROXY",
+	"NO_PROXY",
+	"http_proxy",
+	"https_proxy",
+	"no_proxy",
+}
+
+func buildExecEnvAllowMap(configAllow []string) map[string]bool {
+	allow := make(map[string]bool, len(platformExecEnvAllow)+len(configAllow))
+	for _, name := range platformExecEnvAllow {
+		name = strings.TrimSpace(name)
+		if name != "" {
+			allow[name] = true
+		}
+	}
+	for _, name := range configAllow {
+		name = strings.TrimSpace(name)
+		if envVarNamePattern.MatchString(name) {
+			allow[name] = true
+		}
+	}
+	return allow
+}
+
+func filterExecEnv(env []string, allow map[string]bool) []string {
+	if len(env) == 0 || len(allow) == 0 {
+		return nil
+	}
+	filtered := make([]string, 0, len(env))
+	for _, kv := range env {
+		if kv == "" {
+			continue
+		}
+		eq := strings.IndexByte(kv, '=')
+		if eq <= 0 {
+			continue
+		}
+		name := kv[:eq]
+		if allow[name] {
+			filtered = append(filtered, kv)
+		}
+	}
+	return filtered
+}
+
+func (t *ExecTool) applyEnvPolicy(cmd *exec.Cmd) {
+	if t == nil || cmd == nil {
+		return
+	}
+	// Only apply env filtering for host backend. For docker backend, the executed
+	// user command runs inside a container and we do not pass env; filtering the
+	// docker CLI environment can break rootless/remote docker setups.
+	if strings.EqualFold(strings.TrimSpace(t.backend), "docker") {
+		return
+	}
+	if strings.EqualFold(strings.TrimSpace(t.envMode), "inherit") {
+		// Leave cmd.Env nil → inherit everything.
+		return
+	}
+	cmd.Env = filterExecEnv(os.Environ(), t.envAllow)
 }
 
 func (t *ExecTool) Name() string {
@@ -455,6 +550,7 @@ func (t *ExecTool) executeSync(ctx context.Context, command, cwd string, timeout
 	if cwd != "" {
 		cmd.Dir = cwd
 	}
+	t.applyEnvPolicy(cmd)
 
 	prepareCommandForTermination(cmd)
 
@@ -544,6 +640,7 @@ func (t *ExecTool) executeManaged(
 	if cwd != "" {
 		cmd.Dir = cwd
 	}
+	t.applyEnvPolicy(cmd)
 	prepareCommandForTermination(cmd)
 
 	stdoutPipe, err := cmd.StdoutPipe()

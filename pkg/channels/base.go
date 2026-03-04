@@ -125,16 +125,24 @@ func (c *BaseChannel) MaxMessageLength() int {
 //
 // Logic:
 //   - If isMentioned → always respond
+//   - If command_bypass enabled and message looks like a command → respond
 //   - If mention_only configured and not mentioned → ignore
 //   - If prefixes configured → respond if content starts with any prefix (strip it)
-//   - If prefixes configured but no match and not mentioned → ignore
-//   - Otherwise (no group_trigger configured) → respond to all (permissive default)
+//   - If mentionless enabled → respond to all
+//   - Otherwise (no trigger configured) → ignore (safe-by-default)
 func (c *BaseChannel) ShouldRespondInGroup(isMentioned bool, content string) (bool, string) {
 	gt := c.groupTrigger
 
 	// Mentioned → always respond
 	if isMentioned {
 		return true, strings.TrimSpace(content)
+	}
+
+	trimmed := strings.TrimSpace(content)
+
+	// Slash-command bypass (e.g. "/tree", "/switch ...") to keep ops usable in groups.
+	if gt.CommandBypass && isCommandBypassHit(trimmed, gt.CommandPrefixes) {
+		return true, trimmed
 	}
 
 	// mention_only → require mention
@@ -145,16 +153,40 @@ func (c *BaseChannel) ShouldRespondInGroup(isMentioned bool, content string) (bo
 	// Prefix matching
 	if len(gt.Prefixes) > 0 {
 		for _, prefix := range gt.Prefixes {
-			if prefix != "" && strings.HasPrefix(content, prefix) {
-				return true, strings.TrimSpace(strings.TrimPrefix(content, prefix))
+			if prefix != "" && strings.HasPrefix(trimmed, prefix) {
+				return true, strings.TrimSpace(strings.TrimPrefix(trimmed, prefix))
 			}
 		}
 		// Prefixes configured but none matched and not mentioned → ignore
 		return false, content
 	}
 
-	// No group_trigger configured → permissive (respond to all)
-	return true, strings.TrimSpace(content)
+	// mentionless → respond to all
+	if gt.Mentionless {
+		return true, trimmed
+	}
+
+	// Safe-by-default: ignore group messages unless explicitly triggered.
+	return false, content
+}
+
+func isCommandBypassHit(content string, prefixes []string) bool {
+	if content == "" {
+		return false
+	}
+	if len(prefixes) == 0 {
+		prefixes = []string{"/"}
+	}
+	for _, p := range prefixes {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		if strings.HasPrefix(content, p) && len(content) > len(p) {
+			return true
+		}
+	}
+	return false
 }
 
 func (c *BaseChannel) Name() string {

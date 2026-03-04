@@ -815,10 +815,14 @@ func TestWebTool_GrokSearch_SSEResponse(t *testing.T) {
 type stubSearchProvider struct {
 	out string
 	err error
+	key string
 }
 
-func (p stubSearchProvider) Search(ctx context.Context, query string, count int) (string, error) {
-	return p.out, p.err
+func (p stubSearchProvider) Search(ctx context.Context, query string, count int) (SearchProviderResult, error) {
+	if p.err != nil {
+		return SearchProviderResult{}, p.err
+	}
+	return SearchProviderResult{Text: p.out, KeyID: p.key}, nil
 }
 
 func TestWebSearchTool_EvidenceMode_ProducesJSONSources(t *testing.T) {

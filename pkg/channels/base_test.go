@@ -68,11 +68,11 @@ func TestShouldRespondInGroup(t *testing.T) {
 		wantContent string
 	}{
 		{
-			name:        "no config - permissive default",
+			name:        "no config - safe default (ignore)",
 			gt:          config.GroupTriggerConfig{},
 			isMentioned: false,
 			content:     "hello world",
-			wantRespond: true,
+			wantRespond: false,
 			wantContent: "hello world",
 		},
 		{
@@ -82,6 +82,22 @@ func TestShouldRespondInGroup(t *testing.T) {
 			content:     "hello world",
 			wantRespond: true,
 			wantContent: "hello world",
+		},
+		{
+			name:        "command bypass (default /)",
+			gt:          config.GroupTriggerConfig{CommandBypass: true},
+			isMentioned: false,
+			content:     "/tree list",
+			wantRespond: true,
+			wantContent: "/tree list",
+		},
+		{
+			name:        "command bypass works even when mention_only=true",
+			gt:          config.GroupTriggerConfig{MentionOnly: true, CommandBypass: true},
+			isMentioned: false,
+			content:     "/switch plan to run",
+			wantRespond: true,
+			wantContent: "/switch plan to run",
 		},
 		{
 			name:        "mention_only - not mentioned",
@@ -95,6 +111,14 @@ func TestShouldRespondInGroup(t *testing.T) {
 			name:        "mention_only - mentioned",
 			gt:          config.GroupTriggerConfig{MentionOnly: true},
 			isMentioned: true,
+			content:     "hello world",
+			wantRespond: true,
+			wantContent: "hello world",
+		},
+		{
+			name:        "mentionless - respond without mention/prefix",
+			gt:          config.GroupTriggerConfig{Mentionless: true},
+			isMentioned: false,
 			content:     "hello world",
 			wantRespond: true,
 			wantContent: "hello world",

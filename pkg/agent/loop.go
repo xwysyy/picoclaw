@@ -1145,7 +1145,11 @@ func (al *AgentLoop) processMessage(ctx context.Context, msg bus.InboundMessage)
 	planMode := false
 	if cfg != nil && cfg.Tools.PlanMode.Enabled {
 		defaultMode := sessionPermissionModeRun
-		if strings.EqualFold(strings.TrimSpace(cfg.Tools.PlanMode.DefaultMode), "plan") {
+		modeText := strings.TrimSpace(cfg.Tools.PlanMode.DefaultMode)
+		if strings.EqualFold(strings.TrimSpace(msg.Peer.Kind), "group") && strings.TrimSpace(cfg.Tools.PlanMode.DefaultModeGroup) != "" {
+			modeText = strings.TrimSpace(cfg.Tools.PlanMode.DefaultModeGroup)
+		}
+		if strings.EqualFold(strings.TrimSpace(modeText), "plan") {
 			defaultMode = sessionPermissionModePlan
 		}
 		permWorkspace := agent.Workspace

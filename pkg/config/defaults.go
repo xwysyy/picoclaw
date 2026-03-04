@@ -83,7 +83,11 @@ func DefaultConfig() *Config {
 				Enabled:   false,
 				Token:     "",
 				AllowFrom: FlexibleStringSlice{},
-				Typing:    TypingConfig{Enabled: true},
+				GroupTrigger: GroupTriggerConfig{
+					CommandBypass:   true,
+					CommandPrefixes: []string{"/"},
+				},
+				Typing: TypingConfig{Enabled: true},
 				Placeholder: PlaceholderConfig{
 					Enabled: true,
 					Text:    "Thinking... 💭",
@@ -96,8 +100,17 @@ func DefaultConfig() *Config {
 				EncryptKey:        "",
 				VerificationToken: "",
 				AllowFrom:         FlexibleStringSlice{},
-				Typing:            TypingConfig{Enabled: false},
-				Placeholder:       PlaceholderConfig{Enabled: false},
+				GroupTrigger: GroupTriggerConfig{
+					// Safe-by-default in groups: require @mention.
+					MentionOnly: true,
+					// Allow slash-commands without @mention to keep ops usable.
+					CommandBypass:   true,
+					CommandPrefixes: []string{"/"},
+					Mentionless:     false,
+					Prefixes:        []string{},
+				},
+				Typing:      TypingConfig{Enabled: false},
+				Placeholder: PlaceholderConfig{Enabled: false},
 			},
 			Discord: DiscordConfig{
 				Enabled:     false,
@@ -414,6 +427,9 @@ func DefaultConfig() *Config {
 			PlanMode: PlanModeConfig{
 				Enabled:     true,
 				DefaultMode: "run",
+				// Group chats are less trusted by default: require explicit user approval
+				// (e.g. /switch plan to run) before side-effect tools are allowed.
+				DefaultModeGroup: "plan",
 				RestrictedTools: []string{
 					"exec",
 					"write_file",
@@ -434,6 +450,12 @@ func DefaultConfig() *Config {
 			Web: WebToolsConfig{
 				Proxy:           "",
 				FetchLimitBytes: 10 * 1024 * 1024, // 10MB by default
+				FetchCache: WebFetchCacheConfig{
+					Enabled:       true,
+					TTLSeconds:    120,
+					MaxEntries:    32,
+					MaxEntryChars: 80_000,
+				},
 				Brave: BraveConfig{
 					Enabled:    false,
 					APIKey:     "",
@@ -472,6 +494,30 @@ func DefaultConfig() *Config {
 			Exec: ExecConfig{
 				EnableDenyPatterns: true,
 				Backend:            "host",
+				Env: ExecEnvConfig{
+					Mode: "allowlist",
+					EnvAllow: []string{
+						// Minimal, non-secret defaults.
+						"PATH",
+						"HOME",
+						"USER",
+						"LOGNAME",
+						"SHELL",
+						"LANG",
+						"LC_ALL",
+						"LC_CTYPE",
+						"TERM",
+						"TZ",
+						"TMPDIR",
+						// Proxy support for package installs/downloads.
+						"HTTP_PROXY",
+						"HTTPS_PROXY",
+						"NO_PROXY",
+						"http_proxy",
+						"https_proxy",
+						"no_proxy",
+					},
+				},
 				Docker: ExecDockerConfig{
 					Image:          "alpine:3.20",
 					Network:        "none",

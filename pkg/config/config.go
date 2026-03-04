@@ -3,7 +3,9 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"os"
+	"strings"
 	"sync/atomic"
 
 	"github.com/sipeed/picoclaw/pkg/fileutil"
@@ -60,6 +62,7 @@ type Config struct {
 	Limits        LimitsConfig        `json:"limits,omitempty"`
 	AuditLog      AuditLogConfig      `json:"audit_log,omitempty"`
 	Audit         AuditConfig         `json:"audit,omitempty"`
+	Security      SecurityConfig      `json:"security,omitempty"`
 }
 
 // NotifyConfig controls optional notification hooks.
@@ -96,6 +99,34 @@ func (c Config) MarshalJSON() ([]byte, error) {
 	}
 
 	return json.Marshal(aux)
+}
+
+type SecurityConfig struct {
+	// BreakGlass gates unsafe configuration states behind an explicit boolean.
+	// This makes "unsafe but intentional" deployments auditable and prevents
+	// accidental exposure from simple config edits.
+	BreakGlass BreakGlassConfig `json:"break_glass,omitempty"`
+}
+
+type BreakGlassConfig struct {
+	// AllowPublicGateway acknowledges that gateway.host binds to a non-loopback address
+	// (e.g., 0.0.0.0 or a LAN IP). When false, such configs are rejected.
+	AllowPublicGateway bool `json:"allow_public_gateway,omitempty" env:"PICOCLAW_SECURITY_BREAK_GLASS_ALLOW_PUBLIC_GATEWAY"`
+
+	// AllowUnsafeWorkspace disables workspace-only filesystem restrictions. This is high risk:
+	// tools can read/write arbitrary host paths if other guards are also loosened.
+	AllowUnsafeWorkspace bool `json:"allow_unsafe_workspace,omitempty" env:"PICOCLAW_SECURITY_BREAK_GLASS_ALLOW_UNSAFE_WORKSPACE"`
+
+	// AllowUnsafeExec acknowledges disabling deny patterns for the exec tool.
+	AllowUnsafeExec bool `json:"allow_unsafe_exec,omitempty" env:"PICOCLAW_SECURITY_BREAK_GLASS_ALLOW_UNSAFE_EXEC"`
+
+	// AllowExecInheritEnv acknowledges passing the full host environment into exec tool commands.
+	// Prefer tools.exec.env.mode="allowlist" to avoid leaking host secrets into subprocesses.
+	AllowExecInheritEnv bool `json:"allow_exec_inherit_env,omitempty" env:"PICOCLAW_SECURITY_BREAK_GLASS_ALLOW_EXEC_INHERIT_ENV"`
+
+	// AllowDockerNetwork acknowledges enabling networking for the exec docker sandbox
+	// (tools.exec.docker.network != "none").
+	AllowDockerNetwork bool `json:"allow_docker_network,omitempty" env:"PICOCLAW_SECURITY_BREAK_GLASS_ALLOW_DOCKER_NETWORK"`
 }
 
 type AgentsConfig struct {
@@ -308,6 +339,18 @@ type ChannelsConfig struct {
 type GroupTriggerConfig struct {
 	MentionOnly bool     `json:"mention_only,omitempty"`
 	Prefixes    []string `json:"prefixes,omitempty"`
+
+	// Mentionless allows responding in group chats without an explicit @mention or prefix.
+	// Default: false (safe-by-default).
+	Mentionless bool `json:"mentionless,omitempty"`
+
+	// CommandBypass allows slash-commands (e.g., "/tree", "/switch ...") to bypass mention requirements.
+	// This improves UX in groups while keeping normal chatter gated.
+	CommandBypass bool `json:"command_bypass,omitempty"`
+
+	// CommandPrefixes defines which prefixes count as commands for bypassing group triggers.
+	// When empty and CommandBypass is true, defaults to ["/"].
+	CommandPrefixes []string `json:"command_prefixes,omitempty"`
 }
 
 // TypingConfig controls typing indicator behavior (Phase 10).
@@ -736,16 +779,18 @@ type GatewayReloadConfig struct {
 }
 
 type BraveConfig struct {
-	Enabled    bool   `json:"enabled"     env:"PICOCLAW_TOOLS_WEB_BRAVE_ENABLED"`
-	APIKey     string `json:"api_key"     env:"PICOCLAW_TOOLS_WEB_BRAVE_API_KEY"`
-	MaxResults int    `json:"max_results" env:"PICOCLAW_TOOLS_WEB_BRAVE_MAX_RESULTS"`
+	Enabled    bool     `json:"enabled"     env:"PICOCLAW_TOOLS_WEB_BRAVE_ENABLED"`
+	APIKey     string   `json:"api_key"     env:"PICOCLAW_TOOLS_WEB_BRAVE_API_KEY"`
+	APIKeys    []string `json:"api_keys,omitempty"`
+	MaxResults int      `json:"max_results" env:"PICOCLAW_TOOLS_WEB_BRAVE_MAX_RESULTS"`
 }
 
 type TavilyConfig struct {
-	Enabled    bool   `json:"enabled"     env:"PICOCLAW_TOOLS_WEB_TAVILY_ENABLED"`
-	APIKey     string `json:"api_key"     env:"PICOCLAW_TOOLS_WEB_TAVILY_API_KEY"`
-	BaseURL    string `json:"base_url"    env:"PICOCLAW_TOOLS_WEB_TAVILY_BASE_URL"`
-	MaxResults int    `json:"max_results" env:"PICOCLAW_TOOLS_WEB_TAVILY_MAX_RESULTS"`
+	Enabled    bool     `json:"enabled"     env:"PICOCLAW_TOOLS_WEB_TAVILY_ENABLED"`
+	APIKey     string   `json:"api_key"     env:"PICOCLAW_TOOLS_WEB_TAVILY_API_KEY"`
+	APIKeys    []string `json:"api_keys,omitempty"`
+	BaseURL    string   `json:"base_url"    env:"PICOCLAW_TOOLS_WEB_TAVILY_BASE_URL"`
+	MaxResults int      `json:"max_results" env:"PICOCLAW_TOOLS_WEB_TAVILY_MAX_RESULTS"`
 }
 
 type DuckDuckGoConfig struct {
@@ -754,11 +799,12 @@ type DuckDuckGoConfig struct {
 }
 
 type GrokConfig struct {
-	Enabled      bool   `json:"enabled"       env:"PICOCLAW_TOOLS_WEB_GROK_ENABLED"`
-	APIKey       string `json:"api_key"       env:"PICOCLAW_TOOLS_WEB_GROK_API_KEY"`
-	Endpoint     string `json:"endpoint"      env:"PICOCLAW_TOOLS_WEB_GROK_ENDPOINT"`
-	DefaultModel string `json:"default_model" env:"PICOCLAW_TOOLS_WEB_GROK_DEFAULT_MODEL"`
-	MaxResults   int    `json:"max_results"   env:"PICOCLAW_TOOLS_WEB_GROK_MAX_RESULTS"`
+	Enabled      bool     `json:"enabled"       env:"PICOCLAW_TOOLS_WEB_GROK_ENABLED"`
+	APIKey       string   `json:"api_key"       env:"PICOCLAW_TOOLS_WEB_GROK_API_KEY"`
+	APIKeys      []string `json:"api_keys,omitempty"`
+	Endpoint     string   `json:"endpoint"      env:"PICOCLAW_TOOLS_WEB_GROK_ENDPOINT"`
+	DefaultModel string   `json:"default_model" env:"PICOCLAW_TOOLS_WEB_GROK_DEFAULT_MODEL"`
+	MaxResults   int      `json:"max_results"   env:"PICOCLAW_TOOLS_WEB_GROK_MAX_RESULTS"`
 }
 
 // WebEvidenceModeConfig enables "evidence mode" for web tools.
@@ -784,6 +830,24 @@ type WebToolsConfig struct {
 	// For authenticated proxies, prefer HTTP_PROXY/HTTPS_PROXY env vars instead of embedding credentials in config.
 	Proxy           string `json:"proxy,omitempty"             env:"PICOCLAW_TOOLS_WEB_PROXY"`
 	FetchLimitBytes int64  `json:"fetch_limit_bytes,omitempty" env:"PICOCLAW_TOOLS_WEB_FETCH_LIMIT_BYTES"`
+
+	FetchCache WebFetchCacheConfig `json:"fetch_cache,omitempty"`
+}
+
+type WebFetchCacheConfig struct {
+	Enabled bool `json:"enabled,omitempty"`
+
+	// TTLSeconds controls how long a fetched URL is cached in memory.
+	// 0 uses a small built-in default; negative disables caching.
+	TTLSeconds int `json:"ttl_seconds,omitempty"`
+
+	// MaxEntries caps how many URLs are retained.
+	// 0 uses a small built-in default.
+	MaxEntries int `json:"max_entries,omitempty"`
+
+	// MaxEntryChars caps cached extracted text per URL to limit memory usage.
+	// 0 uses a built-in default.
+	MaxEntryChars int `json:"max_entry_chars,omitempty"`
 }
 
 type CronToolsConfig struct {
@@ -827,11 +891,23 @@ type ExecConfig struct {
 	CustomDenyPatterns  []string `json:"custom_deny_patterns"  env:"PICOCLAW_TOOLS_EXEC_CUSTOM_DENY_PATTERNS"`
 	CustomAllowPatterns []string `json:"custom_allow_patterns" env:"PICOCLAW_TOOLS_EXEC_CUSTOM_ALLOW_PATTERNS"`
 
+	Env ExecEnvConfig `json:"env,omitempty"`
+
 	// Backend selects the exec runtime:
 	// - "host" (default): run commands on the host directly
 	// - "docker": run commands inside a disposable docker container (workspace mounted)
 	Backend string           `json:"backend,omitempty"`
 	Docker  ExecDockerConfig `json:"docker,omitempty"`
+}
+
+type ExecEnvConfig struct {
+	// Mode controls which environment variables are passed to exec tool commands:
+	// - "inherit": pass the full host environment (break-glass required; may leak secrets)
+	// - "allowlist": pass only EnvAllow (plus platform defaults)
+	Mode string `json:"mode,omitempty" env:"PICOCLAW_TOOLS_EXEC_ENV_MODE"`
+
+	// EnvAllow is the allow-list of environment variable names (exact match).
+	EnvAllow []string `json:"allow,omitempty" env:"PICOCLAW_TOOLS_EXEC_ENV_ALLOW"`
 }
 
 type ExecDockerConfig struct {
@@ -879,6 +955,11 @@ type PlanModeConfig struct {
 	// DefaultMode applies when a session has no saved mode yet.
 	// Supported values: "run" (default) | "plan".
 	DefaultMode string `json:"default_mode,omitempty"`
+
+	// DefaultModeGroup applies when a group chat session has no saved mode yet.
+	// Supported values: "run" | "plan" (recommended).
+	// When empty, falls back to DefaultMode.
+	DefaultModeGroup string `json:"default_mode_group,omitempty"`
 
 	// RestrictedTools are denied while in plan mode.
 	RestrictedTools []string `json:"restricted_tools,omitempty"`
@@ -1081,7 +1162,89 @@ func LoadConfig(path string) (*Config, error) {
 		return nil, err
 	}
 
+	if err := cfg.ValidateSecurity(); err != nil {
+		return nil, err
+	}
+
 	return cfg, nil
+}
+
+func isLoopbackHost(host string) bool {
+	host = strings.TrimSpace(host)
+	if host == "" {
+		return false
+	}
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return false
+	}
+	return ip.IsLoopback()
+}
+
+func (c *Config) ValidateSecurity() error {
+	if c == nil {
+		return nil
+	}
+
+	var problems []string
+
+	// Public gateway bind must be explicitly acknowledged.
+	if !isLoopbackHost(c.Gateway.Host) && !c.Security.BreakGlass.AllowPublicGateway {
+		problems = append(
+			problems,
+			fmt.Sprintf(
+				"gateway.host=%q binds non-loopback; set security.break_glass.allow_public_gateway=true to acknowledge",
+				strings.TrimSpace(c.Gateway.Host),
+			),
+		)
+	}
+
+	// Unsafe workspace settings must be explicitly acknowledged.
+	if (!c.Agents.Defaults.RestrictToWorkspace || c.Agents.Defaults.AllowReadOutsideWorkspace) &&
+		!c.Security.BreakGlass.AllowUnsafeWorkspace {
+		problems = append(
+			problems,
+			"agents.defaults workspace restrictions are loosened; set security.break_glass.allow_unsafe_workspace=true to acknowledge",
+		)
+	}
+
+	// Disabling exec deny patterns is unsafe.
+	if !c.Tools.Exec.EnableDenyPatterns && !c.Security.BreakGlass.AllowUnsafeExec {
+		problems = append(
+			problems,
+			"tools.exec.enable_deny_patterns=false; set security.break_glass.allow_unsafe_exec=true to acknowledge",
+		)
+	}
+
+	// Passing full env to host exec is unsafe.
+	if strings.EqualFold(strings.TrimSpace(c.Tools.Exec.Env.Mode), "inherit") && !c.Security.BreakGlass.AllowExecInheritEnv {
+		problems = append(
+			problems,
+			"tools.exec.env.mode=\"inherit\"; set security.break_glass.allow_exec_inherit_env=true to acknowledge",
+		)
+	}
+
+	// Docker sandbox networking must be acknowledged.
+	if strings.EqualFold(strings.TrimSpace(c.Tools.Exec.Backend), "docker") {
+		network := strings.ToLower(strings.TrimSpace(c.Tools.Exec.Docker.Network))
+		if network != "" && network != "none" && !c.Security.BreakGlass.AllowDockerNetwork {
+			problems = append(
+				problems,
+				fmt.Sprintf(
+					"tools.exec.docker.network=%q is not \"none\"; set security.break_glass.allow_docker_network=true to acknowledge",
+					strings.TrimSpace(c.Tools.Exec.Docker.Network),
+				),
+			)
+		}
+	}
+
+	if len(problems) == 0 {
+		return nil
+	}
+	return fmt.Errorf("unsafe configuration (break-glass required): %s", strings.Join(problems, "; "))
 }
 
 func (c *Config) migrateChannelConfigs() {
