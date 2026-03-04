@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -362,6 +363,20 @@ func (c *FeishuChannel) handleMessageReceive(ctx context.Context, event *larkim.
 
 	// Append media tags to content (like Telegram does)
 	content = appendMediaTags(content, messageType, mediaRefs)
+	if c.GetMediaStore() != nil && messageID != "" && len(mediaRefs) == 0 {
+		switch messageType {
+		case larkim.MsgTypeImage, larkim.MsgTypeFile, larkim.MsgTypeAudio, larkim.MsgTypeMedia:
+			// Feishu may reject media downloads when the bot lacks permissions or the
+			// resource is not shared to the bot. Surface a lightweight hint so the agent
+			// can guide the user instead of silently losing the attachment.
+			hint := "[media: unavailable - 请确认图片/文件已共享给机器人且机器人具备下载权限]"
+			if strings.TrimSpace(content) != "" {
+				content = strings.TrimSpace(content) + "\n\n" + hint
+			} else {
+				content = hint
+			}
+		}
+	}
 
 	if content == "" {
 		content = "[empty message]"
