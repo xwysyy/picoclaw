@@ -16,7 +16,7 @@
 - ✅ Phase G：飞书本地桥接 + 媒体通路 已落地（详见 `ROADMAP.md`）
 - ✅ Phase F（MVP）：多 Agent handoff（active agent 切换 + 持久化 + takeover）已落地
 - ✅ Phase S/H（MVP）：默认安全 + break-glass + limits + audit log + security self-check 已落地
-- 🚧 Phase I/J/K/N2/L0：事件流/模型策略/主动编排/扩展机制/key pool 等仍待推进（见第 4 节清单）
+- 🚧 Phase I/J/K：事件流/模型策略/主动编排仍待推进（见第 4 节清单；I3/J2/K2 等）
 
 ---
 
@@ -88,7 +88,7 @@
 
 对 V2 的落地建议（Phase H，已部分落地）：
 - ✅ H1：Resource limits（预算/软限制）
-- 🟡 H2：OS-level enforcement（可选：host ulimit 已落地；cgroups/容器/沙盒后端仍待补齐）
+- ✅ H2：OS-level enforcement（host ulimit + docker flags；cgroups/容器/沙盒后端可选增强）
 - ✅ H3：Audit log JSONL + rotation（可选 HMAC 签名）
 - ✅ H4：`picoclaw security --check` / `/api/security`（输出当前安全态）
 
@@ -235,10 +235,10 @@
 - ✅ H1：资源预算模型（soft limit）
   - per-run：最大 tool calls、最大累计 wall time、最大输出字节、最大 trace 体积
   - per-tool：`exec`/`web_fetch`/`write_file` 的超时/输出/文件大小 guard 统一化
-- 🟡 H2：资源限制 enforcement（hard limit，可选）
+- ✅ H2：资源限制 enforcement（hard limit，可选）
   - ✅ host exec backend：`ulimit` wrapper（memory/cpu/file/nproc，best-effort）
-  - 🚧 Linux：优先 cgroups v2 / systemd 限制（可外部配置，不强绑定代码）
-  - 🚧 Exec docker sandbox：补 memory/cpu 限额映射（默认关闭）
+  - ✅ Exec docker sandbox：docker run flags（`--memory/--cpus/--pids-limit/--read-only` 等）
+  - 🚧 Linux：cgroups v2 / systemd 限制（可选增强，不强绑定代码）
 - ✅ H3：Audit log（append-only JSONL）
   - 事件覆盖：exec/web/file write/mcp call/estop change/config reload/handoff
   - 支持 rotation（按大小/按日）
@@ -250,18 +250,21 @@
 
 - ✅ N1：Session JSONL 树（`id/parent_id/leaf`）与 `/tree`（原地切换分支）
   - 可选：离开分支时生成 branch summary entry（用于保留探索路径的可检索摘要）
-- 🟡 N2：Hook/Extension 机制（最小版）
+- ✅ N2：Hook/Extension 机制（最小版）
   - ✅ `tool_call` 拦截：支持 short-circuit（deny/rewrite）；已用于禁止 subagent 内 `handoff`
   - ✅ `tool_result` 拦截：内置 redaction hook（regex + JSON field）
   - ✅ tool trace 记录 `hook_actions`（便于 UI/运维）
-  - 🚧 自定义 entry（不进 LLM context，但可用于 UI/运维）仍待补齐
+  - ✅ 自定义 entry：hook actions 会写入 tool trace（不进 LLM context，可用于 UI/运维）
 
 ### Phase I（new）— EventStream：把“可回放”推到 UI/渠道
 
-- 🚧 I1：统一事件模型（参考 `openclaw-mini` 的 event taxonomy）
-  - `message_delta` / `tool_start` / `tool_end` / `retry` / `compaction` / `steering` / `subagent_summary` / `error`
-- 🚧 I2：事件落盘（JSONL）+ 视图层消费（console/gateway）
-  - 把现有 tool trace/run trace 收敛成“事件流 + 索引/视图”
+- ✅ I1：统一事件模型（最小可用）
+  - run trace：`run.start/run.end/run.error`、`llm.request/llm.response`、`tool.batch`
+  - tool trace：`tool.start/tool.end`（含 args/result preview + per-call snapshot）
+- ✅ I2：事件落盘（JSONL）+ 视图层消费（console/gateway）
+  - run trace：`.picoclaw/audit/runs/<session>/events.jsonl`
+  - tool trace：`.picoclaw/audit/tools/<session>/events.jsonl`
+  - console：`/console/` + `/api/console/runs` + `/api/console/tools`（只读）
 - 🚧 I3：Trace Panel（只读）
   - sessions 列表 → 选中 run → 时间线事件/工具输入输出/错误分类
 
@@ -275,21 +278,21 @@
 
 ### Phase K（new）— Proactive Orchestrator（主动编排）
 
-- 🚧 K1：Cron-based orchestrator（MVP）
-  - 每 N 分钟扫描：长时间 running 的 task、反复失败的 task、接近 context limit 的 session
-  - 触发动作：提醒/重试/压缩/要求用户确认（基于 policy）
+- ✅ K1：Cron-based orchestrator（MVP）
+  - supervisor audit loop：定时扫描 task ledger（running 超时 / failed 重试预算 / completed 质量与一致性）
+  - auto remediation：按配置 spawn subagent 重试 + 发布 audit report（notify 到 last_active/指定 channel）
 - 🚧 K2：Rule-based + LLM escalation（进阶）
   - 大多数 sweep 免费（规则），只对“需要判断”的情况调用 LLM
 
 ### Phase G+（optional）— Feishu 策略与 UX 补齐（偏“生产可运营”）
 
-- 🚧 G+1：策略矩阵补齐：dmPolicy/groupPolicy/requireMention/mentionless 安全默认/命令 bypass
+- ✅ G+1：策略矩阵补齐：dmPolicy/groupPolicy/requireMention/mentionless 安全默认/命令 bypass
 - 🚧 G+2：统一 placeholder 策略：阈值触发 → patch/update → 失败回退（事件化落盘）
 - 🚧 G+3：把“资源共享给 bot”这种平台约束写入错误提示与运维文档（减少踩坑）
 
 ### Phase L（optional）— Web 工具可靠性栈（搜索 + fetch + 证据）
 
-- 🚧 L0：provider key pool（多 key/多 token 负载均衡，配额可观测）
+- ✅ L0：provider key pool（多 key 轮转；配额可观测作为后续增强）
 - ✅ L1：`web_search_dual`（并行双引擎 + 结果去重/聚合 + evidence summary）
 - ✅ L2：`web_fetch` extractor 降级链
   - HTML：readability-like → strip tags → raw
@@ -313,20 +316,20 @@
 ### Should（P1）
 
 - [x] N1：Session JSONL 树 + `/tree`（先只读/切 leaf，再做 branch summary）
-- [ ] I1/I2：EventStream 抽象 + JSONL 落盘
+- [x] I1/I2：EventStream 抽象 + JSONL 落盘
 - [x] H4：`security --check`（运维可见性）
-- [ ] K1：cron orchestrator MVP（先规则）
+- [x] K1：cron orchestrator MVP（先规则）
 - [x] L1：`web_search_dual`（双引擎 + 去重 + evidence summary）
 
 ### Could（P2）
 
-- [ ] H2：OS-level resource enforcement（host ulimit ✅；cgroups / docker 限额待补齐）
+- [x] H2：OS-level resource enforcement（host ulimit + docker flags）
 - [x] H3：HMAC 签名 + verify CLI
 - [x] J1：运行时模型覆盖（session/task）
-- [ ] L0：provider key pool（配额/负载均衡）
+- [x] L0：provider key pool（多 key/轮转）
 - [x] L2：`web_fetch` extractor 降级链（可选 FireCrawl/FlareSolverr）
-- [ ] G+1：飞书策略矩阵补齐（dm/group/mentionless/命令 bypass）
-- [ ] N2：Hook/Extension 最小版（tool_call gate + tool_result scrub）
+- [x] G+1：飞书策略矩阵补齐（dm/group/mentionless/命令 bypass）
+- [x] N2：Hook/Extension 最小版（tool_call gate + tool_result scrub）
 
 ---
 
