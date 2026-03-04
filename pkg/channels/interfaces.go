@@ -1,6 +1,9 @@
 package channels
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 // TypingCapable — channels that can show a typing/thinking indicator.
 // StartTyping begins the indicator and returns a stop function.
@@ -38,4 +41,16 @@ type PlaceholderRecorder interface {
 	RecordPlaceholder(channel, chatID, placeholderID string)
 	RecordTypingStop(channel, chatID string, stop func())
 	RecordReactionUndo(channel, chatID string, undo func())
+}
+
+// PlaceholderScheduler is an optional extension interface implemented by Manager.
+// It enables a unified placeholder strategy:
+// - delay sending placeholders to avoid flicker for fast replies
+// - cancel scheduled placeholders when the real response is ready
+//
+// Channels should use this when available, but may fall back to immediate
+// SendPlaceholder + RecordPlaceholder when not.
+type PlaceholderScheduler interface {
+	SchedulePlaceholder(ctx context.Context, channel, chatID string, send func(context.Context) (string, error), delay time.Duration)
+	CancelPlaceholder(channel, chatID string)
 }

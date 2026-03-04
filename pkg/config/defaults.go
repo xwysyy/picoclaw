@@ -30,9 +30,15 @@ func DefaultConfig() *Config {
 				RestrictToWorkspace: true,
 				Provider:            "",
 				Model:               "",
-				MaxTokens:           32768,
-				Temperature:         nil, // nil means use provider default
-				MaxToolIterations:   50,
+				SessionModelAutoDowngrade: SessionModelAutoDowngradeConfig{
+					Enabled:       false,
+					Threshold:     2,
+					WindowMinutes: 15,
+					TTLMinutes:    60,
+				},
+				MaxTokens:         32768,
+				Temperature:       nil, // nil means use provider default
+				MaxToolIterations: 50,
 				Compaction: AgentCompactionConfig{
 					Mode:             "safeguard",
 					ReserveTokens:    2048,
@@ -91,6 +97,7 @@ func DefaultConfig() *Config {
 				Placeholder: PlaceholderConfig{
 					Enabled: true,
 					Text:    "Thinking... 💭",
+					DelayMS: 2500,
 				},
 			},
 			Feishu: FeishuConfig{
@@ -110,13 +117,14 @@ func DefaultConfig() *Config {
 					Prefixes:        []string{},
 				},
 				Typing:      TypingConfig{Enabled: false},
-				Placeholder: PlaceholderConfig{Enabled: false},
+				Placeholder: PlaceholderConfig{Enabled: false, DelayMS: 2500},
 			},
 			Discord: DiscordConfig{
 				Enabled:     false,
 				Token:       "",
 				AllowFrom:   FlexibleStringSlice{},
 				MentionOnly: false,
+				Placeholder: PlaceholderConfig{Enabled: false, DelayMS: 2500},
 			},
 			QQ: QQConfig{
 				Enabled:   false,
@@ -135,6 +143,10 @@ func DefaultConfig() *Config {
 				BotToken:  "",
 				AppToken:  "",
 				AllowFrom: FlexibleStringSlice{},
+				Placeholder: PlaceholderConfig{
+					Enabled: false,
+					DelayMS: 2500,
+				},
 			},
 			LINE: LINEConfig{
 				Enabled:            false,
@@ -145,6 +157,7 @@ func DefaultConfig() *Config {
 				WebhookPath:        "/webhook/line",
 				AllowFrom:          FlexibleStringSlice{},
 				GroupTrigger:       GroupTriggerConfig{MentionOnly: true},
+				Placeholder:        PlaceholderConfig{Enabled: false, DelayMS: 2500},
 			},
 			OneBot: OneBotConfig{
 				Enabled:            false,
@@ -153,6 +166,7 @@ func DefaultConfig() *Config {
 				ReconnectInterval:  5,
 				GroupTriggerPrefix: []string{},
 				AllowFrom:          FlexibleStringSlice{},
+				Placeholder:        PlaceholderConfig{Enabled: false, DelayMS: 2500},
 			},
 			WeCom: WeComConfig{
 				Enabled:        false,
@@ -196,6 +210,7 @@ func DefaultConfig() *Config {
 				WriteTimeout:   10,
 				MaxConnections: 100,
 				AllowFrom:      FlexibleStringSlice{},
+				Placeholder:    PlaceholderConfig{Enabled: false, DelayMS: 2500},
 			},
 		},
 		Providers: ProvidersConfig{
@@ -610,6 +625,8 @@ func DefaultConfig() *Config {
 					Fallbacks: []string{"claude-sonnet-4.6"},
 				},
 				MaxTokens: 2048,
+				Mode:      "escalate",
+				MaxTasks:  5,
 			},
 		},
 	}

@@ -71,6 +71,18 @@ func WithReasoningChannelID(id string) BaseChannelOption {
 	return func(c *BaseChannel) { c.reasoningChannelID = id }
 }
 
+// WithPlaceholder configures placeholder scheduling behavior for this channel.
+// DelayMS=0 means send immediately; typical default is ~2500ms to avoid flicker.
+func WithPlaceholder(ph config.PlaceholderConfig) BaseChannelOption {
+	return func(c *BaseChannel) {
+		delayMS := ph.DelayMS
+		if delayMS < 0 {
+			delayMS = 0
+		}
+		c.placeholderDelay = time.Duration(delayMS) * time.Millisecond
+	}
+}
+
 // MessageLengthProvider is an opt-in interface that channels implement
 // to advertise their maximum message length. The Manager uses this via
 // type assertion to decide whether to split outbound messages.
@@ -88,6 +100,7 @@ type BaseChannel struct {
 	groupTrigger        config.GroupTriggerConfig
 	mediaStore          media.MediaStore
 	placeholderRecorder PlaceholderRecorder
+	placeholderDelay    time.Duration
 	owner               Channel // the concrete channel that embeds this BaseChannel
 	reasoningChannelID  string
 }
@@ -104,6 +117,8 @@ func NewBaseChannel(
 		bus:       bus,
 		name:      name,
 		allowList: allowList,
+		// Default placeholder delay (threshold): avoids flicker for fast replies.
+		placeholderDelay: 2500 * time.Millisecond,
 	}
 	for _, opt := range opts {
 		opt(bc)
@@ -333,8 +348,19 @@ func (c *BaseChannel) HandleMessage(
 		}
 		// Placeholder — independent pipeline
 		if pc, ok := c.owner.(PlaceholderCapable); ok {
-			if phID, err := pc.SendPlaceholder(ctx, chatID); err == nil && phID != "" {
-				c.placeholderRecorder.RecordPlaceholder(c.name, chatID, phID)
+			if sched, ok := c.placeholderRecorder.(PlaceholderScheduler); ok {
+				delay := c.placeholderDelay
+				if delay < 0 {
+					delay = 0
+				}
+				sched.SchedulePlaceholder(ctx, c.name, chatID, func(sendCtx context.Context) (string, error) {
+					return pc.SendPlaceholder(sendCtx, chatID)
+				}, delay)
+			} else {
+				// Fallback: send placeholder immediately (legacy behavior).
+				if phID, err := pc.SendPlaceholder(ctx, chatID); err == nil && phID != "" {
+					c.placeholderRecorder.RecordPlaceholder(c.name, chatID, phID)
+				}
 			}
 		}
 	}

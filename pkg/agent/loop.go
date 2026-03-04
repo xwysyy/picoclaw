@@ -53,6 +53,9 @@ type AgentLoop struct {
 
 	tokenUsageMu     sync.Mutex
 	tokenUsageStores map[string]*tokenUsageStore // workspace → store
+
+	modelAutoMu           sync.Mutex
+	modelAutoDowngradeMap map[string]sessionModelAutoDowngradeState // session_key -> state
 }
 
 // processOptions configures how a message is processed
@@ -119,6 +122,12 @@ func isContextWindowError(err error) bool {
 		strings.Contains(msg, "request too large")
 }
 
+type sessionModelAutoDowngradeState struct {
+	TargetModel string
+	Streak      int
+	LastAt      time.Time
+}
+
 func NewAgentLoop(cfg *config.Config, msgBus *bus.MessageBus, provider providers.LLMProvider) *AgentLoop {
 	registry := NewAgentRegistry(cfg, provider)
 
@@ -167,6 +176,8 @@ func NewAgentLoop(cfg *config.Config, msgBus *bus.MessageBus, provider providers
 		mcpMgr:      mcpMgr,
 
 		tokenUsageStores: make(map[string]*tokenUsageStore),
+
+		modelAutoDowngradeMap: make(map[string]sessionModelAutoDowngradeState),
 	}
 
 	// Register shared tools to all agents.
@@ -328,6 +339,209 @@ func (al *AgentLoop) tokenUsageStore(workspace string) *tokenUsageStore {
 	s := newTokenUsageStore(workspace)
 	al.tokenUsageStores[workspace] = s
 	return s
+}
+
+func pickFirstDifferentModel(current string, candidates []providers.FallbackCandidate) string {
+	current = strings.TrimSpace(current)
+	for _, c := range candidates {
+		m := strings.TrimSpace(c.Model)
+		if m == "" {
+			continue
+		}
+		if current == "" || !strings.EqualFold(m, current) {
+			return m
+		}
+	}
+	return ""
+}
+
+func (al *AgentLoop) clearModelAutoDowngradeState(sessionKey string) {
+	if al == nil {
+		return
+	}
+	sessionKey = strings.TrimSpace(sessionKey)
+	if sessionKey == "" {
+		return
+	}
+	al.modelAutoMu.Lock()
+	delete(al.modelAutoDowngradeMap, sessionKey)
+	al.modelAutoMu.Unlock()
+}
+
+func (al *AgentLoop) maybeAutoDowngradeSessionModel(
+	workspace string,
+	trace *runTraceWriter,
+	agentID string,
+	sessionKey string,
+	runID string,
+	channel string,
+	chatID string,
+	senderID string,
+	iteration int,
+	fromModel string,
+	targetModel string,
+	trigger string,
+	fallbackAttempts []providers.FallbackAttempt,
+) bool {
+	if al == nil {
+		return false
+	}
+	cfg := al.Config()
+	if cfg == nil {
+		return false
+	}
+
+	sessionKey = strings.TrimSpace(sessionKey)
+	if sessionKey == "" {
+		return false
+	}
+
+	targetModel = strings.TrimSpace(targetModel)
+	fromModel = strings.TrimSpace(fromModel)
+	if targetModel == "" || strings.EqualFold(targetModel, fromModel) {
+		return false
+	}
+
+	policy := cfg.Agents.Defaults.SessionModelAutoDowngrade
+	if !policy.Enabled {
+		return false
+	}
+	if al.sessions == nil {
+		return false
+	}
+	// Respect explicit/manual overrides.
+	if _, ok := al.sessions.EffectiveModelOverride(sessionKey); ok {
+		return false
+	}
+
+	threshold := policy.Threshold
+	if threshold <= 0 {
+		threshold = 2
+	}
+	windowMinutes := policy.WindowMinutes
+	if windowMinutes <= 0 {
+		windowMinutes = 15
+	}
+	ttlMinutes := policy.TTLMinutes
+	if ttlMinutes <= 0 {
+		ttlMinutes = 60
+	}
+
+	window := time.Duration(windowMinutes) * time.Minute
+	ttl := time.Duration(ttlMinutes) * time.Minute
+
+	now := time.Now()
+
+	al.modelAutoMu.Lock()
+	state := al.modelAutoDowngradeMap[sessionKey]
+	if !state.LastAt.IsZero() && now.Sub(state.LastAt) > window {
+		state = sessionModelAutoDowngradeState{}
+	}
+	if state.TargetModel != "" && !strings.EqualFold(strings.TrimSpace(state.TargetModel), targetModel) {
+		state = sessionModelAutoDowngradeState{}
+	}
+	state.TargetModel = targetModel
+	state.LastAt = now
+	state.Streak++
+	shouldSwitch := state.Streak >= threshold
+	if !shouldSwitch {
+		al.modelAutoDowngradeMap[sessionKey] = state
+		al.modelAutoMu.Unlock()
+		return false
+	}
+	delete(al.modelAutoDowngradeMap, sessionKey)
+	al.modelAutoMu.Unlock()
+
+	expiresAt, err := al.sessions.SetModelOverride(sessionKey, targetModel, ttl)
+	if err != nil {
+		logger.WarnCF("agent", "Session model auto-downgrade failed (best-effort)", map[string]any{
+			"session_key": sessionKey,
+			"from_model":  fromModel,
+			"to_model":    targetModel,
+			"error":       err.Error(),
+		})
+		return false
+	}
+
+	// Audit log (Phase H3): must be traceable.
+	reasons := make(map[string]int)
+	for _, a := range fallbackAttempts {
+		r := strings.TrimSpace(string(a.Reason))
+		if r == "" {
+			continue
+		}
+		reasons[r]++
+	}
+	reasonKeys := make([]string, 0, len(reasons))
+	for k := range reasons {
+		reasonKeys = append(reasonKeys, k)
+	}
+	sort.Strings(reasonKeys)
+	reasonParts := make([]string, 0, len(reasonKeys))
+	for _, k := range reasonKeys {
+		reasonParts = append(reasonParts, fmt.Sprintf("%s=%d", k, reasons[k]))
+	}
+	reasonSummary := strings.Join(reasonParts, ",")
+
+	expiresText := ""
+	if expiresAt != nil {
+		expiresText = expiresAt.UTC().Format(time.RFC3339Nano)
+	}
+	note := fmt.Sprintf(
+		"trigger=%s from=%q to=%q threshold=%d window_minutes=%d ttl_minutes=%d attempts=%d reasons=%q expires_at=%s",
+		strings.TrimSpace(trigger),
+		fromModel,
+		targetModel,
+		threshold,
+		windowMinutes,
+		ttlMinutes,
+		len(fallbackAttempts),
+		reasonSummary,
+		expiresText,
+	)
+	auditlog.Record(workspace, auditlog.Event{
+		Type:       "session.model_auto_downgrade",
+		Source:     "agent",
+		RunID:      strings.TrimSpace(runID),
+		SessionKey: sessionKey,
+		Channel:    strings.TrimSpace(channel),
+		ChatID:     strings.TrimSpace(chatID),
+		SenderID:   strings.TrimSpace(senderID),
+		Iteration:  iteration,
+		Note:       note,
+	})
+
+	if trace != nil {
+		trace.appendEvent(runTraceEvent{
+			Type: "model.autodowngrade",
+
+			TS:   now.UTC().Format(time.RFC3339Nano),
+			TSMS: now.UnixMilli(),
+
+			RunID:      strings.TrimSpace(runID),
+			SessionKey: sessionKey,
+			Channel:    strings.TrimSpace(channel),
+			ChatID:     strings.TrimSpace(chatID),
+			SenderID:   strings.TrimSpace(senderID),
+
+			AgentID: strings.TrimSpace(agentID),
+			Model:   targetModel,
+
+			Iteration:       iteration,
+			ResponsePreview: utils.Truncate(note, 400),
+		})
+	}
+
+	logger.InfoCF("agent", "Session model auto-downgrade applied",
+		map[string]any{
+			"session_key": sessionKey,
+			"from_model":  fromModel,
+			"to_model":    targetModel,
+			"trigger":     strings.TrimSpace(trigger),
+			"expires_at":  expiresText,
+		})
+
+	return true
 }
 
 // registerSharedTools registers tools that are shared across all agents (web, message, spawn).
@@ -1654,8 +1868,10 @@ func (al *AgentLoop) runLLMIteration(
 		var response *providers.LLMResponse
 		var usedModel string
 		var err error
+		var lastFallbackAttempts []providers.FallbackAttempt
 
 		callLLM := func() (*providers.LLMResponse, string, error) {
+			lastFallbackAttempts = nil
 			if strings.TrimSpace(agent.Model) != "" && modelForRun != strings.TrimSpace(agent.Model) {
 				resp, err := agent.Provider.Chat(ctx, messages, providerToolDefs, modelForRun, map[string]any{
 					"max_tokens":       agent.MaxTokens,
@@ -1693,6 +1909,7 @@ func (al *AgentLoop) runLLMIteration(
 						map[string]any{"agent_id": agent.ID, "iteration": iteration},
 					)
 				}
+				lastFallbackAttempts = fbResult.Attempts
 				return fbResult.Response, strings.TrimSpace(fbResult.Model), nil
 			}
 			resp, err := agent.Provider.Chat(ctx, messages, providerToolDefs, modelForRun, map[string]any{
@@ -1727,6 +1944,36 @@ func (al *AgentLoop) runLLMIteration(
 					"error": err.Error(),
 					"retry": retry,
 				})
+
+				// Phase J2: context window errors can be persistent for a given model.
+				// After consecutive context errors, switch to the first fallback model and
+				// persist as a session override (TTL).
+				if cfg != nil {
+					target := pickFirstDifferentModel(modelForRun, agent.Candidates)
+					runID := strings.TrimSpace(opts.RunID)
+					if trace != nil {
+						runID = trace.RunID()
+					}
+					if target != "" {
+						if al.maybeAutoDowngradeSessionModel(
+							agent.Workspace,
+							trace,
+							agent.ID,
+							opts.SessionKey,
+							runID,
+							opts.Channel,
+							opts.ChatID,
+							opts.SenderID,
+							iteration,
+							modelForRun,
+							target,
+							"context_window",
+							nil,
+						) {
+							modelForRun = target
+						}
+					}
+				}
 
 				if retry == 0 && !constants.IsInternalChannel(opts.Channel) {
 					al.bus.PublishOutbound(ctx, bus.OutboundMessage{
@@ -1788,6 +2035,37 @@ func (al *AgentLoop) runLLMIteration(
 					"error":     err.Error(),
 				})
 			return "", iteration, agent, fmt.Errorf("LLM call failed after retries: %w", err)
+		}
+
+		// Phase J2: automatic session model downgrade when fallback repeatedly triggers.
+		if strings.TrimSpace(usedModel) == "" {
+			usedModel = modelForRun
+		}
+		if len(lastFallbackAttempts) == 0 && strings.EqualFold(strings.TrimSpace(usedModel), strings.TrimSpace(modelForRun)) {
+			al.clearModelAutoDowngradeState(opts.SessionKey)
+		}
+		if len(lastFallbackAttempts) > 0 && strings.TrimSpace(usedModel) != "" && !strings.EqualFold(strings.TrimSpace(usedModel), strings.TrimSpace(modelForRun)) {
+			runID := strings.TrimSpace(opts.RunID)
+			if trace != nil {
+				runID = trace.RunID()
+			}
+			if al.maybeAutoDowngradeSessionModel(
+				agent.Workspace,
+				trace,
+				agent.ID,
+				opts.SessionKey,
+				runID,
+				opts.Channel,
+				opts.ChatID,
+				opts.SenderID,
+				iteration,
+				modelForRun,
+				usedModel,
+				"fallback",
+				lastFallbackAttempts,
+			) {
+				modelForRun = usedModel
+			}
 		}
 
 		if trace != nil {

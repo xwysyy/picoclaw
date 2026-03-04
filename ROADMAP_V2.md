@@ -16,7 +16,7 @@
 - ✅ Phase G：飞书本地桥接 + 媒体通路 已落地（详见 `ROADMAP.md`）
 - ✅ Phase F（MVP）：多 Agent handoff（active agent 切换 + 持久化 + takeover）已落地
 - ✅ Phase S/H（MVP）：默认安全 + break-glass + limits + audit log + security self-check 已落地
-- 🚧 Phase I/J/K：事件流/模型策略/主动编排仍待推进（见第 4 节清单；I3/J2/K2 等）
+- 🟡 Phase I/J/K：事件流/模型策略/主动编排仍有待推进（见第 4 节清单；S4/G+3/L4 等）
 
 ---
 
@@ -265,29 +265,31 @@
   - run trace：`.picoclaw/audit/runs/<session>/events.jsonl`
   - tool trace：`.picoclaw/audit/tools/<session>/events.jsonl`
   - console：`/console/` + `/api/console/runs` + `/api/console/tools`（只读）
-- 🚧 I3：Trace Panel（只读）
-  - sessions 列表 → 选中 run → 时间线事件/工具输入输出/错误分类
+- ✅ I3：Trace Panel（只读）
+  - console 内置 trace viewer：runs/tools 列表点击 View → tail events.jsonl（带过滤/raw 查看/下载）
 
 ### Phase J（new）— Provider/Model 运行时策略（可审计）
 
 - 🟡 J1：运行时模型覆盖（per session / per task）
   - ✅ `session_model`（TTL + 持久化）已落地（CLI：`/switch session_model to <name> [ttl_minutes]`）
   - ✅ Gateway API：`/api/session_model`（GET/POST）+ audit log 留痕
-- 🚧 J2：自动降级策略（与 fallback 链协同）
-  - 当连续失败/超时/上下文溢出时：切到 fallback model（必须留痕）
+- ✅ J2：自动降级策略（与 fallback 链协同）
+  - 当连续触发 fallback / 上下文溢出时：自动把 session_model 切到首个可用 fallback（TTL + audit + trace 留痕）
 
 ### Phase K（new）— Proactive Orchestrator（主动编排）
 
 - ✅ K1：Cron-based orchestrator（MVP）
   - supervisor audit loop：定时扫描 task ledger（running 超时 / failed 重试预算 / completed 质量与一致性）
   - auto remediation：按配置 spawn subagent 重试 + 发布 audit report（notify 到 last_active/指定 channel）
-- 🚧 K2：Rule-based + LLM escalation（进阶）
-  - 大多数 sweep 免费（规则），只对“需要判断”的情况调用 LLM
+- ✅ K2：Rule-based + LLM escalation（进阶）
+  - audit supervisor 支持 mode=escalate：仅对规则已命中的 tasks 调用 LLM；并支持 max_tasks 限流
 
 ### Phase G+（optional）— Feishu 策略与 UX 补齐（偏“生产可运营”）
 
 - ✅ G+1：策略矩阵补齐：dmPolicy/groupPolicy/requireMention/mentionless 安全默认/命令 bypass
-- 🚧 G+2：统一 placeholder 策略：阈值触发 → patch/update → 失败回退（事件化落盘）
+- 🟡 G+2：统一 placeholder 策略：阈值触发 → patch/update → 失败回退（事件化落盘）
+  - ✅ 已落地：delay 阈值（避免快回复闪烁）+ cancel + placeholder edit（失败自动回退 normal send）
+  - 🚧 待补强：placeholder 的事件落盘（以便 trace panel / 运维回放）
 - 🚧 G+3：把“资源共享给 bot”这种平台约束写入错误提示与运维文档（减少踩坑）
 
 ### Phase L（optional）— Web 工具可靠性栈（搜索 + fetch + 证据）

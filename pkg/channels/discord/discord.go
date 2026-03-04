@@ -43,6 +43,7 @@ func NewDiscordChannel(cfg config.DiscordConfig, bus *bus.MessageBus) (*DiscordC
 	base := channels.NewBaseChannel("discord", cfg, bus, cfg.AllowFrom,
 		channels.WithMaxMessageLength(2000),
 		channels.WithGroupTrigger(cfg.GroupTrigger),
+		channels.WithPlaceholder(cfg.Placeholder),
 		channels.WithReasoningChannelID(cfg.ReasoningChannelID),
 	)
 

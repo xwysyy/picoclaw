@@ -43,6 +43,7 @@ type FeishuChannel struct {
 func NewFeishuChannel(cfg config.FeishuConfig, bus *bus.MessageBus) (*FeishuChannel, error) {
 	base := channels.NewBaseChannel("feishu", cfg, bus, cfg.AllowFrom,
 		channels.WithGroupTrigger(cfg.GroupTrigger),
+		channels.WithPlaceholder(cfg.Placeholder),
 		channels.WithReasoningChannelID(cfg.ReasoningChannelID),
 	)
 

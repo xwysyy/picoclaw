@@ -12,7 +12,9 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/time/rate"
@@ -61,6 +63,13 @@ type placeholderEntry struct {
 	createdAt time.Time
 }
 
+type scheduledPlaceholderEntry struct {
+	token     int64
+	timer     *time.Timer
+	cancel    context.CancelFunc
+	createdAt time.Time
+}
+
 // channelRateConfig maps channel name to per-second rate limit.
 var channelRateConfig = map[string]float64{
 	"telegram": 20,
@@ -90,8 +99,11 @@ type Manager struct {
 	httpServer    *http.Server
 	mu            sync.RWMutex
 	placeholders  sync.Map // "channel:chatID" → placeholderID (string)
+	scheduled     sync.Map // "channel:chatID" → scheduledPlaceholderEntry
 	typingStops   sync.Map // "channel:chatID" → func()
 	reactionUndos sync.Map // "channel:chatID" → reactionEntry
+
+	scheduledSeq atomic.Int64
 }
 
 type asyncTask struct {
@@ -119,10 +131,120 @@ func (m *Manager) RecordReactionUndo(channel, chatID string, undo func()) {
 	m.reactionUndos.Store(key, reactionEntry{undo: undo, createdAt: time.Now()})
 }
 
+func (m *Manager) SchedulePlaceholder(
+	ctx context.Context,
+	channel string,
+	chatID string,
+	send func(context.Context) (string, error),
+	delay time.Duration,
+) {
+	if m == nil {
+		return
+	}
+	channel = strings.TrimSpace(channel)
+	chatID = strings.TrimSpace(chatID)
+	if channel == "" || chatID == "" || send == nil {
+		return
+	}
+
+	if delay < 0 {
+		delay = 0
+	}
+
+	key := channel + ":" + chatID
+	m.CancelPlaceholder(channel, chatID)
+
+	if delay == 0 {
+		sendCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if id, err := send(sendCtx); err == nil && strings.TrimSpace(id) != "" {
+			m.RecordPlaceholder(channel, chatID, strings.TrimSpace(id))
+		}
+		return
+	}
+
+	token := m.scheduledSeq.Add(1)
+	timer := time.NewTimer(delay)
+	scheduleCtx, cancel := context.WithCancel(context.Background())
+	m.scheduled.Store(key, scheduledPlaceholderEntry{
+		token:     token,
+		timer:     timer,
+		cancel:    cancel,
+		createdAt: time.Now(),
+	})
+
+	go func() {
+		defer func() {
+			// Ensure timer resources are released even if CancelPlaceholder was never called.
+			if !timer.Stop() {
+				select {
+				case <-timer.C:
+				default:
+				}
+			}
+			cancel()
+			if v, ok := m.scheduled.Load(key); ok {
+				if entry, ok := v.(scheduledPlaceholderEntry); ok && entry.token == token {
+					m.scheduled.Delete(key)
+				}
+			}
+		}()
+
+		select {
+		case <-timer.C:
+			// ok
+		case <-scheduleCtx.Done():
+			return
+		case <-ctx.Done():
+			return
+		}
+
+		if scheduleCtx.Err() != nil {
+			return
+		}
+
+		sendCtx, sendCancel := context.WithTimeout(scheduleCtx, 10*time.Second)
+		defer sendCancel()
+		id, err := send(sendCtx)
+		if err != nil || sendCtx.Err() != nil {
+			return
+		}
+		if strings.TrimSpace(id) != "" {
+			m.RecordPlaceholder(channel, chatID, strings.TrimSpace(id))
+		}
+	}()
+}
+
+func (m *Manager) CancelPlaceholder(channel, chatID string) {
+	if m == nil {
+		return
+	}
+	channel = strings.TrimSpace(channel)
+	chatID = strings.TrimSpace(chatID)
+	if channel == "" || chatID == "" {
+		return
+	}
+
+	key := channel + ":" + chatID
+	if v, loaded := m.scheduled.LoadAndDelete(key); loaded {
+		if entry, ok := v.(scheduledPlaceholderEntry); ok {
+			if entry.cancel != nil {
+				entry.cancel()
+			}
+			if entry.timer != nil {
+				entry.timer.Stop()
+			}
+		}
+	}
+}
+
 // preSend handles typing stop, reaction undo, and placeholder editing before sending a message.
 // Returns true if the message was edited into a placeholder (skip Send).
 func (m *Manager) preSend(ctx context.Context, name string, msg bus.OutboundMessage, ch Channel) bool {
 	key := name + ":" + msg.ChatID
+
+	// 0. Cancel any delayed placeholder that hasn't been sent yet (avoids flicker).
+	m.CancelPlaceholder(name, msg.ChatID)
 
 	// 1. Stop typing
 	if v, loaded := m.typingStops.LoadAndDelete(key); loaded {

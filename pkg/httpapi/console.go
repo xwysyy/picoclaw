@@ -1167,6 +1167,7 @@ const consoleHTML = `<!doctype html>
     .muted { opacity: .75; }
     .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
     input { padding: 6px 8px; min-width: 280px; }
+    input[type="number"] { min-width: 80px; width: 90px; }
     button { padding: 6px 10px; cursor: pointer; }
     code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
     pre { padding: 10px; border: 1px solid rgba(127,127,127,.35); border-radius: 8px; overflow: auto; max-height: 360px; }
@@ -1176,6 +1177,11 @@ const consoleHTML = `<!doctype html>
     .err { color: #b00020; white-space: pre-wrap; }
     .ok { color: #0a7; }
     .pill { display:inline-block; padding:2px 6px; border:1px solid rgba(127,127,127,.35); border-radius:999px; font-size:12px; opacity:.85; }
+    .nowrap { white-space: nowrap; }
+    .clickable { cursor: pointer; }
+    .selected { background: rgba(127,127,127,.12); }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+    .small { font-size: 12px; }
   </style>
 </head>
 <body>
@@ -1210,6 +1216,22 @@ const consoleHTML = `<!doctype html>
   <div class="row muted">Files under <code>.picoclaw/audit/tools/&lt;session&gt;/events.jsonl</code></div>
   <div id="tools"></div>
 
+  <h2>Trace viewer</h2>
+  <div class="row muted">Select a run/tool trace above to view recent events (tail, bounded).</div>
+  <div class="row">
+    <span id="viewerTitle" class="pill muted">none selected</span>
+    <button onclick="reloadViewer()">Reload</button>
+    <button onclick="downloadViewer()">Download</button>
+    <label class="small">Lines:</label>
+    <input id="viewerLines" type="number" value="200" min="50" max="500" />
+    <label class="small">Filter:</label>
+    <input id="viewerFilter" type="text" placeholder="type/tool/text..." oninput="renderViewer()"/>
+    <label class="small"><input id="viewerRawToggle" type="checkbox" onchange="renderViewer()"/> raw</label>
+  </div>
+  <div id="viewerMeta" class="muted" style="margin-top:8px"></div>
+  <div id="viewer"></div>
+  <pre id="viewerRaw" style="display:none"></pre>
+
   <h2>Links</h2>
   <ul>
     <li><a href="/health" target="_blank">/health</a></li>
@@ -1219,6 +1241,18 @@ const consoleHTML = `<!doctype html>
 
 <script>
 const LS_KEY = "picoclaw.console.api_key";
+const VIEWER_DEFAULT_LINES = 200;
+
+const viewerState = {
+  kind: "",
+  path: "",
+  session: "",
+  events: [],
+  truncated: false,
+  linesRequested: 0,
+  loadedAt: "",
+  selectedIndex: -1,
+};
 
 function getKey() {
   return (document.getElementById("apiKey").value || "").trim();
@@ -1276,6 +1310,11 @@ async function refreshAll() {
     document.getElementById("cron").textContent = fmt(cron);
     renderTraceList("runs", runs);
     renderTraceList("tools", tools);
+    if (viewerState.path) {
+      await loadViewer();
+    } else {
+      renderViewer();
+    }
     setPill("ok", true);
   } catch (e) {
     setErr(String(e && e.message ? e.message : e));
@@ -1301,7 +1340,10 @@ function renderTraceList(containerId, payload) {
       "<td><code>" + escapeHtml(sess) + "</code><div class='muted'><code>" + escapeHtml(it.token) + "</code></div></td>" +
       "<td><code>" + escapeHtml(last.trim() || "-") + "</code></td>" +
       "<td><code>" + escapeHtml(fp) + "</code><div class='muted'>" + escapeHtml(it.mod_time || "") + "</div></td>" +
-      "<td><button onclick=\"downloadPath('" + escapeAttr(fp) + "')\">Download</button></td>" +
+      "<td class='nowrap'>" +
+        "<button onclick=\"viewTrace('" + escapeAttr(containerId) + "','" + escapeAttr(fp) + "','" + escapeAttr(sess) + "')\">View</button> " +
+        "<button onclick=\"downloadPath('" + escapeAttr(fp) + "')\">Download</button>" +
+      "</td>" +
       "</tr>";
   }
   html += "</tbody></table>";
@@ -1319,6 +1361,215 @@ function escapeHtml(s) {
 }
 function escapeAttr(s) {
   return String(s || "").replace(/'/g, "&#39;");
+}
+
+function viewerLines() {
+  const el = document.getElementById("viewerLines");
+  let n = parseInt(el && el.value ? el.value : "", 10);
+  if (!n || n < 50) n = VIEWER_DEFAULT_LINES;
+  if (n > 500) n = 500;
+  return n;
+}
+
+function setViewerTitle() {
+  const el = document.getElementById("viewerTitle");
+  if (!el) return;
+  if (!viewerState.path) {
+    el.textContent = "none selected";
+    el.className = "pill muted";
+    return;
+  }
+  el.textContent = viewerState.kind + " • " + (viewerState.session || viewerState.path);
+  el.className = "pill ok";
+}
+
+async function viewTrace(kind, relPath, sessionKey) {
+  viewerState.kind = String(kind || "").trim() || "trace";
+  viewerState.path = String(relPath || "").trim();
+  viewerState.session = String(sessionKey || "").trim();
+  viewerState.events = [];
+  viewerState.truncated = false;
+  viewerState.linesRequested = 0;
+  viewerState.loadedAt = "";
+  viewerState.selectedIndex = -1;
+  setViewerTitle();
+  await loadViewer();
+}
+
+async function reloadViewer() {
+  if (!viewerState.path) {
+    renderViewer();
+    return;
+  }
+  await loadViewer();
+}
+
+function downloadViewer() {
+  if (!viewerState.path) return;
+  downloadPath(viewerState.path);
+}
+
+function safeJsonParse(s) {
+  try { return JSON.parse(s); } catch { return null; }
+}
+
+function eventTS(ev) {
+  if (!ev) return "";
+  if (ev.ts) return String(ev.ts);
+  if (ev.ts_ms) {
+    try { return new Date(Number(ev.ts_ms)).toISOString(); } catch {}
+  }
+  return "";
+}
+
+function eventType(ev) {
+  if (!ev) return "";
+  return String(ev.type || "").trim();
+}
+
+function eventTool(ev) {
+  if (!ev) return "";
+  return String(ev.tool || "").trim();
+}
+
+function eventIter(ev) {
+  if (!ev) return "";
+  const n = ev.iteration;
+  if (typeof n === "number") return String(n);
+  return "";
+}
+
+function summarizeEvent(ev) {
+  if (!ev) return "";
+  const bits = [];
+  if (ev.user_message_preview) bits.push(ev.user_message_preview);
+  if (ev.response_preview) bits.push(ev.response_preview);
+  if (ev.args_preview) bits.push("args: " + ev.args_preview);
+  if (ev.for_user_preview) bits.push("user: " + ev.for_user_preview);
+  if (!ev.for_user_preview && ev.for_llm_preview) bits.push("llm: " + ev.for_llm_preview);
+  if (Array.isArray(ev.tool_calls) && ev.tool_calls.length) bits.push("tools: " + ev.tool_calls.join(", "));
+  if (Array.isArray(ev.tool_batch) && ev.tool_batch.length) bits.push("tool_batch: " + ev.tool_batch.length);
+  if (ev.policy_decision) bits.push("policy=" + ev.policy_decision);
+  if (ev.is_error && !ev.error) bits.push("error=true");
+  if (ev.error) bits.push("error: " + ev.error);
+  return bits.join(" | ");
+}
+
+function matchesFilter(ev, needle) {
+  if (!needle) return true;
+  const raw = JSON.stringify(ev || {}).toLowerCase();
+  return raw.includes(needle);
+}
+
+function setViewerMeta(msg) {
+  const el = document.getElementById("viewerMeta");
+  if (!el) return;
+  el.textContent = msg || "";
+}
+
+function setViewerRaw(text, visible) {
+  const el = document.getElementById("viewerRaw");
+  if (!el) return;
+  el.textContent = text || "";
+  el.style.display = visible ? "block" : "none";
+}
+
+function selectViewerEvent(idx) {
+  viewerState.selectedIndex = idx;
+  renderViewer();
+}
+
+function renderViewer() {
+  setViewerTitle();
+  const el = document.getElementById("viewer");
+  if (!el) return;
+
+  if (!viewerState.path) {
+    el.innerHTML = "<div class='muted'>No trace selected.</div>";
+    setViewerMeta("");
+    setViewerRaw("", false);
+    return;
+  }
+
+  const needle = (document.getElementById("viewerFilter").value || "").trim().toLowerCase();
+  const showRaw = !!(document.getElementById("viewerRawToggle") && document.getElementById("viewerRawToggle").checked);
+
+  const events = viewerState.events || [];
+  const filtered = [];
+  for (let i = 0; i < events.length; i++) {
+    const ev = events[i];
+    if (!matchesFilter(ev, needle)) continue;
+    filtered.push({ idx: i, ev });
+  }
+
+  const meta = [
+    "path=" + viewerState.path,
+    "events=" + events.length,
+    (needle ? ("filtered=" + filtered.length) : ""),
+    (viewerState.truncated ? "truncated=true" : ""),
+    (viewerState.loadedAt ? ("loaded_at=" + viewerState.loadedAt) : ""),
+  ].filter(Boolean).join(" • ");
+  setViewerMeta(meta);
+
+  if (!filtered.length) {
+    el.innerHTML = "<div class='muted'>No events (or filter matched none).</div>";
+    setViewerRaw("", false);
+    return;
+  }
+
+  let html = "<table><thead><tr>" +
+    "<th>TS</th><th>Type</th><th>Tool</th><th>Iter</th><th>Summary</th>" +
+    "</tr></thead><tbody>";
+  for (const row of filtered) {
+    const ev = row.ev;
+    const isErr = !!(ev && (ev.is_error || ev.error || String(ev.type || "").endsWith(".error")));
+    const cls = (row.idx === viewerState.selectedIndex) ? "selected clickable" : "clickable";
+    html += "<tr class='" + cls + "' onclick='selectViewerEvent(" + row.idx + ")'>" +
+      "<td class='mono small'>" + escapeHtml(eventTS(ev)) + "</td>" +
+      "<td class='mono small'>" + escapeHtml(eventType(ev)) + "</td>" +
+      "<td class='mono small'>" + escapeHtml(eventTool(ev)) + "</td>" +
+      "<td class='mono small'>" + escapeHtml(eventIter(ev)) + "</td>" +
+      "<td class='" + (isErr ? "err" : "") + "'>" + escapeHtml(summarizeEvent(ev)) + "</td>" +
+      "</tr>";
+  }
+  html += "</tbody></table>";
+  el.innerHTML = html;
+
+  if (showRaw && viewerState.selectedIndex >= 0 && viewerState.selectedIndex < events.length) {
+    setViewerRaw(fmt(events[viewerState.selectedIndex]), true);
+  } else {
+    setViewerRaw("", false);
+  }
+}
+
+async function loadViewer() {
+  if (!viewerState.path) {
+    renderViewer();
+    return;
+  }
+  setErr("");
+  setPill("loading trace...", false);
+  try {
+    const url = "/api/console/tail?path=" + encodeURIComponent(viewerState.path) + "&lines=" + encodeURIComponent(viewerLines());
+    const payload = await (await apiFetch(url)).json();
+    const lines = (payload && payload.lines) ? payload.lines : [];
+    const events = [];
+    for (const line of lines) {
+      const ev = safeJsonParse(line);
+      if (!ev || typeof ev !== "object") continue;
+      events.push(ev);
+    }
+    viewerState.events = events;
+    viewerState.truncated = !!(payload && payload.truncated);
+    viewerState.linesRequested = payload && payload.lines_requested ? payload.lines_requested : 0;
+    viewerState.loadedAt = new Date().toISOString();
+    if (viewerState.selectedIndex >= events.length) viewerState.selectedIndex = -1;
+    renderViewer();
+    setPill("ok", true);
+  } catch (e) {
+    setErr(String(e && e.message ? e.message : e));
+    setPill("error", false);
+  }
 }
 
 async function downloadPath(relPath) {

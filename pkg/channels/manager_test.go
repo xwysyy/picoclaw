@@ -515,6 +515,69 @@ func TestPreSend_PlaceholderEditSuccess(t *testing.T) {
 	}
 }
 
+func TestSchedulePlaceholder_CancelBeforeDelay(t *testing.T) {
+	m := newTestManager()
+
+	var called atomic.Int64
+	send := func(_ context.Context) (string, error) {
+		called.Add(1)
+		return "ph_id", nil
+	}
+
+	m.SchedulePlaceholder(context.Background(), "test", "123", send, 50*time.Millisecond)
+	m.CancelPlaceholder("test", "123")
+
+	time.Sleep(120 * time.Millisecond)
+
+	if called.Load() != 0 {
+		t.Fatalf("expected placeholder send to be canceled, called=%d", called.Load())
+	}
+	if _, ok := m.placeholders.Load("test:123"); ok {
+		t.Fatal("expected no placeholder recorded when canceled before delay")
+	}
+}
+
+func TestSchedulePlaceholder_RescheduleReplacesExisting(t *testing.T) {
+	m := newTestManager()
+
+	calls := make(chan string, 2)
+	first := func(_ context.Context) (string, error) {
+		calls <- "first"
+		return "ph_first", nil
+	}
+	second := func(_ context.Context) (string, error) {
+		calls <- "second"
+		return "ph_second", nil
+	}
+
+	m.SchedulePlaceholder(context.Background(), "test", "123", first, 80*time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
+	m.SchedulePlaceholder(context.Background(), "test", "123", second, 20*time.Millisecond)
+
+	time.Sleep(120 * time.Millisecond)
+
+	got := make([]string, 0, 2)
+	for {
+		select {
+		case s := <-calls:
+			got = append(got, s)
+		default:
+			goto done
+		}
+	}
+done:
+
+	if len(got) != 1 || got[0] != "second" {
+		t.Fatalf("expected only second placeholder send, got %v", got)
+	}
+
+	if v, ok := m.placeholders.Load("test:123"); !ok {
+		t.Fatal("expected placeholder recorded for rescheduled send")
+	} else if entry, ok := v.(placeholderEntry); !ok || entry.id != "ph_second" {
+		t.Fatalf("expected placeholder id ph_second, got %#v", v)
+	}
+}
+
 func TestPreSend_PlaceholderEditFails_FallsThrough(t *testing.T) {
 	m := newTestManager()
 

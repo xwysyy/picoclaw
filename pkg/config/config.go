@@ -188,6 +188,30 @@ type SubagentsConfig struct {
 	Model       *AgentModelConfig `json:"model,omitempty"`
 }
 
+// SessionModelAutoDowngradeConfig controls automatic session model override updates.
+//
+// ROADMAP_V2 Phase J2:
+//   - When the fallback chain repeatedly fails over from the primary model,
+//     automatically set a per-session model override (TTL) to the successful fallback.
+//   - This reduces repeated timeouts / errors on every run while keeping behavior auditable.
+//
+// Default: disabled.
+type SessionModelAutoDowngradeConfig struct {
+	Enabled bool `json:"enabled,omitempty"`
+
+	// Threshold is the number of consecutive triggers required before switching.
+	// 0 uses a small built-in default (2).
+	Threshold int `json:"threshold,omitempty"`
+
+	// WindowMinutes defines how long strikes remain valid for the "consecutive" check.
+	// 0 uses a built-in default (15 minutes).
+	WindowMinutes int `json:"window_minutes,omitempty"`
+
+	// TTLMinutes is the TTL applied to the session model override when switching.
+	// 0 uses a built-in default (60 minutes).
+	TTLMinutes int `json:"ttl_minutes,omitempty"`
+}
+
 type PeerMatch struct {
 	Kind string `json:"kind"`
 	ID   string `json:"id"`
@@ -212,23 +236,24 @@ type SessionConfig struct {
 }
 
 type AgentDefaults struct {
-	Workspace                 string                       `json:"workspace"                       env:"PICOCLAW_AGENTS_DEFAULTS_WORKSPACE"`
-	RestrictToWorkspace       bool                         `json:"restrict_to_workspace"           env:"PICOCLAW_AGENTS_DEFAULTS_RESTRICT_TO_WORKSPACE"`
-	AllowReadOutsideWorkspace bool                         `json:"allow_read_outside_workspace"    env:"PICOCLAW_AGENTS_DEFAULTS_ALLOW_READ_OUTSIDE_WORKSPACE"`
-	Provider                  string                       `json:"provider"                        env:"PICOCLAW_AGENTS_DEFAULTS_PROVIDER"`
-	ModelName                 string                       `json:"model_name,omitempty"            env:"PICOCLAW_AGENTS_DEFAULTS_MODEL_NAME"`
-	Model                     string                       `json:"model"                           env:"PICOCLAW_AGENTS_DEFAULTS_MODEL"` // Deprecated: use model_name instead
-	ModelFallbacks            []string                     `json:"model_fallbacks,omitempty"`
-	ImageModel                string                       `json:"image_model,omitempty"           env:"PICOCLAW_AGENTS_DEFAULTS_IMAGE_MODEL"`
-	ImageModelFallbacks       []string                     `json:"image_model_fallbacks,omitempty"`
-	MaxTokens                 int                          `json:"max_tokens"                      env:"PICOCLAW_AGENTS_DEFAULTS_MAX_TOKENS"`
-	Temperature               *float64                     `json:"temperature,omitempty"           env:"PICOCLAW_AGENTS_DEFAULTS_TEMPERATURE"`
-	MaxToolIterations         int                          `json:"max_tool_iterations"             env:"PICOCLAW_AGENTS_DEFAULTS_MAX_TOOL_ITERATIONS"`
-	MaxMediaSize              int                          `json:"max_media_size,omitempty"        env:"PICOCLAW_AGENTS_DEFAULTS_MAX_MEDIA_SIZE"`
-	Compaction                AgentCompactionConfig        `json:"compaction,omitempty"`
-	ContextPruning            AgentContextPruningConfig    `json:"context_pruning,omitempty"`
-	BootstrapSnapshot         AgentBootstrapSnapshotConfig `json:"bootstrap_snapshot,omitempty"`
-	MemoryVector              AgentMemoryVectorConfig      `json:"memory_vector,omitempty"`
+	Workspace                 string                          `json:"workspace"                       env:"PICOCLAW_AGENTS_DEFAULTS_WORKSPACE"`
+	RestrictToWorkspace       bool                            `json:"restrict_to_workspace"           env:"PICOCLAW_AGENTS_DEFAULTS_RESTRICT_TO_WORKSPACE"`
+	AllowReadOutsideWorkspace bool                            `json:"allow_read_outside_workspace"    env:"PICOCLAW_AGENTS_DEFAULTS_ALLOW_READ_OUTSIDE_WORKSPACE"`
+	Provider                  string                          `json:"provider"                        env:"PICOCLAW_AGENTS_DEFAULTS_PROVIDER"`
+	ModelName                 string                          `json:"model_name,omitempty"            env:"PICOCLAW_AGENTS_DEFAULTS_MODEL_NAME"`
+	Model                     string                          `json:"model"                           env:"PICOCLAW_AGENTS_DEFAULTS_MODEL"` // Deprecated: use model_name instead
+	ModelFallbacks            []string                        `json:"model_fallbacks,omitempty"`
+	SessionModelAutoDowngrade SessionModelAutoDowngradeConfig `json:"session_model_auto_downgrade,omitempty"`
+	ImageModel                string                          `json:"image_model,omitempty"           env:"PICOCLAW_AGENTS_DEFAULTS_IMAGE_MODEL"`
+	ImageModelFallbacks       []string                        `json:"image_model_fallbacks,omitempty"`
+	MaxTokens                 int                             `json:"max_tokens"                      env:"PICOCLAW_AGENTS_DEFAULTS_MAX_TOKENS"`
+	Temperature               *float64                        `json:"temperature,omitempty"           env:"PICOCLAW_AGENTS_DEFAULTS_TEMPERATURE"`
+	MaxToolIterations         int                             `json:"max_tool_iterations"             env:"PICOCLAW_AGENTS_DEFAULTS_MAX_TOOL_ITERATIONS"`
+	MaxMediaSize              int                             `json:"max_media_size,omitempty"        env:"PICOCLAW_AGENTS_DEFAULTS_MAX_MEDIA_SIZE"`
+	Compaction                AgentCompactionConfig           `json:"compaction,omitempty"`
+	ContextPruning            AgentContextPruningConfig       `json:"context_pruning,omitempty"`
+	BootstrapSnapshot         AgentBootstrapSnapshotConfig    `json:"bootstrap_snapshot,omitempty"`
+	MemoryVector              AgentMemoryVectorConfig         `json:"memory_vector,omitempty"`
 }
 
 const DefaultMaxMediaSize = 20 * 1024 * 1024 // 20 MB
@@ -362,6 +387,10 @@ type TypingConfig struct {
 type PlaceholderConfig struct {
 	Enabled bool   `json:"enabled,omitempty"`
 	Text    string `json:"text,omitempty"`
+
+	// DelayMS delays sending placeholder messages to avoid flicker for fast replies.
+	// 0 means no delay. Recommended: 2500ms.
+	DelayMS int `json:"delay_ms,omitempty"`
 }
 
 type WhatsAppConfig struct {
@@ -572,6 +601,15 @@ type AuditSupervisorConfig struct {
 	Model       *AgentModelConfig `json:"model,omitempty"`
 	Temperature *float64          `json:"temperature,omitempty" env:"PICOCLAW_AUDIT_SUPERVISOR_TEMPERATURE"`
 	MaxTokens   int               `json:"max_tokens,omitempty"  env:"PICOCLAW_AUDIT_SUPERVISOR_MAX_TOKENS"`
+
+	// Mode controls when the supervisor LLM is used:
+	// - "always" (default): review every completed task in the lookback window.
+	// - "escalate": only review tasks that already have rule-based findings.
+	Mode string `json:"mode,omitempty"`
+
+	// MaxTasks caps how many tasks are reviewed per audit cycle (to cap cost/latency).
+	// 0 disables the cap.
+	MaxTasks int `json:"max_tasks,omitempty"`
 }
 
 // LimitsConfig defines soft resource budgets enforced by the agent/runtime.

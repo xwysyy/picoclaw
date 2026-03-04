@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -216,7 +217,7 @@ func (al *AgentLoop) RunTaskAudit(ctx context.Context) (*AuditReport, error) {
 		}
 	}
 
-	modelFindings, err := al.supervisorModelAudit(ctx, records)
+	modelFindings, err := al.supervisorModelAudit(ctx, records, report.Findings)
 	if err != nil {
 		logger.WarnCF("audit", "Supervisor model audit skipped", map[string]any{"error": err.Error()})
 	} else {
@@ -229,6 +230,7 @@ func (al *AgentLoop) RunTaskAudit(ctx context.Context) (*AuditReport, error) {
 func (al *AgentLoop) supervisorModelAudit(
 	ctx context.Context,
 	records []tools.TaskLedgerEntry,
+	preFindings []AuditFinding,
 ) ([]AuditFinding, error) {
 	cfg := al.Config()
 	if cfg == nil || !cfg.Audit.Supervisor.Enabled {
@@ -263,11 +265,55 @@ func (al *AgentLoop) supervisorModelAudit(
 		options["max_tokens"] = cfg.Audit.Supervisor.MaxTokens
 	}
 
-	findings := make([]AuditFinding, 0)
+	mode := strings.ToLower(strings.TrimSpace(cfg.Audit.Supervisor.Mode))
+	if mode == "" {
+		mode = "always"
+	}
+
+	maxTasks := cfg.Audit.Supervisor.MaxTasks
+	if maxTasks < 0 {
+		maxTasks = 0
+	}
+
+	needReview := map[string]struct{}{}
+	if mode == "escalate" {
+		for _, f := range preFindings {
+			id := strings.TrimSpace(f.TaskID)
+			if id != "" {
+				needReview[id] = struct{}{}
+			}
+		}
+		// Nothing to escalate: keep rule-based sweep free.
+		if len(needReview) == 0 {
+			return nil, nil
+		}
+	}
+
+	toReview := make([]tools.TaskLedgerEntry, 0)
 	for _, record := range records {
 		if record.Status != tools.TaskStatusCompleted {
 			continue
 		}
+		if mode == "escalate" {
+			if _, ok := needReview[strings.TrimSpace(record.ID)]; !ok {
+				continue
+			}
+		}
+		toReview = append(toReview, record)
+	}
+
+	if maxTasks > 0 && len(toReview) > maxTasks {
+		sort.Slice(toReview, func(i, j int) bool {
+			if toReview[i].UpdatedAtMS == toReview[j].UpdatedAtMS {
+				return toReview[i].ID < toReview[j].ID
+			}
+			return toReview[i].UpdatedAtMS > toReview[j].UpdatedAtMS
+		})
+		toReview = toReview[:maxTasks]
+	}
+
+	findings := make([]AuditFinding, 0)
+	for _, record := range toReview {
 		review, err := al.reviewTaskWithSupervisor(ctx, provider, modelID, options, record)
 		if err != nil {
 			continue
