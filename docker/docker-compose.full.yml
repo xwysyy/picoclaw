@@ -41,4 +41,6 @@ services:
 
 volumes:
   x-claw-workspace:
+    name: x-claw-workspace
   x-claw-npm-cache: # Cache npm packages to speed up MCP server installations
+    name: x-claw-npm-cache
