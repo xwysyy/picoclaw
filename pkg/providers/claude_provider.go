@@ -44,11 +44,7 @@ func newClaudeProviderWithDelegate(delegate *anthropicprovider.Provider) *Claude
 func (p *ClaudeProvider) Chat(
 	ctx context.Context, messages []Message, tools []ToolDefinition, model string, options map[string]any,
 ) (*LLMResponse, error) {
-	resp, err := p.delegate.Chat(ctx, messages, tools, model, options)
-	if err != nil {
-		return nil, err
-	}
-	return resp, nil
+	return p.delegate.Chat(ctx, messages, tools, model, options)
 }
 
 func (p *ClaudeProvider) GetDefaultModel() string {

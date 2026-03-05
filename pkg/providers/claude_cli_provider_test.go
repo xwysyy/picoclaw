@@ -844,24 +844,22 @@ func TestParseClaudeCliResponse_WhitespaceResult(t *testing.T) {
 	}
 }
 
-// --- extractToolCalls tests ---
+// --- extractToolCallsFromText tests ---
 
 func TestExtractToolCalls_NoToolCalls(t *testing.T) {
-	p := NewClaudeCliProvider("/workspace")
-	got := p.extractToolCalls("Just a regular response.")
+	got := extractToolCallsFromText("Just a regular response.")
 	if len(got) != 0 {
-		t.Errorf("extractToolCalls() = %d, want 0", len(got))
+		t.Errorf("extractToolCallsFromText() = %d, want 0", len(got))
 	}
 }
 
 func TestExtractToolCalls_WithToolCalls(t *testing.T) {
-	p := NewClaudeCliProvider("/workspace")
 	text := `Here's the result:
 {"tool_calls":[{"id":"call_1","type":"function","function":{"name":"test","arguments":"{}"}}]}`
 
-	got := p.extractToolCalls(text)
+	got := extractToolCallsFromText(text)
 	if len(got) != 1 {
-		t.Fatalf("extractToolCalls() = %d, want 1", len(got))
+		t.Fatalf("extractToolCallsFromText() = %d, want 1", len(got))
 	}
 	if got[0].ID != "call_1" {
 		t.Errorf("ID = %q, want %q", got[0].ID, "call_1")
@@ -875,20 +873,18 @@ func TestExtractToolCalls_WithToolCalls(t *testing.T) {
 }
 
 func TestExtractToolCalls_InvalidJSON(t *testing.T) {
-	p := NewClaudeCliProvider("/workspace")
-	got := p.extractToolCalls(`{"tool_calls":invalid}`)
+	got := extractToolCallsFromText(`{"tool_calls":invalid}`)
 	if len(got) != 0 {
-		t.Errorf("extractToolCalls() with invalid JSON = %d, want 0", len(got))
+		t.Errorf("extractToolCallsFromText() with invalid JSON = %d, want 0", len(got))
 	}
 }
 
 func TestExtractToolCalls_MultipleToolCalls(t *testing.T) {
-	p := NewClaudeCliProvider("/workspace")
 	text := `{"tool_calls":[{"id":"call_1","type":"function","function":{"name":"read_file","arguments":"{\"path\":\"/tmp/test\"}"}},{"id":"call_2","type":"function","function":{"name":"write_file","arguments":"{\"path\":\"/tmp/out\",\"content\":\"hello\"}"}}]}`
 
-	got := p.extractToolCalls(text)
+	got := extractToolCallsFromText(text)
 	if len(got) != 2 {
-		t.Fatalf("extractToolCalls() = %d, want 2", len(got))
+		t.Fatalf("extractToolCallsFromText() = %d, want 2", len(got))
 	}
 	if got[0].Name != "read_file" {
 		t.Errorf("[0].Name = %q, want %q", got[0].Name, "read_file")
@@ -906,18 +902,16 @@ func TestExtractToolCalls_MultipleToolCalls(t *testing.T) {
 }
 
 func TestExtractToolCalls_UnmatchedBrace(t *testing.T) {
-	p := NewClaudeCliProvider("/workspace")
-	got := p.extractToolCalls(`{"tool_calls":[{"id":"call_1"`)
+	got := extractToolCallsFromText(`{"tool_calls":[{"id":"call_1"`)
 	if len(got) != 0 {
-		t.Errorf("extractToolCalls() with unmatched brace = %d, want 0", len(got))
+		t.Errorf("extractToolCallsFromText() with unmatched brace = %d, want 0", len(got))
 	}
 }
 
 func TestExtractToolCalls_ToolCallArgumentsParsing(t *testing.T) {
-	p := NewClaudeCliProvider("/workspace")
 	text := `{"tool_calls":[{"id":"c1","type":"function","function":{"name":"fn","arguments":"{\"num\":42,\"flag\":true,\"name\":\"test\"}"}}]}`
 
-	got := p.extractToolCalls(text)
+	got := extractToolCallsFromText(text)
 	if len(got) != 1 {
 		t.Fatalf("len = %d, want 1", len(got))
 	}
@@ -937,15 +931,14 @@ func TestExtractToolCalls_ToolCallArgumentsParsing(t *testing.T) {
 	}
 }
 
-// --- stripToolCallsJSON tests ---
+// --- stripToolCallsFromText tests ---
 
 func TestStripToolCallsJSON(t *testing.T) {
-	p := NewClaudeCliProvider("/workspace")
 	text := `Let me check the weather.
 {"tool_calls":[{"id":"call_1","type":"function","function":{"name":"test","arguments":"{}"}}]}
 Done.`
 
-	got := p.stripToolCallsJSON(text)
+	got := stripToolCallsFromText(text)
 	if strings.Contains(got, "tool_calls") {
 		t.Errorf("should remove tool_calls JSON, got %q", got)
 	}
@@ -958,20 +951,18 @@ Done.`
 }
 
 func TestStripToolCallsJSON_NoToolCalls(t *testing.T) {
-	p := NewClaudeCliProvider("/workspace")
 	text := "Just regular text."
-	got := p.stripToolCallsJSON(text)
+	got := stripToolCallsFromText(text)
 	if got != text {
-		t.Errorf("stripToolCallsJSON() = %q, want %q", got, text)
+		t.Errorf("stripToolCallsFromText() = %q, want %q", got, text)
 	}
 }
 
 func TestStripToolCallsJSON_OnlyToolCalls(t *testing.T) {
-	p := NewClaudeCliProvider("/workspace")
 	text := `{"tool_calls":[{"id":"c1","type":"function","function":{"name":"fn","arguments":"{}"}}]}`
-	got := p.stripToolCallsJSON(text)
+	got := stripToolCallsFromText(text)
 	if got != "" {
-		t.Errorf("stripToolCallsJSON() = %q, want empty", got)
+		t.Errorf("stripToolCallsFromText() = %q, want empty", got)
 	}
 }
 

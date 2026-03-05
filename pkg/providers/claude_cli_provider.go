@@ -66,20 +66,7 @@ func (p *ClaudeCliProvider) GetDefaultModel() string {
 
 // messagesToPrompt converts messages to a CLI-compatible prompt string.
 func (p *ClaudeCliProvider) messagesToPrompt(messages []Message) string {
-	var parts []string
-
-	for _, msg := range messages {
-		switch msg.Role {
-		case "system":
-			// handled via --system-prompt flag
-		case "user":
-			parts = append(parts, "User: "+msg.Content)
-		case "assistant":
-			parts = append(parts, "Assistant: "+msg.Content)
-		case "tool":
-			parts = append(parts, fmt.Sprintf("[Tool Result for %s]: %s", msg.ToolCallID, msg.Content))
-		}
-	}
+	parts := formatConversationParts(messages)
 
 	// Simplify single user message
 	if len(parts) == 1 && strings.HasPrefix(parts[0], "User: ") {
@@ -117,13 +104,13 @@ func (p *ClaudeCliProvider) parseClaudeCliResponse(output string) (*LLMResponse,
 		return nil, fmt.Errorf("claude cli returned error: %s", resp.Result)
 	}
 
-	toolCalls := p.extractToolCalls(resp.Result)
+	toolCalls := extractToolCallsFromText(resp.Result)
 
 	finishReason := "stop"
 	content := resp.Result
 	if len(toolCalls) > 0 {
 		finishReason = "tool_calls"
-		content = p.stripToolCallsJSON(resp.Result)
+		content = stripToolCallsFromText(resp.Result)
 	}
 
 	var usage *UsageInfo
@@ -141,32 +128,6 @@ func (p *ClaudeCliProvider) parseClaudeCliResponse(output string) (*LLMResponse,
 		FinishReason: finishReason,
 		Usage:        usage,
 	}, nil
-}
-
-// extractToolCalls delegates to the shared extractToolCallsFromText function.
-func (p *ClaudeCliProvider) extractToolCalls(text string) []ToolCall {
-	return extractToolCallsFromText(text)
-}
-
-// stripToolCallsJSON delegates to the shared stripToolCallsFromText function.
-func (p *ClaudeCliProvider) stripToolCallsJSON(text string) string {
-	return stripToolCallsFromText(text)
-}
-
-// findMatchingBrace finds the index after the closing brace matching the opening brace at pos.
-func findMatchingBrace(text string, pos int) int {
-	depth := 0
-	for i := pos; i < len(text); i++ {
-		if text[i] == '{' {
-			depth++
-		} else if text[i] == '}' {
-			depth--
-			if depth == 0 {
-				return i + 1
-			}
-		}
-	}
-	return pos
 }
 
 // claudeCliJSONResponse represents the JSON output from the claude CLI.

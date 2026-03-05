@@ -56,6 +56,22 @@ func extractToolCallsFromText(text string) []ToolCall {
 	return result
 }
 
+// findMatchingBrace finds the index after the closing brace matching the opening brace at pos.
+func findMatchingBrace(text string, pos int) int {
+	depth := 0
+	for i := pos; i < len(text); i++ {
+		if text[i] == '{' {
+			depth++
+		} else if text[i] == '}' {
+			depth--
+			if depth == 0 {
+				return i + 1
+			}
+		}
+	}
+	return pos
+}
+
 // stripToolCallsFromText removes tool call JSON from response text.
 func stripToolCallsFromText(text string) string {
 	start := strings.Index(text, `{"tool_calls"`)

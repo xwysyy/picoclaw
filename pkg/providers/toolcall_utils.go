@@ -43,6 +43,26 @@ func buildCLIToolsPrompt(tools []ToolDefinition) string {
 	return sb.String()
 }
 
+// formatConversationParts converts non-system messages into role-prefixed text parts.
+// This is the shared logic between ClaudeCliProvider.messagesToPrompt and
+// CodexCliProvider.buildPrompt. Each provider may further customize the output.
+func formatConversationParts(messages []Message) []string {
+	var parts []string
+	for _, msg := range messages {
+		switch msg.Role {
+		case "system":
+			// Handled separately by each provider (flag vs prefix).
+		case "user":
+			parts = append(parts, "User: "+msg.Content)
+		case "assistant":
+			parts = append(parts, "Assistant: "+msg.Content)
+		case "tool":
+			parts = append(parts, fmt.Sprintf("[Tool Result for %s]: %s", msg.ToolCallID, msg.Content))
+		}
+	}
+	return parts
+}
+
 // NormalizeToolCall normalizes a ToolCall to ensure all fields are properly populated.
 // It handles cases where Name/Arguments might be in different locations (top-level vs Function)
 // and ensures both are populated consistently.
