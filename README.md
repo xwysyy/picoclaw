@@ -1,1344 +1,730 @@
-<div align="center">
-  <img src="assets/logo.jpg" alt="PicoClaw" width="512">
+# PicoClaw
 
-  <h1>PicoClaw: Ultra-Efficient AI Assistant in Go</h1>
+<p align="center">
+  <img src="assets/logo.svg" alt="PicoClaw logo" width="120" />
+</p>
 
-  <h3>$10 Hardware · 10MB RAM · 1s Boot · 皮皮虾，我们走！</h3>
+[English](README.en.md) | [Roadmap](ROADMAP.md)
 
-  <p>
-    <img src="https://img.shields.io/badge/Go-1.21+-00ADD8?style=flat&logo=go&logoColor=white" alt="Go">
-    <img src="https://img.shields.io/badge/Arch-x86__64%2C%20ARM64%2C%20RISC--V-blue" alt="Hardware">
-    <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
-    <br>
-    <a href="https://picoclaw.io"><img src="https://img.shields.io/badge/Website-picoclaw.io-blue?style=flat&logo=google-chrome&logoColor=white" alt="Website"></a>
-    <a href="https://x.com/SipeedIO"><img src="https://img.shields.io/badge/X_(Twitter)-SipeedIO-black?style=flat&logo=x&logoColor=white" alt="Twitter"></a>
-    <br>
-    <a href="./assets/wechat.png"><img src="https://img.shields.io/badge/WeChat-Group-41d56b?style=flat&logo=wechat&logoColor=white"></a>
-    <a href="https://discord.gg/V4sAZ9XWpN"><img src="https://img.shields.io/badge/Discord-Community-4c60eb?style=flat&logo=discord&logoColor=white" alt="Discord"></a>
-  </p>
+PicoClaw 是一个使用 Go 编写的轻量级个人 AI 助手。
 
-[中文](README.zh.md) | [日本語](README.ja.md) | [Português](README.pt-br.md) | [Tiếng Việt](README.vi.md) | [Français](README.fr.md) | **English**
+本仓库包含核心 CLI、Gateway 服务、工具系统和多种渠道集成。
 
-</div>
+## 项目范围
 
----
+当前支持：
+- CLI 对话（`agent` 模式）
+- 常驻网关服务（`gateway` 模式）
+- 基于 `model_list` 的多模型配置
+- 工具调用（文件、命令、Web、定时、记忆、技能）
+- 会话与工作区持久化
 
-🦐 PicoClaw is an ultra-lightweight personal AI Assistant inspired by [nanobot](https://github.com/HKUDS/nanobot), refactored from the ground up in Go through a self-bootstrapping process, where the AI agent itself drove the entire architectural migration and code optimization.
+## 项目状态
 
-⚡️ Runs on $10 hardware with <10MB RAM: That's 99% less memory than OpenClaw and 98% cheaper than a Mac mini!
+项目仍在持续迭代中。
 
-<table align="center">
-  <tr align="center">
-    <td align="center" valign="top">
-      <p align="center">
-        <img src="assets/picoclaw_mem.gif" width="360" height="240">
-      </p>
-    </td>
-    <td align="center" valign="top">
-      <p align="center">
-        <img src="assets/licheervnano.png" width="400" height="240">
-      </p>
-    </td>
-  </tr>
-</table>
+- 版本升级时可能存在行为变化
+- 建议升级后检查配置兼容性
+- 未加防护前，不建议直接暴露到公网
 
-> [!CAUTION]
-> **🚨 SECURITY & OFFICIAL CHANNELS / 安全声明**
->
-> * **NO CRYPTO:** PicoClaw has **NO** official token/coin. All claims on `pump.fun` or other trading platforms are **SCAMS**.
->
-> * **OFFICIAL DOMAIN:** The **ONLY** official website is **[picoclaw.io](https://picoclaw.io)**, and company website is **[sipeed.com](https://sipeed.com)**
-> * **Warning:** Many `.ai/.org/.com/.net/...` domains are registered by third parties.
-> * **Warning:** picoclaw is in early development now and may have unresolved network security issues. Do not deploy to production environments before the v1.0 release.
-> * **Note:** picoclaw has recently merged a lot of PRs, which may result in a larger memory footprint (10–20MB) in the latest versions. We plan to prioritize resource optimization as soon as the current feature set reaches a stable state.
+## 环境要求
 
-## 📢 News
+- 推荐 Linux 主机（x86_64 / ARM64 / RISC-V）
+- 源码构建需要 Go 工具链
+- 至少一个可用模型 API Key（或兼容的本地/代理端点）
 
-2026-02-16 🎉 PicoClaw hit 12K stars in one week! Thank you all for your support! PicoClaw is growing faster than we ever imagined. Given the high volume of PRs, we urgently need community maintainers. Our volunteer roles and roadmap are officially posted [here](ROADMAP.md) —we can’t wait to have you on board!
-
-2026-02-13 🎉 PicoClaw hit 5000 stars in 4days! Thank you for the community! There are so many PRs & issues coming in (during Chinese New Year holidays), we are finalizing the Project Roadmap and setting up the Developer Group to accelerate PicoClaw's development.  
-🚀 Call to Action: Please submit your feature requests in GitHub Discussions. We will review and prioritize them during our upcoming weekly meeting.
-
-2026-02-09 🎉 PicoClaw Launched! Built in 1 day to bring AI Agents to $10 hardware with <10MB RAM. 🦐 PicoClaw，Let's Go！
-
-## ✨ Features
-
-🪶 **Ultra-Lightweight**: <10MB Memory footprint — 99% smaller than Clawdbot - core functionality.
-
-💰 **Minimal Cost**: Efficient enough to run on $10 Hardware — 98% cheaper than a Mac mini.
-
-⚡️ **Lightning Fast**: 400X Faster startup time, boot in 1 second even in 0.6GHz single core.
-
-🌍 **True Portability**: Single self-contained binary across RISC-V, ARM, and x86, One-click to Go!
-
-🤖 **AI-Bootstrapped**: Autonomous Go-native implementation — 95% Agent-generated core with human-in-the-loop refinement.
-
-|                               | OpenClaw      | NanoBot                  | **PicoClaw**                              |
-| ----------------------------- | ------------- | ------------------------ | ----------------------------------------- |
-| **Language**                  | TypeScript    | Python                   | **Go**                                    |
-| **RAM**                       | >1GB          | >100MB                   | **< 10MB**                                |
-| **Startup**</br>(0.8GHz core) | >500s         | >30s                     | **<1s**                                   |
-| **Cost**                      | Mac Mini 599$ | Most Linux SBC </br>~50$ | **Any Linux Board**</br>**As low as 10$** |
-
-<img src="assets/compare.jpg" alt="PicoClaw" width="512">
-
-## 🦾 Demonstration
-
-### 🛠️ Standard Assistant Workflows
-
-<table align="center">
-  <tr align="center">
-    <th><p align="center">🧩 Full-Stack Engineer</p></th>
-    <th><p align="center">🗂️ Logging & Planning Management</p></th>
-    <th><p align="center">🔎 Web Search & Learning</p></th>
-  </tr>
-  <tr>
-    <td align="center"><p align="center"><img src="assets/picoclaw_code.gif" width="240" height="180"></p></td>
-    <td align="center"><p align="center"><img src="assets/picoclaw_memory.gif" width="240" height="180"></p></td>
-    <td align="center"><p align="center"><img src="assets/picoclaw_search.gif" width="240" height="180"></p></td>
-  </tr>
-  <tr>
-    <td align="center">Develop • Deploy • Scale</td>
-    <td align="center">Schedule • Automate • Memory</td>
-    <td align="center">Discovery • Insights • Trends</td>
-  </tr>
-</table>
-
-### 📱 Run on old Android Phones
-
-Give your decade-old phone a second life! Turn it into a smart AI Assistant with PicoClaw. Quick Start:
-
-1. **Install Termux** (Available on F-Droid or Google Play).
-2. **Execute cmds**
-
-```bash
-# Note: Replace v0.1.1 with the latest version from the Releases page
-wget https://github.com/sipeed/picoclaw/releases/download/v0.1.1/picoclaw-linux-arm64
-chmod +x picoclaw-linux-arm64
-pkg install proot
-termux-chroot ./picoclaw-linux-arm64 onboard
-```
-
-And then follow the instructions in the "Quick Start" section to complete the configuration!
-<img src="assets/termux.jpg" alt="PicoClaw" width="512">
-
-### 🐜 Innovative Low-Footprint Deploy
-
-PicoClaw can be deployed on almost any Linux device!
-
-- $9.9 [LicheeRV-Nano](https://www.aliexpress.com/item/1005006519668532.html) E(Ethernet) or W(WiFi6) version, for Minimal Home Assistant
-- $30~50 [NanoKVM](https://www.aliexpress.com/item/1005007369816019.html), or $100 [NanoKVM-Pro](https://www.aliexpress.com/item/1005010048471263.html) for Automated Server Maintenance
-- $50 [MaixCAM](https://www.aliexpress.com/item/1005008053333693.html) or $100 [MaixCAM2](https://www.kickstarter.com/projects/zepan/maixcam2-build-your-next-gen-4k-ai-camera) for Smart Monitoring
-
-<https://private-user-images.githubusercontent.com/83055338/547056448-e7b031ff-d6f5-4468-bcca-5726b6fecb5c.mp4>
-
-🌟 More Deployment Cases Await！
-
-## 📦 Install
-
-### Install with precompiled binary
-
-Download the firmware for your platform from the [release](https://github.com/sipeed/picoclaw/releases) page.
-
-### Install from source (latest features, recommended for development)
+## 快速开始（本地构建）
 
 ```bash
 git clone https://github.com/sipeed/picoclaw.git
-
 cd picoclaw
 make deps
-
-# Build, no need to install
 make build
-
-# Build for multiple platforms
-make build-all
-
-# Build for Raspberry Pi Zero 2 W (32-bit: make build-linux-arm; 64-bit: make build-linux-arm64)
-make build-pi-zero
-
-# Build And Install
-make install
 ```
 
-**Raspberry Pi Zero 2 W:** Use the binary that matches your OS: 32-bit Raspberry Pi OS → `make build-linux-arm` (output: `build/picoclaw-linux-arm`); 64-bit → `make build-linux-arm64` (output: `build/picoclaw-linux-arm64`). Or run `make build-pi-zero` to build both.
-
-## 🐳 Docker Compose
-
-You can also run PicoClaw using Docker Compose without installing anything locally.
+也可以用脚本一键安装到本机（默认安装到 `~/.local/bin/picoclaw`，并初始化 `~/.picoclaw/`）：
 
 ```bash
-# 1. Clone this repo
-git clone https://github.com/sipeed/picoclaw.git
-cd picoclaw
-
-# 2. First run — auto-generates docker/data/config.json then exits
-docker compose -f docker/docker-compose.yml --profile gateway up
-# The container prints "First-run setup complete." and stops.
-
-# 3. Set your API keys
-vim docker/data/config.json   # Set provider API keys, bot tokens, etc.
-
-# 4. Start
-docker compose -f docker/docker-compose.yml --profile gateway up -d
+./scripts/install.sh --from-source
 ```
 
-> [!TIP]
-> **Docker Users**: By default, the Gateway listens on `127.0.0.1` which is not accessible from the host. If you need to access the health endpoints or expose ports, set `PICOCLAW_GATEWAY_HOST=0.0.0.0` in your environment or update `config.json`.
+初始化工作区与配置：
 
 ```bash
-# 5. Check logs
-docker compose -f docker/docker-compose.yml logs -f picoclaw-gateway
-
-# 6. Stop
-docker compose -f docker/docker-compose.yml --profile gateway down
+./build/picoclaw onboard
 ```
 
-### Agent Mode (One-shot)
+编辑配置：
 
 ```bash
-# Ask a question
-docker compose -f docker/docker-compose.yml run --rm picoclaw-agent -m "What is 2+2?"
-
-# Interactive mode
-docker compose -f docker/docker-compose.yml run --rm picoclaw-agent
+vim ~/.picoclaw/config.json
 ```
 
-### Update
+说明：PicoClaw 的运行时配置**只读取** `config.json`（默认路径 `~/.picoclaw/config.json`；Docker 部署通常将 `config/config.json` 挂载到该位置），不支持通过环境变量覆盖配置字段，以避免“同一份代码在不同环境变量下行为漂移”。
 
-```bash
-docker compose -f docker/docker-compose.yml pull
-docker compose -f docker/docker-compose.yml --profile gateway up -d
-```
-
-### 🚀 Quick Start
-
-> [!TIP]
-> Set your API key in `~/.picoclaw/config.json`.
-> Get API keys: [OpenRouter](https://openrouter.ai/keys) (LLM) · [Zhipu](https://open.bigmodel.cn/usercenter/proj-mgmt/apikeys) (LLM)
-> Web Search is **optional** - get free [Tavily API](https://tavily.com) (1000 free queries/month) or [Brave Search API](https://brave.com/search/api) (2000 free queries/month) or use built-in auto fallback.
-
-**1. Initialize**
-
-```bash
-picoclaw onboard
-```
-
-**2. Configure** (`~/.picoclaw/config.json`)
+最小配置示例：
 
 ```json
 {
   "agents": {
     "defaults": {
       "workspace": "~/.picoclaw/workspace",
-      "model_name": "gpt4",
+      "model_name": "gpt-5.2-medium",
       "max_tokens": 8192,
-      "temperature": 0.7,
       "max_tool_iterations": 20
     }
   },
   "model_list": [
     {
-      "model_name": "gpt4",
-      "model": "openai/gpt-5.2",
-      "api_key": "your-api-key",
-      "request_timeout": 300
-    },
-    {
-      "model_name": "claude-sonnet-4.6",
-      "model": "anthropic/claude-sonnet-4.6",
-      "api_key": "your-anthropic-key"
-    }
-  ],
-  "tools": {
-    "web": {
-      "brave": {
-        "enabled": false,
-        "api_key": "YOUR_BRAVE_API_KEY",
-        "max_results": 5
-      },
-      "tavily": {
-        "enabled": false,
-        "api_key": "YOUR_TAVILY_API_KEY",
-        "max_results": 5
-      },
-      "duckduckgo": {
-        "enabled": true,
-        "max_results": 5
-      }
-    }
-  }
-}
-```
-
-> **New**: The `model_list` configuration format allows zero-code provider addition. See [Model Configuration](#model-configuration-model_list) for details.
-> `request_timeout` is optional and uses seconds. If omitted or set to `<= 0`, PicoClaw uses the default timeout (120s).
-
-**3. Get API Keys**
-
-* **LLM Provider**: [OpenRouter](https://openrouter.ai/keys) · [Zhipu](https://open.bigmodel.cn/usercenter/proj-mgmt/apikeys) · [Anthropic](https://console.anthropic.com) · [OpenAI](https://platform.openai.com) · [Gemini](https://aistudio.google.com/api-keys)
-* **Web Search** (optional): [Tavily](https://tavily.com) - Optimized for AI Agents (1000 requests/month) · [Brave Search](https://brave.com/search/api) - Free tier available (2000 requests/month)
-
-> **Note**: See `config.example.json` for a complete configuration template.
-
-**4. Chat**
-
-```bash
-picoclaw agent -m "What is 2+2?"
-```
-
-That's it! You have a working AI assistant in 2 minutes.
-
----
-
-## 💬 Chat Apps
-
-Talk to your picoclaw through Telegram, Discord, WhatsApp, DingTalk, LINE, or WeCom
-
-> **Note**: All webhook-based channels (LINE, WeCom, etc.) are served on a single shared Gateway HTTP server (`gateway.host`:`gateway.port`, default `127.0.0.1:18790`). There are no per-channel ports to configure. Note: Feishu uses WebSocket/SDK mode and does not use the shared HTTP webhook server.
-
-| Channel      | Setup                              |
-| ------------ | ---------------------------------- |
-| **Telegram** | Easy (just a token)                |
-| **Discord**  | Easy (bot token + intents)         |
-| **WhatsApp** | Easy (native: QR scan; or bridge URL) |
-| **QQ**       | Easy (AppID + AppSecret)           |
-| **DingTalk** | Medium (app credentials)           |
-| **LINE**     | Medium (credentials + webhook URL) |
-| **WeCom AI Bot** | Medium (Token + AES key)       |
-
-<details>
-<summary><b>Telegram</b> (Recommended)</summary>
-
-**1. Create a bot**
-
-* Open Telegram, search `@BotFather`
-* Send `/newbot`, follow prompts
-* Copy the token
-
-**2. Configure**
-
-```json
-{
-  "channels": {
-    "telegram": {
-      "enabled": true,
-      "token": "YOUR_BOT_TOKEN",
-      "allow_from": ["YOUR_USER_ID"]
-    }
-  }
-}
-```
-
-> Get your user ID from `@userinfobot` on Telegram.
-
-**3. Run**
-
-```bash
-picoclaw gateway
-```
-
-</details>
-
-<details>
-<summary><b>Discord</b></summary>
-
-**1. Create a bot**
-
-* Go to <https://discord.com/developers/applications>
-* Create an application → Bot → Add Bot
-* Copy the bot token
-
-**2. Enable intents**
-
-* In the Bot settings, enable **MESSAGE CONTENT INTENT**
-* (Optional) Enable **SERVER MEMBERS INTENT** if you plan to use allow lists based on member data
-
-**3. Get your User ID**
-* Discord Settings → Advanced → enable **Developer Mode**
-* Right-click your avatar → **Copy User ID**
-
-**4. Configure**
-
-```json
-{
-  "channels": {
-    "discord": {
-      "enabled": true,
-      "token": "YOUR_BOT_TOKEN",
-      "allow_from": ["YOUR_USER_ID"]
-    }
-  }
-}
-```
-
-**5. Invite the bot**
-
-* OAuth2 → URL Generator
-* Scopes: `bot`
-* Bot Permissions: `Send Messages`, `Read Message History`
-* Open the generated invite URL and add the bot to your server
-
-**Optional: Group trigger mode**
-
-By default the bot responds to all messages in a server channel. To restrict responses to @-mentions only, add:
-
-```json
-{
-  "channels": {
-    "discord": {
-      "group_trigger": { "mention_only": true }
-    }
-  }
-}
-```
-
-You can also trigger by keyword prefixes (e.g. `!bot`):
-
-```json
-{
-  "channels": {
-    "discord": {
-      "group_trigger": { "prefixes": ["!bot"] }
-    }
-  }
-}
-```
-
-**6. Run**
-
-```bash
-picoclaw gateway
-```
-
-</details>
-
-<details>
-<summary><b>WhatsApp</b> (native via whatsmeow)</summary>
-
-PicoClaw can connect to WhatsApp in two ways:
-
-- **Native (recommended):** In-process using [whatsmeow](https://github.com/tulir/whatsmeow). No separate bridge. Set `"use_native": true` and leave `bridge_url` empty. On first run, scan the QR code with WhatsApp (Linked Devices). Session is stored under your workspace (e.g. `workspace/whatsapp/`). The native channel is **optional** to keep the default binary small; build with `-tags whatsapp_native` (e.g. `make build-whatsapp-native` or `go build -tags whatsapp_native ./cmd/...`).
-- **Bridge:** Connect to an external WebSocket bridge. Set `bridge_url` (e.g. `ws://localhost:3001`) and keep `use_native` false.
-
-**Configure (native)**
-
-```json
-{
-  "channels": {
-    "whatsapp": {
-      "enabled": true,
-      "use_native": true,
-      "session_store_path": "",
-      "allow_from": []
-    }
-  }
-}
-```
-
-If `session_store_path` is empty, the session is stored in `&lt;workspace&gt;/whatsapp/`. Run `picoclaw gateway`; on first run, scan the QR code printed in the terminal with WhatsApp → Linked Devices.
-
-</details>
-
-<details>
-<summary><b>QQ</b></summary>
-
-**1. Create a bot**
-
-- Go to [QQ Open Platform](https://q.qq.com/#)
-- Create an application → Get **AppID** and **AppSecret**
-
-**2. Configure**
-
-```json
-{
-  "channels": {
-    "qq": {
-      "enabled": true,
-      "app_id": "YOUR_APP_ID",
-      "app_secret": "YOUR_APP_SECRET",
-      "allow_from": []
-    }
-  }
-}
-```
-
-> Set `allow_from` to empty to allow all users, or specify QQ numbers to restrict access.
-
-**3. Run**
-
-```bash
-picoclaw gateway
-```
-
-</details>
-
-<details>
-<summary><b>DingTalk</b></summary>
-
-**1. Create a bot**
-
-* Go to [Open Platform](https://open.dingtalk.com/)
-* Create an internal app
-* Copy Client ID and Client Secret
-
-**2. Configure**
-
-```json
-{
-  "channels": {
-    "dingtalk": {
-      "enabled": true,
-      "client_id": "YOUR_CLIENT_ID",
-      "client_secret": "YOUR_CLIENT_SECRET",
-      "allow_from": []
-    }
-  }
-}
-```
-
-> Set `allow_from` to empty to allow all users, or specify DingTalk user IDs to restrict access.
-
-**3. Run**
-
-```bash
-picoclaw gateway
-```
-</details>
-
-<details>
-<summary><b>LINE</b></summary>
-
-**1. Create a LINE Official Account**
-
-- Go to [LINE Developers Console](https://developers.line.biz/)
-- Create a provider → Create a Messaging API channel
-- Copy **Channel Secret** and **Channel Access Token**
-
-**2. Configure**
-
-```json
-{
-  "channels": {
-    "line": {
-      "enabled": true,
-      "channel_secret": "YOUR_CHANNEL_SECRET",
-      "channel_access_token": "YOUR_CHANNEL_ACCESS_TOKEN",
-      "webhook_path": "/webhook/line",
-      "allow_from": []
-    }
-  }
-}
-```
-
-> LINE webhook is served on the shared Gateway server (`gateway.host`:`gateway.port`, default `127.0.0.1:18790`).
-
-**3. Set up Webhook URL**
-
-LINE requires HTTPS for webhooks. Use a reverse proxy or tunnel:
-
-```bash
-# Example with ngrok (gateway default port is 18790)
-ngrok http 18790
-```
-
-Then set the Webhook URL in LINE Developers Console to `https://your-domain/webhook/line` and enable **Use webhook**.
-
-**4. Run**
-
-```bash
-picoclaw gateway
-```
-
-> In group chats, the bot responds only when @mentioned. Replies quote the original message.
-
-</details>
-
-<details>
-<summary><b>WeCom (企业微信)</b></summary>
-
-PicoClaw supports three types of WeCom integration:
-
-**Option 1: WeCom Bot (Bot)** - Easier setup, supports group chats
-**Option 2: WeCom App (Custom App)** - More features, proactive messaging, private chat only
-**Option 3: WeCom AI Bot (AI Bot)** - Official AI Bot, streaming replies, supports group & private chat
-
-See [WeCom AI Bot Configuration Guide](docs/channels/wecom/wecom_aibot/README.zh.md) for detailed setup instructions.
-
-**Quick Setup - WeCom Bot:**
-
-**1. Create a bot**
-
-* Go to WeCom Admin Console → Group Chat → Add Group Bot
-* Copy the webhook URL (format: `https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxx`)
-
-**2. Configure**
-
-```json
-{
-  "channels": {
-    "wecom": {
-      "enabled": true,
-      "token": "YOUR_TOKEN",
-      "encoding_aes_key": "YOUR_ENCODING_AES_KEY",
-      "webhook_url": "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=YOUR_KEY",
-      "webhook_path": "/webhook/wecom",
-      "allow_from": []
-    }
-  }
-}
-```
-
-> WeCom webhook is served on the shared Gateway server (`gateway.host`:`gateway.port`, default `127.0.0.1:18790`).
-
-**Quick Setup - WeCom App:**
-
-**1. Create an app**
-
-* Go to WeCom Admin Console → App Management → Create App
-* Copy **AgentId** and **Secret**
-* Go to "My Company" page, copy **CorpID**
-
-**2. Configure receive message**
-
-* In App details, click "Receive Message" → "Set API"
-* Set URL to `http://your-server:18790/webhook/wecom-app`
-* Generate **Token** and **EncodingAESKey**
-
-**3. Configure**
-
-```json
-{
-  "channels": {
-    "wecom_app": {
-      "enabled": true,
-      "corp_id": "wwxxxxxxxxxxxxxxxx",
-      "corp_secret": "YOUR_CORP_SECRET",
-      "agent_id": 1000002,
-      "token": "YOUR_TOKEN",
-      "encoding_aes_key": "YOUR_ENCODING_AES_KEY",
-      "webhook_path": "/webhook/wecom-app",
-      "allow_from": []
-    }
-  }
-}
-```
-
-**4. Run**
-
-```bash
-picoclaw gateway
-```
-
-> **Note**: WeCom webhook callbacks are served on the Gateway port (default 18790). Use a reverse proxy for HTTPS.
-
-**Quick Setup - WeCom AI Bot:**
-
-**1. Create an AI Bot**
-
-* Go to WeCom Admin Console → App Management → AI Bot
-* In the AI Bot settings, configure callback URL: `http://your-server:18791/webhook/wecom-aibot`
-* Copy **Token** and click "Random Generate" for **EncodingAESKey**
-
-**2. Configure**
-
-```json
-{
-  "channels": {
-    "wecom_aibot": {
-      "enabled": true,
-      "token": "YOUR_TOKEN",
-      "encoding_aes_key": "YOUR_43_CHAR_ENCODING_AES_KEY",
-      "webhook_path": "/webhook/wecom-aibot",
-      "allow_from": [],
-      "welcome_message": "Hello! How can I help you?"
-    }
-  }
-}
-```
-
-**3. Run**
-
-```bash
-picoclaw gateway
-```
-
-> **Note**: WeCom AI Bot uses streaming pull protocol — no reply timeout concerns. Long tasks (>30 seconds) automatically switch to `response_url` push delivery.
-
-</details>
-
-## <img src="assets/clawdchat-icon.png" width="24" height="24" alt="ClawdChat"> Join the Agent Social Network
-
-Connect Picoclaw to the Agent Social Network simply by sending a single message via the CLI or any integrated Chat App.
-
-**Read `https://clawdchat.ai/skill.md` and follow the instructions to join [ClawdChat.ai](https://clawdchat.ai)**
-
-## ⚙️ Configuration
-
-Config file: `~/.picoclaw/config.json`
-
-### Environment Variables
-
-You can override default paths using environment variables. This is useful for portable installations, containerized deployments, or running picoclaw as a system service. These variables are independent and control different paths.
-
-| Variable          | Description                                                                                                                             | Default Path              |
-|-------------------|-----------------------------------------------------------------------------------------------------------------------------------------|---------------------------|
-| `PICOCLAW_CONFIG` | Overrides the path to the configuration file. This directly tells picoclaw which `config.json` to load, ignoring all other locations. | `~/.picoclaw/config.json` |
-| `PICOCLAW_HOME`   | Overrides the root directory for picoclaw data. This changes the default location of the `workspace` and other data directories.          | `~/.picoclaw`             |
-
-**Examples:**
-
-```bash
-# Run picoclaw using a specific config file
-# The workspace path will be read from within that config file
-PICOCLAW_CONFIG=/etc/picoclaw/production.json picoclaw gateway
-
-# Run picoclaw with all its data stored in /opt/picoclaw
-# Config will be loaded from the default ~/.picoclaw/config.json
-# Workspace will be created at /opt/picoclaw/workspace
-PICOCLAW_HOME=/opt/picoclaw picoclaw agent
-
-# Use both for a fully customized setup
-PICOCLAW_HOME=/srv/picoclaw PICOCLAW_CONFIG=/srv/picoclaw/main.json picoclaw gateway
-```
-
-### Workspace Layout
-
-PicoClaw stores data in your configured workspace (default: `~/.picoclaw/workspace`):
-
-```
-~/.picoclaw/workspace/
-├── sessions/          # Conversation sessions and history
-├── memory/           # Long-term memory (MEMORY.md)
-├── state/            # Persistent state (last channel, etc.)
-├── cron/             # Scheduled jobs database
-├── skills/           # Custom skills
-├── AGENTS.md         # Agent behavior guide
-├── HEARTBEAT.md      # Periodic task prompts (checked every 30 min)
-├── IDENTITY.md       # Agent identity
-├── SOUL.md           # Agent soul
-├── TOOLS.md          # Tool descriptions
-└── USER.md           # User preferences
-```
-
-### Skill Sources
-
-By default, skills are loaded from:
-
-1. `~/.picoclaw/workspace/skills` (workspace)
-2. `~/.picoclaw/skills` (global)
-3. `<current-working-directory>/skills` (builtin)
-
-For advanced/test setups, you can override the builtin skills root with:
-
-```bash
-export PICOCLAW_BUILTIN_SKILLS=/path/to/skills
-```
-
-### 🔒 Security Sandbox
-
-PicoClaw runs in a sandboxed environment by default. The agent can only access files and execute commands within the configured workspace.
-
-#### Default Configuration
-
-```json
-{
-  "agents": {
-    "defaults": {
-      "workspace": "~/.picoclaw/workspace",
-      "restrict_to_workspace": true
-    }
-  }
-}
-```
-
-| Option                  | Default                 | Description                               |
-| ----------------------- | ----------------------- | ----------------------------------------- |
-| `workspace`             | `~/.picoclaw/workspace` | Working directory for the agent           |
-| `restrict_to_workspace` | `true`                  | Restrict file/command access to workspace |
-
-#### Protected Tools
-
-When `restrict_to_workspace: true`, the following tools are sandboxed:
-
-| Tool          | Function         | Restriction                            |
-| ------------- | ---------------- | -------------------------------------- |
-| `read_file`   | Read files       | Only files within workspace            |
-| `write_file`  | Write files      | Only files within workspace            |
-| `list_dir`    | List directories | Only directories within workspace      |
-| `edit_file`   | Edit files       | Only files within workspace            |
-| `append_file` | Append to files  | Only files within workspace            |
-| `exec`        | Execute commands | Command paths must be within workspace |
-
-#### Additional Exec Protection
-
-Even with `restrict_to_workspace: false`, the `exec` tool blocks these dangerous commands:
-
-* `rm -rf`, `del /f`, `rmdir /s` — Bulk deletion
-* `format`, `mkfs`, `diskpart` — Disk formatting
-* `dd if=` — Disk imaging
-* Writing to `/dev/sd[a-z]` — Direct disk writes
-* `shutdown`, `reboot`, `poweroff` — System shutdown
-* Fork bomb `:(){ :|:& };:`
-
-#### Error Examples
-
-```
-[ERROR] tool: Tool execution failed
-{tool=exec, error=Command blocked by safety guard (path outside working dir)}
-```
-
-```
-[ERROR] tool: Tool execution failed
-{tool=exec, error=Command blocked by safety guard (dangerous pattern detected)}
-```
-
-#### Disabling Restrictions (Security Risk)
-
-If you need the agent to access paths outside the workspace:
-
-**Method 1: Config file**
-
-```json
-{
-  "agents": {
-    "defaults": {
-      "restrict_to_workspace": false
-    }
-  }
-}
-```
-
-**Method 2: Environment variable**
-
-```bash
-export PICOCLAW_AGENTS_DEFAULTS_RESTRICT_TO_WORKSPACE=false
-```
-
-> ⚠️ **Warning**: Disabling this restriction allows the agent to access any path on your system. Use with caution in controlled environments only.
-
-#### Security Boundary Consistency
-
-The `restrict_to_workspace` setting applies consistently across all execution paths:
-
-| Execution Path   | Security Boundary            |
-| ---------------- | ---------------------------- |
-| Main Agent       | `restrict_to_workspace` ✅   |
-| Subagent / Spawn | Inherits same restriction ✅ |
-| Heartbeat tasks  | Inherits same restriction ✅ |
-
-All paths share the same workspace restriction — there's no way to bypass the security boundary through subagents or scheduled tasks.
-
-### Heartbeat (Periodic Tasks)
-
-PicoClaw can perform periodic tasks automatically. Create a `HEARTBEAT.md` file in your workspace:
-
-```markdown
-# Periodic Tasks
-
-- Check my email for important messages
-- Review my calendar for upcoming events
-- Check the weather forecast
-```
-
-The agent will read this file every 30 minutes (configurable) and execute any tasks using available tools.
-
-#### Async Tasks with Spawn
-
-For long-running tasks (web search, API calls), use the `spawn` tool to create a **subagent**:
-
-```markdown
-# Periodic Tasks
-
-## Quick Tasks (respond directly)
-
-- Report current time
-
-## Long Tasks (use spawn for async)
-
-- Search the web for AI news and summarize
-- Check email and report important messages
-```
-
-**Key behaviors:**
-
-| Feature                 | Description                                               |
-| ----------------------- | --------------------------------------------------------- |
-| **spawn**               | Creates async subagent, doesn't block heartbeat           |
-| **Independent context** | Subagent has its own context, no session history          |
-| **message tool**        | Subagent communicates with user directly via message tool |
-| **Non-blocking**        | After spawning, heartbeat continues to next task          |
-
-#### How Subagent Communication Works
-
-```
-Heartbeat triggers
-    ↓
-Agent reads HEARTBEAT.md
-    ↓
-For long task: spawn subagent
-    ↓                           ↓
-Continue to next task      Subagent works independently
-    ↓                           ↓
-All tasks done            Subagent uses "message" tool
-    ↓                           ↓
-Respond HEARTBEAT_OK      User receives result directly
-```
-
-The subagent has access to tools (message, web_search, etc.) and can communicate with the user independently without going through the main agent.
-
-**Configuration:**
-
-```json
-{
-  "heartbeat": {
-    "enabled": true,
-    "interval": 30
-  }
-}
-```
-
-| Option     | Default | Description                        |
-| ---------- | ------- | ---------------------------------- |
-| `enabled`  | `true`  | Enable/disable heartbeat           |
-| `interval` | `30`    | Check interval in minutes (min: 5) |
-
-**Environment variables:**
-
-* `PICOCLAW_HEARTBEAT_ENABLED=false` to disable
-* `PICOCLAW_HEARTBEAT_INTERVAL=60` to change interval
-
-### Providers
-
-> [!NOTE]
-> Groq provides free voice transcription via Whisper. If configured, audio messages from any channel will be automatically transcribed at the agent level.
-
-| Provider                   | Purpose                                 | Get API Key                                                          |
-| -------------------------- | --------------------------------------- | -------------------------------------------------------------------- |
-| `gemini`                   | LLM (Gemini direct)                     | [aistudio.google.com](https://aistudio.google.com)                   |
-| `zhipu`                    | LLM (Zhipu direct)                      | [bigmodel.cn](https://bigmodel.cn)                                   |
-| `openrouter(To be tested)` | LLM (recommended, access to all models) | [openrouter.ai](https://openrouter.ai)                               |
-| `anthropic(To be tested)`  | LLM (Claude direct)                     | [console.anthropic.com](https://console.anthropic.com)               |
-| `openai(To be tested)`     | LLM (GPT direct)                        | [platform.openai.com](https://platform.openai.com)                   |
-| `deepseek(To be tested)`   | LLM (DeepSeek direct)                   | [platform.deepseek.com](https://platform.deepseek.com)               |
-| `qwen`                     | LLM (Qwen direct)                       | [dashscope.console.aliyun.com](https://dashscope.console.aliyun.com) |
-| `groq`                     | LLM + **Voice transcription** (Whisper) | [console.groq.com](https://console.groq.com)                         |
-| `cerebras`                 | LLM (Cerebras direct)                   | [cerebras.ai](https://cerebras.ai)                                   |
-
-### Model Configuration (model_list)
-
-> **What's New?** PicoClaw now uses a **model-centric** configuration approach. Simply specify `vendor/model` format (e.g., `zhipu/glm-4.7`) to add new providers—**zero code changes required!**
-
-This design also enables **multi-agent support** with flexible provider selection:
-
-- **Different agents, different providers**: Each agent can use its own LLM provider
-- **Model fallbacks**: Configure primary and fallback models for resilience
-- **Load balancing**: Distribute requests across multiple endpoints
-- **Centralized configuration**: Manage all providers in one place
-
-#### 📋 All Supported Vendors
-
-| Vendor              | `model` Prefix    | Default API Base                                    | Protocol  | API Key                                                          |
-| ------------------- | ----------------- |-----------------------------------------------------| --------- | ---------------------------------------------------------------- |
-| **OpenAI**          | `openai/`         | `https://api.openai.com/v1`                         | OpenAI    | [Get Key](https://platform.openai.com)                           |
-| **Anthropic**       | `anthropic/`      | `https://api.anthropic.com/v1`                      | Anthropic | [Get Key](https://console.anthropic.com)                         |
-| **智谱 AI (GLM)**   | `zhipu/`          | `https://open.bigmodel.cn/api/paas/v4`              | OpenAI    | [Get Key](https://open.bigmodel.cn/usercenter/proj-mgmt/apikeys) |
-| **DeepSeek**        | `deepseek/`       | `https://api.deepseek.com/v1`                       | OpenAI    | [Get Key](https://platform.deepseek.com)                         |
-| **Google Gemini**   | `gemini/`         | `https://generativelanguage.googleapis.com/v1beta`  | OpenAI    | [Get Key](https://aistudio.google.com/api-keys)                  |
-| **Groq**            | `groq/`           | `https://api.groq.com/openai/v1`                    | OpenAI    | [Get Key](https://console.groq.com)                              |
-| **Moonshot**        | `moonshot/`       | `https://api.moonshot.cn/v1`                        | OpenAI    | [Get Key](https://platform.moonshot.cn)                          |
-| **通义千问 (Qwen)** | `qwen/`           | `https://dashscope.aliyuncs.com/compatible-mode/v1` | OpenAI    | [Get Key](https://dashscope.console.aliyun.com)                  |
-| **NVIDIA**          | `nvidia/`         | `https://integrate.api.nvidia.com/v1`               | OpenAI    | [Get Key](https://build.nvidia.com)                              |
-| **Ollama**          | `ollama/`         | `http://localhost:11434/v1`                         | OpenAI    | Local (no key needed)                                            |
-| **OpenRouter**      | `openrouter/`     | `https://openrouter.ai/api/v1`                      | OpenAI    | [Get Key](https://openrouter.ai/keys)                            |
-| **LiteLLM Proxy**   | `litellm/`        | `http://localhost:4000/v1                           | OpenAI    | Your LiteLLM proxy key                                            |
-| **VLLM**            | `vllm/`           | `http://localhost:8000/v1`                          | OpenAI    | Local                                                            |
-| **Cerebras**        | `cerebras/`       | `https://api.cerebras.ai/v1`                        | OpenAI    | [Get Key](https://cerebras.ai)                                   |
-| **火山引擎**        | `volcengine/`     | `https://ark.cn-beijing.volces.com/api/v3`          | OpenAI    | [Get Key](https://console.volcengine.com)                        |
-| **神算云**          | `shengsuanyun/`   | `https://router.shengsuanyun.com/api/v1`            | OpenAI    | -                                                                |
-| **Antigravity**     | `antigravity/`    | Google Cloud                                        | Custom    | OAuth only                                                       |
-| **GitHub Copilot**  | `github-copilot/` | `localhost:4321`                                    | gRPC      | -                                                                |
-
-#### Basic Configuration
-
-```json
-{
-  "model_list": [
-    {
-      "model_name": "gpt-5.2",
-      "model": "openai/gpt-5.2",
-      "api_key": "sk-your-openai-key"
-    },
-    {
-      "model_name": "claude-sonnet-4.6",
-      "model": "anthropic/claude-sonnet-4.6",
-      "api_key": "sk-ant-your-key"
-    },
-    {
-      "model_name": "glm-4.7",
-      "model": "zhipu/glm-4.7",
-      "api_key": "your-zhipu-key"
-    }
-  ],
-  "agents": {
-    "defaults": {
-      "model": "gpt-5.2"
-    }
-  }
-}
-```
-
-#### Vendor-Specific Examples
-
-**OpenAI**
-
-```json
-{
-  "model_name": "gpt-5.2",
-  "model": "openai/gpt-5.2",
-  "api_key": "sk-..."
-}
-```
-
-**智谱 AI (GLM)**
-
-```json
-{
-  "model_name": "glm-4.7",
-  "model": "zhipu/glm-4.7",
-  "api_key": "your-key"
-}
-```
-
-**DeepSeek**
-
-```json
-{
-  "model_name": "deepseek-chat",
-  "model": "deepseek/deepseek-chat",
-  "api_key": "sk-..."
-}
-```
-
-**Anthropic (with API key)**
-
-```json
-{
-  "model_name": "claude-sonnet-4.6",
-  "model": "anthropic/claude-sonnet-4.6",
-  "api_key": "sk-ant-your-key"
-}
-```
-
-> Run `picoclaw auth login --provider anthropic` to paste your API token.
-
-**Ollama (local)**
-
-```json
-{
-  "model_name": "llama3",
-  "model": "ollama/llama3"
-}
-```
-
-**Custom Proxy/API**
-
-```json
-{
-  "model_name": "my-custom-model",
-  "model": "openai/custom-model",
-  "api_base": "https://my-proxy.com/v1",
-  "api_key": "sk-...",
-  "request_timeout": 300
-}
-```
-
-**LiteLLM Proxy**
-
-```json
-{
-  "model_name": "lite-gpt4",
-  "model": "litellm/lite-gpt4",
-  "api_base": "http://localhost:4000/v1",
-  "api_key": "sk-..."
-}
-```
-
-PicoClaw strips only the outer `litellm/` prefix before sending the request, so proxy aliases like `litellm/lite-gpt4` send `lite-gpt4`, while `litellm/openai/gpt-4o` sends `openai/gpt-4o`.
-
-#### Load Balancing
-
-Configure multiple endpoints for the same model name—PicoClaw will automatically round-robin between them:
-
-```json
-{
-  "model_list": [
-    {
-      "model_name": "gpt-5.2",
-      "model": "openai/gpt-5.2",
-      "api_base": "https://api1.example.com/v1",
-      "api_key": "sk-key1"
-    },
-    {
-      "model_name": "gpt-5.2",
-      "model": "openai/gpt-5.2",
-      "api_base": "https://api2.example.com/v1",
-      "api_key": "sk-key2"
+      "model_name": "gpt-5.2-medium",
+      "model": "openai/gpt-5.2-medium",
+      "api_key": "YOUR_API_KEY",
+      "api_base": "https://api.openai.com/v1"
     }
   ]
 }
 ```
 
-#### Migration from Legacy `providers` Config
-
-The old `providers` configuration is **deprecated** but still supported for backward compatibility.
-
-**Old Config (deprecated):**
-
-```json
-{
-  "providers": {
-    "zhipu": {
-      "api_key": "your-key",
-      "api_base": "https://open.bigmodel.cn/api/paas/v4"
-    }
-  },
-  "agents": {
-    "defaults": {
-      "provider": "zhipu",
-      "model": "glm-4.7"
-    }
-  }
-}
-```
-
-**New Config (recommended):**
-
-```json
-{
-  "model_list": [
-    {
-      "model_name": "glm-4.7",
-      "model": "zhipu/glm-4.7",
-      "api_key": "your-key"
-    }
-  ],
-  "agents": {
-    "defaults": {
-      "model": "glm-4.7"
-    }
-  }
-}
-```
-
-For detailed migration guide, see [docs/migration/model-list-migration.md](docs/migration/model-list-migration.md).
-
-### Provider Architecture
-
-PicoClaw routes providers by protocol family:
-
-- OpenAI-compatible protocol: OpenRouter, OpenAI-compatible gateways, Groq, Zhipu, and vLLM-style endpoints.
-- Anthropic protocol: Claude-native API behavior.
-- Codex/OAuth path: OpenAI OAuth/token authentication route.
-
-This keeps the runtime lightweight while making new OpenAI-compatible backends mostly a config operation (`api_base` + `api_key`).
-
-<details>
-<summary><b>Zhipu</b></summary>
-
-**1. Get API key and base URL**
-
-* Get [API key](https://bigmodel.cn/usercenter/proj-mgmt/apikeys)
-
-**2. Configure**
-
-```json
-{
-  "agents": {
-    "defaults": {
-      "workspace": "~/.picoclaw/workspace",
-      "model": "glm-4.7",
-      "max_tokens": 8192,
-      "temperature": 0.7,
-      "max_tool_iterations": 20
-    }
-  },
-  "providers": {
-    "zhipu": {
-      "api_key": "Your API Key",
-      "api_base": "https://open.bigmodel.cn/api/paas/v4"
-    }
-  }
-}
-```
-
-**3. Run**
+单轮问答：
 
 ```bash
-picoclaw agent -m "Hello"
+./build/picoclaw agent -m "hello"
 ```
 
-</details>
+交互模式：
 
-<details>
-<summary><b>Full config example</b></summary>
+```bash
+./build/picoclaw agent
+```
+
+## Gateway 模式
+
+启动 gateway：
+
+```bash
+./build/picoclaw gateway
+```
+
+健康检查：
+
+```bash
+curl -sS http://127.0.0.1:18790/health
+```
+
+查看运行状态（包含 `last_active` / cron / trace 等）：
+
+```bash
+./build/picoclaw status
+./build/picoclaw status --json
+```
+
+### Gateway inbound 队列（gateway.inbound_queue）
+
+为了让 Gateway 能长期稳定跑多会话/长任务，PicoClaw 支持 **按 session 分桶串行** + **全局并发上限** 的 inbound 队列：
+- 同一会话串行：避免上下文/记忆写入竞争
+- 不同会话并发：避免一个会话长任务拖死全部
+
+配置示例：
+
+```json
+{
+  "gateway": {
+    "inbound_queue": {
+      "enabled": true,
+      "max_concurrency": 4,
+      "per_session_buffer": 32
+    }
+  }
+}
+```
+
+### Gateway 配置热更新（gateway.reload）
+
+为了减少“改配置就得重启/重建容器”的频率，Gateway 支持 **热更新**（仅 Gateway 模式）：
+- **SIGHUP**：收到 `SIGHUP` 时尝试 reload（需要 `gateway.reload.enabled=true`）
+- **watch**：轮询配置文件变更并自动 reload（适合 Docker bind-mount；需要 `gateway.reload.watch=true`）
+
+配置示例：
+
+```json
+{
+  "gateway": {
+    "reload": {
+      "enabled": true,
+      "watch": true,
+      "interval_seconds": 2
+    }
+  }
+}
+```
+
+触发方式：
+
+```bash
+# 方式 1：发 SIGHUP（仅当 enabled=true 时生效）
+kill -HUP <picoclaw_pid>
+```
+
+当前 reload 覆盖范围（刻意保持小而可控）：
+- 会重启 channels + 重新注册 webhook/HTTP handlers（含 `/api/notify`、`/api/console/*` 等）
+- 会把新 config 应用到 agent loop（含 notify/tool policy/MCP server 配置），并刷新 MCP tools 注册表
+- **不会**重启 cron/heartbeat/provider（这些通常需要“更重”的重启语义）
+
+### Gateway Console（/console/）
+
+Gateway 内置一个**只读 Console**（Web UI，Next.js + shadcn/ui），用于自助查看：
+- `last_active` / 基础状态
+- cron jobs（`cron/jobs.json`）
+- token usage（`state/token_usage.json`，按模型统计累计 tokens）
+- sessions 列表（元数据：`sessions/*.meta.json`；事件流：`sessions/*.jsonl`）
+- run trace / tool trace（`<workspace>/.picoclaw/audit/**/events.jsonl`）
+- 健康检查链接（`/health` / `/ready`）
+
+打开：
+
+```bash
+# 浏览器访问
+http://127.0.0.1:18790/console/
+```
+
+鉴权规则同 `/api/notify`：
+- 当 `gateway.api_key` 为空时：`/console/` 与 `/api/console/*` 仅允许来自本机 loopback 的访问
+- 当 `gateway.api_key` 非空时：`/console/` 可以直接在浏览器打开，但 `/api/console/*` 需要携带 `Authorization: Bearer <api_key>`  
+  （UI 内置了 API key 输入框，会用 Bearer header 拉取数据）
+
+Console 对应的 JSON API（便于脚本化）：
+
+```bash
+curl -sS http://127.0.0.1:18790/api/console/status
+curl -sS http://127.0.0.1:18790/api/console/cron
+curl -sS http://127.0.0.1:18790/api/console/tokens
+curl -sS http://127.0.0.1:18790/api/console/sessions
+curl -sS http://127.0.0.1:18790/api/console/runs
+curl -sS http://127.0.0.1:18790/api/console/tools
+```
+
+下载 workspace 内的审计/状态文件（只允许 `.picoclaw/audit/`、`cron/`、`state/` 下的 `.json/.jsonl/.md` 等白名单文件）：
+
+```bash
+curl -sS -OJ "http://127.0.0.1:18790/api/console/file?path=cron/jobs.json"
+```
+
+仅取末尾 N 行（适合 `events.jsonl`，避免下载整文件）：
+
+```bash
+curl -sS "http://127.0.0.1:18790/api/console/tail?path=.picoclaw/audit/runs/<session>/events.jsonl&lines=200"
+```
+
+实时跟随（tail -f 风格，适合观察长任务进度；UI 里 Traces 也提供 Live 按钮）：
+
+```bash
+# -N: curl 不缓冲输出
+curl -N -sS "http://127.0.0.1:18790/api/console/stream?path=.picoclaw/audit/runs/<session>/events.jsonl&tail=200"
+```
+
+### 通知接口（/api/notify）
+
+Gateway 会额外暴露一个通知接口，用于让外部系统（CI / 脚本 / 守护进程）通过已配置的渠道给你发提醒（例如飞书）。
+
+指定渠道与收件人：
+
+```bash
+curl -sS -X POST http://127.0.0.1:18790/api/notify \
+  -H 'Content-Type: application/json' \
+  -d '{"channel":"feishu","to":"oc_xxx","content":"任务完成了"}'
+```
+
+如果省略 `channel/to`，会默认发送到最近一次对话的 `last_active`：
+
+```bash
+curl -sS -X POST http://127.0.0.1:18790/api/notify \
+  -H 'Content-Type: application/json' \
+  -d '{"content":"任务完成了（last_active）"}'
+```
+
+注意：如果 gateway 刚启动、还没有任何外部对话记录（`last_active` 为空），省略 `channel/to` 会返回 `channel is required`。此时请先在飞书/Telegram 等渠道给机器人发一句话建立 `last_active`，或显式指定 `channel/to`。
+
+安全说明：
+- 当 `gateway.api_key` 为空时，仅允许来自本机 loopback 的请求（例如 `127.0.0.1`）
+- 当 `gateway.api_key` 设置为非空时，请携带 `Authorization: Bearer <api_key>`（否则返回 401）
+
+公网暴露建议（如需远程/跨机器通知）：
+- 强烈不建议在 `gateway.api_key` 为空时暴露公网
+- 建议优先使用反向代理（HTTPS）或私网方案（如 Tailscale）再对外提供 `/api/notify`
+- 如必须直连：将 `gateway.host` 设为 `0.0.0.0` 并配置强随机 `gateway.api_key`
+
+外部 Agent（例如 Claude Code / Codex）对接 PicoClaw 通知的扩展文档见：`extensions/picoclaw-notify/SKILL.md`（通过调用 `/api/notify` 推送提醒）。
+
+### 任务完成提醒（notify.on_task_complete）
+
+当你把 `notify.on_task_complete=true` 时，PicoClaw 会在 **内部通道**（`cli/system/subagent`）的一次 run 正常结束后，自动通过 `message` tool 把“任务完成 + 结果摘要”发到 `last_active` 外部会话。
+
+静默约定（少打扰）：
+- 如果内部任务最终输出为 `NO_UPDATE` 或 `HEARTBEAT_OK`（大小写不敏感），则不会触发完成提醒  
+  这适合 cron/后台巡检类任务：无更新不打扰，有更新才提醒。
+
+### E-STOP（/api/estop：全局 kill switch）
+
+PicoClaw 提供一个全局 `estop`（Emergency Stop）控制面：用于在你发现异常行为时，**一键冻结工具执行**（或禁网）。
+
+前置条件：
+- 配置中 `tools.estop.enabled=true`（默认开启）
+- `/api/estop` 的鉴权策略与 `/api/notify` 相同（`gateway.api_key` 为空时仅允许 loopback）
+
+查看当前 estop 状态：
+
+```bash
+curl -sS http://127.0.0.1:18790/api/estop
+```
+
+开启全停（`kill_all`，所有工具调用都会返回 `ESTOP_DENY`）：
+
+```bash
+curl -sS -X POST http://127.0.0.1:18790/api/estop \
+  -H 'Content-Type: application/json' \
+  -d '{"mode":"kill_all","note":"maintenance"}'
+```
+
+禁网（`network_kill`，会禁用 `web_search`/`web_fetch` 以及 `mcp_*` 外部工具调用）：
+
+```bash
+curl -sS -X POST http://127.0.0.1:18790/api/estop \
+  -H 'Content-Type: application/json' \
+  -d '{"mode":"network_kill"}'
+```
+
+关闭 estop（恢复正常）：
+
+```bash
+curl -sS -X POST http://127.0.0.1:18790/api/estop \
+  -H 'Content-Type: application/json' \
+  -d '{"mode":"off"}'
+```
+
+状态文件落盘位置：
+- ` <workspace>/.picoclaw/state/estop.json `
+
+CLI（等价于直接写 state file）：
+
+```bash
+./build/picoclaw estop status
+./build/picoclaw estop kill_all --note "maintenance"
+./build/picoclaw estop network_kill
+./build/picoclaw estop off
+```
+
+### Web 证据模式（tools.web.evidence_mode）
+
+当你把 `tools.web.evidence_mode.enabled=true` 时：
+- `web_search` 会返回结构化 JSON（包含 `sources[]` 和 `evidence.satisfied/distinct_domains`）
+- system prompt 会强制“事实/最新信息”回答引用 ≥2 个不同域名来源；否则明确不确定性并给出验证建议
+
+配置示例：
+
+```json
+{
+  "tools": {
+    "web": {
+      "evidence_mode": {
+        "enabled": true,
+        "min_domains": 2
+      }
+    }
+  }
+}
+```
+
+### Plan Mode（计划阶段：先出方案，再允许执行）
+
+Plan Mode 用于把“工具执行”从默认放开，升级为“先计划、再审批”：
+- `/plan <任务>`：进入计划阶段（此时会拒绝 `exec/edit/write` 等危险工具）
+- `/approve` 或 `/run`：批准并执行刚才计划阶段捕获的任务
+- `/cancel`：退出计划阶段并清空 pending task
+- `/mode`：查看当前 mode 和 pending task 预览
+
+### 上下文压缩（Compaction）
+
+当会话历史过长（接近模型 context window）时，PicoClaw 会在后台对历史进行总结/压缩，以提升长期运行稳定性。
+
+默认行为：
+- **不会**在飞书/Telegram 里额外发“正在压缩上下文”的提示（避免太吵）
+
+如需开启提示：
 
 ```json
 {
   "agents": {
     "defaults": {
-      "model": "anthropic/claude-opus-4-5"
-    }
-  },
-  "providers": {
-    "openrouter": {
-      "api_key": "sk-or-v1-xxx"
-    },
-    "groq": {
-      "api_key": "gsk_xxx"
-    }
-  },
-  "channels": {
-    "telegram": {
-      "enabled": true,
-      "token": "123456:ABC...",
-      "allow_from": ["123456789"]
-    },
-    "discord": {
-      "enabled": true,
-      "token": "",
-      "allow_from": [""]
-    },
-    "whatsapp": {
-      "enabled": false,
-      "bridge_url": "ws://localhost:3001",
-      "use_native": false,
-      "session_store_path": "",
-      "allow_from": []
-    },
-    "feishu": {
-      "enabled": false,
-      "app_id": "cli_xxx",
-      "app_secret": "xxx",
-      "encrypt_key": "",
-      "verification_token": "",
-      "allow_from": []
-    },
-    "qq": {
-      "enabled": false,
-      "app_id": "",
-      "app_secret": "",
-      "allow_from": []
-    }
-  },
-  "tools": {
-    "web": {
-      "brave": {
-        "enabled": false,
-        "api_key": "BSA...",
-        "max_results": 5
-      },
-      "duckduckgo": {
-        "enabled": true,
-        "max_results": 5
+      "compaction": {
+        "notify_user": true
       }
-    },
-    "cron": {
-      "exec_timeout_minutes": 5
     }
-  },
-  "heartbeat": {
-    "enabled": true,
-    "interval": 30
   }
 }
 ```
 
-</details>
+### Exec Docker Sandbox（tools.exec.backend=docker）
 
-## CLI Reference
+PicoClaw 的 `exec` 工具支持两种后端：
+- `host`（默认）：直接在宿主机执行
+- `docker`：在一次性容器里执行（只挂载 workspace），更适合长期运行时的安全边界
 
-| Command                   | Description                   |
-| ------------------------- | ----------------------------- |
-| `picoclaw onboard`        | Initialize config & workspace |
-| `picoclaw agent -m "..."` | Chat with the agent           |
-| `picoclaw agent`          | Interactive chat mode         |
-| `picoclaw gateway`        | Start the gateway             |
-| `picoclaw status`         | Show status                   |
-| `picoclaw cron list`      | List all scheduled jobs       |
-| `picoclaw cron add ...`   | Add a scheduled job           |
-
-### Scheduled Tasks / Reminders
-
-PicoClaw supports scheduled reminders and recurring tasks through the `cron` tool:
-
-* **One-time reminders**: "Remind me in 10 minutes" → triggers once after 10min
-* **Recurring tasks**: "Remind me every 2 hours" → triggers every 2 hours
-* **Cron expressions**: "Remind me at 9am daily" → uses cron expression
-
-Jobs are stored in `~/.picoclaw/workspace/cron/` and processed automatically.
-
-## 🤝 Contribute & Roadmap
-
-PRs welcome! The codebase is intentionally small and readable. 🤗
-
-See our full [Community Roadmap](https://github.com/sipeed/picoclaw/blob/main/ROADMAP.md).
-
-Developer group building, join after your first merged PR!
-
-User Groups:
-
-discord: <https://discord.gg/V4sAZ9XWpN>
-
-<img src="assets/wechat.png" alt="PicoClaw" width="512">
-
-## 🐛 Troubleshooting
-
-### Web search says "API key configuration issue"
-
-This is normal if you haven't configured a search API key yet. PicoClaw will provide helpful links for manual searching.
-
-To enable web search:
-
-1. **Option 1 (Recommended)**: Get a free API key at [https://brave.com/search/api](https://brave.com/search/api) (2000 free queries/month) for the best results.
-2. **Option 2 (No Credit Card)**: If you don't have a key, we automatically fall back to **DuckDuckGo** (no key required).
-
-Add the key to `~/.picoclaw/config.json` if using Brave:
+配置示例：
 
 ```json
 {
   "tools": {
-    "web": {
-      "brave": {
-        "enabled": false,
-        "api_key": "YOUR_BRAVE_API_KEY",
-        "max_results": 5
-      },
-      "duckduckgo": {
-        "enabled": true,
-        "max_results": 5
+    "exec": {
+      "backend": "docker",
+      "docker": {
+        "image": "alpine:3.20",
+        "network": "none",
+        "read_only_rootfs": true
       }
     }
   }
 }
 ```
 
-### Getting content filtering errors
+注意：
+- `docker` 后端要求 `restrict_to_workspace=true`
+- 当前 `docker` 后端不支持 `background=true` / `yield_ms`（建议用 `host` 后端配合 process tool 做长任务）
 
-Some providers (like Zhipu) have content filtering. Try rephrasing your query or use a different model.
+### Tool Trace（工具调用可追溯 / 可复盘）
 
-### Telegram bot says "Conflict: terminated by other getUpdates"
+当你把配置里的 `tools.trace.enabled` 设为 `true` 时，每一次 tool call 都会追加写入一个 JSONL 事件流，并可选写 per-call 文件，便于排查 “模型为什么调用了某个工具 / 工具到底返回了什么 / 耗时多少”。
 
-This happens when another instance of the bot is running. Make sure only one `picoclaw gateway` is running at a time.
+默认落盘位置（当 `tools.trace.dir` 为空时）：
 
----
+- ` <workspace>/.picoclaw/audit/tools/<session>/events.jsonl `
+- ` <workspace>/.picoclaw/audit/tools/<session>/calls/*.json|*.md `（当 `tools.trace.write_per_call_files=true`）
 
-## 📝 API Key Comparison
+配置示例：
 
-| Service          | Free Tier           | Use Case                              |
-| ---------------- | ------------------- | ------------------------------------- |
-| **OpenRouter**   | 200K tokens/month   | Multiple models (Claude, GPT-4, etc.) |
-| **Zhipu**        | 200K tokens/month   | Best for Chinese users                |
-| **Brave Search** | 2000 queries/month  | Web search functionality              |
-| **Groq**         | Free tier available | Fast inference (Llama, Mixtral)       |
-| **Cerebras**     | Free tier available | Fast inference (Llama, Qwen, etc.)    |
+```json
+{
+  "tools": {
+    "trace": {
+      "enabled": true,
+      "write_per_call_files": true
+    }
+  }
+}
+```
+
+### Run Trace（run 级 checkpoint 事件流）
+
+Tool Trace 解决的是“每次工具调用发生了什么”；Run Trace 解决的是“这一次用户请求（run）整体发生了什么”（LLM 回合、工具批次、最终输出）。
+
+当 `tools.trace.enabled=true` 时，PicoClaw 会额外为每个 session 维护一个 run 级 JSONL 事件流（append-only），用于：
+- 故障定位（某一轮为什么走偏 / 哪个 batch 出错）
+- 长任务可恢复（Phase E2 的地基）
+- 与 `picoclaw export` 一起形成“可回放执行”的最小证据链
+
+默认落盘位置：
+
+- ` <workspace>/.picoclaw/audit/runs/<session>/events.jsonl `
+
+### Tool Policy（tools.policy：统一策略层 / 审计与安全护栏）
+
+从 Phase D2 开始，PicoClaw 在 **tool executor 的统一入口**（所有内置 tools + MCP tools 一视同仁）增加了策略层，用于收口：
+- allow/deny（名单与前缀）
+- 统一 timeout（每个 tool call 的最大墙钟时间）
+- 脱敏（避免 secret 落盘到 trace/ledger；可选对 LLM/User 输出也脱敏）
+- “副作用确认”（两段提交：先要求确认，再执行）
+- 幂等/可恢复（resume 时避免重复执行副作用工具）
+
+配置示例（建议先从“只做审计脱敏 + timeout”开始）：
+
+```json
+{
+  "tools": {
+    "policy": {
+      "enabled": true,
+      "timeout_ms": 60000,
+      "redact": {
+        "enabled": true,
+        "apply_to_llm": false,
+        "apply_to_user": false
+      }
+    }
+  }
+}
+```
+
+启用“副作用确认 + 幂等重放”（推荐仅在 resume 流程开启确认门）：
+
+```json
+{
+  "tools": {
+    "policy": {
+      "enabled": true,
+      "confirm": {
+        "enabled": true,
+        "mode": "resume_only",
+        "tools": ["exec", "write_file", "edit_file", "append_file"]
+      },
+      "idempotency": {
+        "enabled": true,
+        "cache_result": true,
+        "tools": ["exec", "write_file", "edit_file", "append_file"]
+      }
+    }
+  }
+}
+```
+
+说明：
+- 当某个 tool call 被策略层拦下时，tool output 会返回结构化 JSON（`kind=tool_policy_*`），模型应先向用户请求确认，再调用 `tool_confirm(confirm_key)`。
+- 幂等 ledger 会落在：` <workspace>/.picoclaw/audit/runs/<session>/runs/<run_id>/policy.jsonl `
+- Tool Trace 的 JSONL 事件会携带 `run_id`、`policy_decision`、`idempotency_key` 等字段，便于线上排障与复盘。
+
+### MCP Bridge（tools.mcp：挂载外部工具生态）
+
+PicoClaw 支持把 MCP（Model Context Protocol）服务器上的工具动态注册为原生工具（Phase D1）。
+
+核心特性：
+- 启动时（best-effort）发现 MCP server 工具并注册到 `ToolRegistry`
+- MCP tool call 统一走现有 tool executor：自动纳入 Tool Trace / Run Trace / 超时与错误模板
+- 工具命名隔离：默认前缀 `mcp_<server>_`，也可自定义 `tool_prefix`
+
+配置示例（stdio）：
+
+```json
+{
+  "tools": {
+    "mcp": {
+      "enabled": true,
+      "servers": [
+        {
+          "name": "local",
+          "transport": "stdio",
+          "command": "python",
+          "args": ["-m", "your_mcp_server"],
+          "include_tools": ["echo", "add"],
+          "tool_prefix": "mcp_local_",
+          "timeout_seconds": 30
+        }
+      ]
+    }
+  }
+}
+```
+
+命名说明：
+- 注册到 LLM 的工具名会做安全清洗（仅允许字母/数字/`_`/`-`），避免 provider 拒绝调用
+- 默认命名形如：`mcp_<server>_<tool>`（例如 `mcp_local_echo`）
+
+### Resume last task（/api/resume_last_task）
+
+从 Phase E2 开始，Gateway 会额外暴露一个“断点续跑”接口：定位最近一次 **未正常结束** 的 run，并在同一 `run_id` 上继续执行（append-only 续写 run trace）。
+
+调用示例：
+
+```bash
+curl -sS -X POST http://127.0.0.1:18790/api/resume_last_task
+```
+
+鉴权规则同 `/api/notify`：
+- `gateway.api_key` 为空：仅允许 loopback（127.0.0.1）访问
+- `gateway.api_key` 非空：携带 `Authorization: Bearer <api_key>` 或 `X-API-Key: <api_key>`
+
+强烈建议同时开启 `tools.policy.confirm` + `tools.policy.idempotency`，避免 resume 时重复执行 `exec` / 写文件 / MCP 写操作类工具。
+
+### Run/Session 导出（picoclaw export）
+
+当你需要提交 bug / 复盘某次对话 / 把 “可回放执行” 资料打包给别人时，可以导出一个 zip bundle（默认会包含：session 快照 + tool traces + run traces + cron/state/config 脱敏快照 + manifest）。
+
+常用用法：
+
+```bash
+# 直接导出当前 workspace 的 last_active 会话（推荐）
+./build/picoclaw export --last-active
+
+# 或导出指定 sessionKey
+./build/picoclaw export --session 'agent:main:feishu:group:oc_xxx'
+```
+
+默认输出位置：
+
+- ` <workspace>/exports/*.zip `
+
+### 统一工具错误模板（tools.error_template）
+
+当工具执行失败时（`is_error=true`），PicoClaw 会把错误包装成结构化 JSON（`kind=tool_error`），并附带最小的自愈 hints（required 参数、可用工具列表/相似工具名等），让模型更容易自救（换参数 / 换工具 / 先读后写）。
+
+说明：
+- 这是 executor 层的统一能力，不需要每个 tool 单独实现
+- 只影响 LLM 侧的 `ForLLM`；不会强制把 JSON 错误刷给用户（若 tool 提供了 `ForUser`，会优先保留人类友好输出）
+
+配置示例（默认已启用）：
+
+```json
+{
+  "tools": {
+    "error_template": {
+      "enabled": true,
+      "include_schema": true
+    }
+  }
+}
+```
+
+### 结构化记忆输出（Memory JSON hits）
+
+`memory_search` / `memory_get` 的工具输出对 LLM 侧返回结构化 JSON（`kind` 字段可用于回归测试与稳定引用），同时对人类侧保留简要摘要：
+
+- `memory_search` → `{"kind":"memory_search_result","hits":[...]}`
+- `memory_get` → `{"kind":"memory_get_result","found":...,"hit":...}`
+
+这能显著降低 “模型看不懂纯文本结果 / 引用不稳定” 的概率。
+
+另外，`memory_search_result.hits[]` 会提供 `match_kind` 与 `signals` 字段（例如 `fts_score` / `vector_score`），便于你在排查召回漂移时快速判断“这条命中是靠关键词还是靠向量”。
+
+### 语义记忆 Embeddings（可选远程）
+
+PicoClaw 的语义记忆（`agents.defaults.memory_vector`）默认使用本地 `hashed` embedder：快、确定性强、无需额外 API / 网络。
+
+如果你希望更高质量的语义检索，可以让 PicoClaw 调用一个 OpenAI-compatible 的 embeddings 端点（`POST <api_base>/embeddings`），例如 SiliconFlow / OpenAI / 其他兼容服务。
+
+在本项目中，embeddings 配置 **只从 `config.json` 读取**。示例（放到 `agents.defaults.memory_vector.embedding`）：
+
+```json
+{
+  "agents": {
+    "defaults": {
+      "memory_vector": {
+        "dimensions": 4096,
+        "hybrid": {
+          "fts_weight": 0.6,
+          "vector_weight": 0.4
+        },
+        "embedding": {
+          "kind": "openai_compat",
+          "api_base": "https://api.siliconflow.cn/v1",
+          "api_key": "sk-...",
+          "model": "Qwen/Qwen3-Embedding-8B",
+          "proxy": "",
+          "batch_size": 64,
+          "request_timeout_seconds": 30
+        }
+      }
+    }
+  }
+}
+```
+
+说明：
+- 如果 `embedding.kind` 为空或为 `hashed`，则使用本地 deterministic 的 `hashed` embedder（无网络）
+- 首次触发语义检索/索引重建时会产生网络请求；索引会落盘缓存，并在源文件或 `api_base/model` 变化时自动重建
+- 如果你显式把 `embedding.kind` 设为 `openai_compat`，则 `api_base` 与 `model` 为必填（否则会报错）
+
+### Cron 可运营任务状态（runHistory / lastStatus）
+
+Cron 的任务状态会持久化到工作区：
+
+- ` <workspace>/cron/jobs.json `
+
+其中 `state` 会记录：
+
+- `lastStatus` / `lastRunAtMs` / `lastDurationMs`
+- `lastOutputPreview`（截断预览）
+- `runHistory`（最近 N 次运行记录）
+
+CLI 侧常用命令：
+
+```bash
+./build/picoclaw cron list
+./build/picoclaw cron show <job_id>
+./build/picoclaw cron show <job_id> --json
+```
+
+#### Cron 无更新不提醒（NO_UPDATE）
+
+对于“抓取/巡检/日报”类定时任务，经常会出现“本次没有新内容”的情况。为了减少打扰，你可以在任务提示词里约定：
+
+- **如果没有新发现，最终回复必须是 `NO_UPDATE`**（大小写不敏感）
+
+当 cron 的 `deliver=false`（让 agent 处理）时，PicoClaw 会把 `NO_UPDATE` 视为“无更新”，从而：
+- 不向聊天渠道推送 `Cron job '...' completed` 消息（安静）
+- 但 `jobs.json` 的 `runHistory/lastOutputPreview` 仍会记录 `NO_UPDATE`（便于运维/回放）
+
+## Docker Compose
+
+本仓库的 `docker/docker-compose.yml` 提供两个 profile：
+- `gateway`：常驻服务
+- `agent`：单次/手动执行
+
+容器会挂载本地 `config/config.json`（只读）作为运行配置。
+如果容器日志提示 `permission denied` 无法读取 `/home/picoclaw/.picoclaw/config.json`，通常是因为宿主机上的 `config/config.json` 权限过严（例如 `600`），请确保容器用户可读（例如 `chmod 644 config/config.json`）。
+
+构建并启动 gateway：
+
+```bash
+docker compose -p picoclaw -f docker/docker-compose.yml --profile gateway up -d --build
+docker compose -p picoclaw -f docker/docker-compose.yml ps
+curl -sS http://127.0.0.1:18790/health
+```
+
+执行单次 agent：
+
+```bash
+docker compose -p picoclaw -f docker/docker-compose.yml run --rm picoclaw-agent -m "hello"
+```
+
+容器镜像内已包含 `git`，可用于 agent 在工作区内提交/推送代码。请在 `config/config.json` 里配置 `tools.git`（PAT + 身份）：
+
+```json
+{
+  "tools": {
+    "git": {
+      "enabled": true,
+      "username": "你的 GitHub 用户名",
+      "pat": "github_pat_xxx",
+      "user_name": "你的名字",
+      "user_email": "you@example.com",
+      "host": "github.com",
+      "protocol": "https"
+    }
+  }
+}
+```
+
+容器启动时会自动写入 `~/.git-credentials` 和 `~/.gitconfig`。
+
+停止服务：
+
+```bash
+docker compose -p picoclaw -f docker/docker-compose.yml down
+```
+
+## 常用命令
+
+- `picoclaw onboard` 初始化工作区与配置
+- `picoclaw agent` 交互式对话
+- `picoclaw agent -m "..."` 单轮对话
+- `picoclaw gateway` 启动网关服务
+- `picoclaw status` 查看运行状态
+- `picoclaw cron list` 查看定时任务
+- `picoclaw cron add ...` 新增定时任务
+
+## 配置说明
+
+- 主配置文件：`~/.picoclaw/config.json`
+- 默认工作区：`~/.picoclaw/workspace`
+- 配置模板：`config/config.example.json`
+
+进阶配置可直接查看代码中的配置结构（`pkg/config`）。
+
+## 单元测试
+
+单元测试与 TDD 工作流说明见：[UNIT_TESTING.md](UNIT_TESTING.md)。
+
+## 排错
+
+参考：
+- `docker compose ... logs -f picoclaw-gateway`
+
+## 许可证
+
+MIT
