@@ -4,7 +4,7 @@
 >
 > 参考基线（本次阅读）：
 > - OpenClaw：`openclaw/openclaw`，Changelog 版本 `2026.3.1 ~ 2026.3.3`（含 Breaking），本地阅读时的 commit `61f7cea`。
-> - PicoClaw：本仓库 `main`，对齐当时路线图（已归档：`docs/archive/2026-03/ROADMAP_V2.md`）。
+> - PicoClaw：本仓库 `main`（对齐当时路线图；历史版本可在 git history 中追溯）。
 
 ---
 

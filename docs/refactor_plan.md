@@ -15,7 +15,7 @@
 - **默认安全**：sandbox/tool policy/elevated 的清晰边界 + SSRF/路径/权限护栏
 
 ### 0.2 当前 PicoClaw 的主要屎山成因
-来自 [refactor_guide1.md](archive/2026-03/refactor_guide1.md) 的诊断（并与代码现状吻合；该文档已归档）：
+来自历史重构指南的诊断（并与代码现状吻合；历史版本已移除，可在 git history 中追溯）：
 - `pkg/agent` 单包职责混杂，核心 loop 反向依赖 channels/media/http 等基础设施概念，测试隔离困难。
 - `pkg/tools` 抽象/治理/实现混在一起，生产治理（policy/trace/timeout）不易收口。
 - 组合根（wiring）分散且容易膨胀，生命周期边界不清。
