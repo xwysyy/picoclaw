@@ -1,7 +1,7 @@
 {
   "agents": {
     "defaults": {
-      "workspace": "~/.picoclaw/workspace",
+      "workspace": "~/.x-claw/workspace",
       "restrict_to_workspace": true,
       "model_name": "gpt-5.2-medium",
       "max_tokens": 8192,
@@ -175,7 +175,7 @@
       "reasoning_channel_id": ""
     },
     "wecom_app": {
-      "_comment": "WeCom App (自建应用) - More features, proactive messaging, private chat only. See https://docs.picoclaw.io/zh-Hans/docs/channels/wecom/wecom_app/",
+      "_comment": "WeCom App (自建应用) - More features, proactive messaging, private chat only. See https://docs.x-claw.io/zh-Hans/docs/channels/wecom/wecom_app/",
       "enabled": false,
       "corp_id": "YOUR_CORP_ID",
       "corp_secret": "YOUR_CORP_SECRET",

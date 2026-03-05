@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sipeed/picoclaw/pkg/bus"
-	"github.com/sipeed/picoclaw/pkg/channels"
-	"github.com/sipeed/picoclaw/pkg/config"
-	"github.com/sipeed/picoclaw/pkg/identity"
+	"github.com/xwysyy/picoclaw/pkg/bus"
+	"github.com/xwysyy/picoclaw/pkg/channels"
+	"github.com/xwysyy/picoclaw/pkg/config"
+	"github.com/xwysyy/picoclaw/pkg/identity"
 )
 
 func TestWhatsAppChannel_Send_NotRunning(t *testing.T) {

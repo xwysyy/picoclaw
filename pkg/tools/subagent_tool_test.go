@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sipeed/picoclaw/pkg/bus"
-	"github.com/sipeed/picoclaw/pkg/providers"
+	"github.com/xwysyy/picoclaw/pkg/bus"
+	"github.com/xwysyy/picoclaw/pkg/providers"
 )
 
 // MockLLMProvider is a test implementation of LLMProvider

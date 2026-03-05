@@ -6,7 +6,7 @@
 - 尽量测试失败路径（错误返回、超时、空输入、非法输入、资源限制等）
 - 保持测试确定性（可重复、无外部依赖、运行时间可控）
 
-本文档是面向 PicoClaw 的测试约定与落地方法，包含推荐命令、TDD 工作流和项目内的常用测试模式。
+本文档是面向 X-Claw 的测试约定与落地方法，包含推荐命令、TDD 工作流和项目内的常用测试模式。
 
 ## 推荐命令
 
@@ -42,13 +42,13 @@ make test
 同时 race 检测会显著增加 CPU/内存消耗；在小内存环境建议只对关键包启用，例如：
 
 ```bash
-CGO_ENABLED=1 PICOCLAW_TEST_PKGS='./pkg/agent ./pkg/tools' ./scripts/test-unit.sh -race
+CGO_ENABLED=1 X_CLAW_TEST_PKGS='./pkg/agent ./pkg/tools' ./scripts/test-unit.sh -race
 ```
 
 如果只想测试部分包，可以用环境变量覆盖：
 
 ```bash
-PICOCLAW_TEST_PKGS='./pkg/agent ./pkg/tools' ./scripts/test-unit.sh
+X_CLAW_TEST_PKGS='./pkg/agent ./pkg/tools' ./scripts/test-unit.sh
 ```
 
 ### 2. 快速并行（可能更快，但更吃内存）

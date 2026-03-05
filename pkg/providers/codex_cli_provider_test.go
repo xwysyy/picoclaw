@@ -517,10 +517,10 @@ echo '{"type":"turn.completed"}'`
 }
 
 func TestCodexCliProvider_MockCLI_ContextCancel(t *testing.T) {
-		// Script that blocks for a while (no child processes).
-		tmpDir := t.TempDir()
-		scriptPath := filepath.Join(tmpDir, "codex")
-		script := "#!/bin/bash\nread -r -t 60 _ || true\n"
+	// Script that blocks for a while (no child processes).
+	tmpDir := t.TempDir()
+	scriptPath := filepath.Join(tmpDir, "codex")
+	script := "#!/bin/bash\nread -r -t 60 _ || true\n"
 
 	if err := os.WriteFile(scriptPath, []byte(script), 0o755); err != nil {
 		t.Fatal(err)
@@ -554,8 +554,8 @@ func TestCodexCliProvider_EmptyCommand(t *testing.T) {
 // --- Integration Test (requires real codex CLI with valid auth) ---
 
 func TestCodexCliProvider_Integration(t *testing.T) {
-	if os.Getenv("PICOCLAW_INTEGRATION_TESTS") == "" {
-		t.Skip("skipping integration test (set PICOCLAW_INTEGRATION_TESTS=1 to enable)")
+	if os.Getenv("X_CLAW_INTEGRATION_TESTS") == "" {
+		t.Skip("skipping integration test (set X_CLAW_INTEGRATION_TESTS=1 to enable)")
 	}
 
 	// Verify codex is available

@@ -9,8 +9,8 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/sipeed/picoclaw/pkg/bus"
-	"github.com/sipeed/picoclaw/pkg/config"
+	"github.com/xwysyy/picoclaw/pkg/bus"
+	"github.com/xwysyy/picoclaw/pkg/config"
 )
 
 type roundTripperFunc func(*http.Request) (*http.Response, error)

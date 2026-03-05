@@ -68,7 +68,7 @@ func TestDownloadToFile_Non2xx(t *testing.T) {
 
 func TestDownloadToFile_MaxBytesExceeded_CleansUp(t *testing.T) {
 	// Snapshot existing temp files for this prefix and assert we don't leak a new one.
-	before, err := filepath.Glob(filepath.Join(os.TempDir(), "picoclaw-dl-*"))
+	before, err := filepath.Glob(filepath.Join(os.TempDir(), "x-claw-dl-*"))
 	if err != nil {
 		t.Fatalf("glob before: %v", err)
 	}
@@ -97,7 +97,7 @@ func TestDownloadToFile_MaxBytesExceeded_CleansUp(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	after, err := filepath.Glob(filepath.Join(os.TempDir(), "picoclaw-dl-*"))
+	after, err := filepath.Glob(filepath.Join(os.TempDir(), "x-claw-dl-*"))
 	if err != nil {
 		t.Fatalf("glob after: %v", err)
 	}

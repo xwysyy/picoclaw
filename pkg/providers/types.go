@@ -3,8 +3,8 @@ package providers
 import (
 	"fmt"
 
-	coreprovider "github.com/sipeed/picoclaw/internal/core/provider"
-	"github.com/sipeed/picoclaw/pkg/providers/protocoltypes"
+	coreprovider "github.com/xwysyy/picoclaw/internal/core/provider"
+	"github.com/xwysyy/picoclaw/pkg/providers/protocoltypes"
 )
 
 type (

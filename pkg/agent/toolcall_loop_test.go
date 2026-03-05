@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/sipeed/picoclaw/pkg/providers"
+	"github.com/xwysyy/picoclaw/pkg/providers"
 )
 
 func TestDetectToolCallLoop_NoLoopWhenBelowThreshold(t *testing.T) {
@@ -82,4 +82,3 @@ func mustSig(t *testing.T, name string, args map[string]any) toolCallSignature {
 		Args: string(b),
 	}
 }
-

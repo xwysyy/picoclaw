@@ -20,7 +20,7 @@ if [[ -z "${GOTOOLCHAIN:-}" || "${GOTOOLCHAIN}" == "auto" ]]; then
 fi
 
 # Use repo-local Go caches by default (same rationale as scripts/test-unit.sh).
-cache_dir="${PICOCLAW_GO_CACHE_DIR:-${root_dir}/.cache}"
+cache_dir="${X_CLAW_GO_CACHE_DIR:-${root_dir}/.cache}"
 export GOMODCACHE="${GOMODCACHE:-${cache_dir}/gomod}"
 export GOPATH="${GOPATH:-${cache_dir}/gopath}"
 export GOCACHE="${GOCACHE:-${cache_dir}/gocache}"
@@ -32,7 +32,7 @@ export GOMAXPROCS="${GOMAXPROCS:-1}"
 export GOMEMLIMIT="${GOMEMLIMIT:-1024MiB}"
 export GOGC="${GOGC:-50}"
 
-cover_dir="${PICOCLAW_COVER_DIR:-${cache_dir}/coverage}"
+cover_dir="${X_CLAW_COVER_DIR:-${cache_dir}/coverage}"
 profiles_dir="${cover_dir}/profiles"
 bins_dir="${cover_dir}/bins"
 
@@ -42,7 +42,7 @@ mkdir -p "${profiles_dir}" "${bins_dir}"
 rm -f "${profiles_dir}/"*.out 2>/dev/null || true
 rm -f "${bins_dir}/"*.test 2>/dev/null || true
 
-packages="${PICOCLAW_TEST_PKGS:-}"
+packages="${X_CLAW_TEST_PKGS:-}"
 if [[ -z "${packages}" ]]; then
   packages="$(go list ./... 2>/dev/null)"
 fi
@@ -112,10 +112,10 @@ for ((i = 0; i < ${#argv[@]}; i++)); do
   esac
 done
 
-covermode="${PICOCLAW_COVERMODE:-set}"
-merged_profile="${PICOCLAW_COVERPROFILE:-${root_dir}/coverage.out}"
-html_out="${PICOCLAW_COVERHTML:-${root_dir}/coverage.html}"
-threshold="${PICOCLAW_COVER_THRESHOLD:-}"
+covermode="${X_CLAW_COVERMODE:-set}"
+merged_profile="${X_CLAW_COVERPROFILE:-${root_dir}/coverage.out}"
+html_out="${X_CLAW_COVERHTML:-${root_dir}/coverage.html}"
+threshold="${X_CLAW_COVER_THRESHOLD:-}"
 
 profiles=()
 
@@ -131,7 +131,7 @@ for pkg in ${packages}; do
   rm -f "${bin_path}" "${profile_path}"
 
   # Compile with coverage instrumentation.
-  go test -p "${PICOCLAW_GO_TEST_P:-1}" -c -cover -covermode="${covermode}" -o "${bin_path}" "${pkg}"
+  go test -p "${X_CLAW_GO_TEST_P:-1}" -c -cover -covermode="${covermode}" -o "${bin_path}" "${pkg}"
 
   # Packages with no tests won't produce a binary even with `-c`.
   if [[ ! -f "${bin_path}" ]]; then

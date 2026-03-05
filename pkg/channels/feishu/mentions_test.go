@@ -10,7 +10,7 @@ import (
 
 func TestFeishuCleanTextMentions_WithBotID_StripsBotAndReplacesOthers(t *testing.T) {
 	botKey := "@_user_1"
-	botName := "PicoClaw"
+	botName := "X-Claw"
 	botOpenID := "ou_bot_123"
 
 	userKey := "@_user_2"

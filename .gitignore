@@ -8,17 +8,17 @@ build/
 *.dylib
 *.test
 *.out
-/picoclaw
-/picoclaw-test
+/x-claw
+/x-claw-test
 /ref/*
 !/ref/go.mod
 !/ref/go.sum
 .cache
 
-# Picoclaw specific
+# x-claw specific
 
-# PicoClaw
-.picoclaw/
+# X-Claw
+.x-claw/
 config.json
 sessions/
 build/

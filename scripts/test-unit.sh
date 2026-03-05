@@ -10,7 +10,7 @@ cd "${root_dir}"
 # - Keeps `go test` functional in restricted environments (no writes to $HOME).
 # - Avoids re-downloading modules/toolchains on CI hosts with ephemeral home dirs.
 # - `.cache/` is gitignored, so it does not pollute commits.
-cache_dir="${PICOCLAW_GO_CACHE_DIR:-${root_dir}/.cache}"
+cache_dir="${X_CLAW_GO_CACHE_DIR:-${root_dir}/.cache}"
 export GOMODCACHE="${GOMODCACHE:-${cache_dir}/gomod}"
 export GOPATH="${GOPATH:-${cache_dir}/gopath}"
 export GOCACHE="${GOCACHE:-${cache_dir}/gocache}"
@@ -33,10 +33,10 @@ export GOMAXPROCS="${GOMAXPROCS:-1}"
 export GOMEMLIMIT="${GOMEMLIMIT:-1024MiB}"
 export GOGC="${GOGC:-50}"
 
-bins_dir="${PICOCLAW_GO_TEST_BINS_DIR:-${cache_dir}/testbins}"
+bins_dir="${X_CLAW_GO_TEST_BINS_DIR:-${cache_dir}/testbins}"
 mkdir -p "${bins_dir}"
 
-packages="${PICOCLAW_TEST_PKGS:-}"
+packages="${X_CLAW_TEST_PKGS:-}"
 if [[ -z "${packages}" ]]; then
   packages="$(go list ./... 2>/dev/null)"
 fi
@@ -132,7 +132,7 @@ for pkg in ${packages}; do
   bin_path="${bins_dir}/${bin_name}.test"
   rm -f "${bin_path}"
 
-  go test -p "${PICOCLAW_GO_TEST_P:-1}" -c -o "${bin_path}" "$@" "${pkg}"
+  go test -p "${X_CLAW_GO_TEST_P:-1}" -c -o "${bin_path}" "$@" "${pkg}"
 
   # Packages with no tests won't produce a binary even with `-c`.
   if [[ ! -f "${bin_path}" ]]; then

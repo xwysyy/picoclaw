@@ -134,4 +134,3 @@ func (ws *WorkingState) FormatForContext() string {
 
 	return sb.String()
 }
-

@@ -10,11 +10,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sipeed/picoclaw/internal/core/events"
-	"github.com/sipeed/picoclaw/pkg/fileutil"
-	"github.com/sipeed/picoclaw/pkg/logger"
-	"github.com/sipeed/picoclaw/pkg/providers"
-	"github.com/sipeed/picoclaw/pkg/utils"
+	"github.com/xwysyy/picoclaw/internal/core/events"
+	"github.com/xwysyy/picoclaw/pkg/fileutil"
+	"github.com/xwysyy/picoclaw/pkg/logger"
+	"github.com/xwysyy/picoclaw/pkg/providers"
+	"github.com/xwysyy/picoclaw/pkg/utils"
 )
 
 // ToolTraceOptions controls optional on-disk tracing for tool calls.
@@ -25,7 +25,7 @@ type ToolTraceOptions struct {
 	Enabled bool
 
 	// Dir overrides the default per-session trace directory.
-	// When empty, tracing falls back to: <workspace>/.picoclaw/audit/tools/<session>/
+	// When empty, tracing falls back to: <workspace>/.x-claw/audit/tools/<session>/
 	Dir string
 
 	// WritePerCallFiles writes one JSON + one Markdown file per call.
@@ -155,7 +155,7 @@ func newToolTraceWriter(opts ToolCallExecutionOptions, scope string) *toolTraceW
 			dirKey = "unknown"
 		}
 
-		dir = filepath.Join(workspace, ".picoclaw", "audit", "tools", dirKey)
+		dir = filepath.Join(workspace, ".x-claw", "audit", "tools", dirKey)
 	}
 
 	if err := os.MkdirAll(dir, 0o755); err != nil {

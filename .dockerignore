@@ -2,7 +2,7 @@
 .gitignore
 .cache/
 build/
-.picoclaw/
+.x-claw/
 config/
 .env
 .env.example

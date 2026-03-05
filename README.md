@@ -1,12 +1,12 @@
-# PicoClaw
+# X-Claw
 
 <p align="center">
-  <img src="assets/logo.svg" alt="PicoClaw logo" width="120" />
+  <img src="assets/logo.svg" alt="X-Claw logo" width="120" />
 </p>
 
 [English](README.en.md) | [Roadmap](ROADMAP.md)
 
-PicoClaw 是一个使用 Go 编写的轻量级个人 AI 助手。
+X-Claw 是一个使用 Go 编写的轻量级个人 AI 助手。
 
 本仓库包含核心 CLI、Gateway 服务、工具系统和多种渠道集成。
 
@@ -36,13 +36,13 @@ PicoClaw 是一个使用 Go 编写的轻量级个人 AI 助手。
 ## 快速开始（本地构建）
 
 ```bash
-git clone https://github.com/sipeed/picoclaw.git
-cd picoclaw
+git clone https://github.com/xwysyy/X-Claw.git x-claw
+cd x-claw
 make deps
 make build
 ```
 
-也可以用脚本一键安装到本机（默认安装到 `~/.local/bin/picoclaw`，并初始化 `~/.picoclaw/`）：
+也可以用脚本一键安装到本机（默认安装到 `~/.local/bin/x-claw`，并初始化 `~/.x-claw/`）：
 
 ```bash
 ./scripts/install.sh --from-source
@@ -51,16 +51,16 @@ make build
 初始化工作区与配置：
 
 ```bash
-./build/picoclaw onboard
+./build/x-claw onboard
 ```
 
 编辑配置：
 
 ```bash
-vim ~/.picoclaw/config.json
+vim ~/.x-claw/config.json
 ```
 
-说明：PicoClaw 的运行时配置**只读取** `config.json`（默认路径 `~/.picoclaw/config.json`；Docker 部署通常将 `config/config.json` 挂载到该位置），不支持通过环境变量覆盖配置字段，以避免“同一份代码在不同环境变量下行为漂移”。
+说明：X-Claw 的运行时配置**只读取** `config.json`（默认路径 `~/.x-claw/config.json`；Docker 部署通常将 `config/config.json` 挂载到该位置），不支持通过环境变量覆盖配置字段，以避免“同一份代码在不同环境变量下行为漂移”。
 
 最小配置示例：
 
@@ -68,7 +68,7 @@ vim ~/.picoclaw/config.json
 {
   "agents": {
     "defaults": {
-      "workspace": "~/.picoclaw/workspace",
+      "workspace": "~/.x-claw/workspace",
       "model_name": "gpt-5.2-medium",
       "max_tokens": 8192,
       "max_tool_iterations": 20
@@ -88,13 +88,13 @@ vim ~/.picoclaw/config.json
 单轮问答：
 
 ```bash
-./build/picoclaw agent -m "hello"
+./build/x-claw agent -m "hello"
 ```
 
 交互模式：
 
 ```bash
-./build/picoclaw agent
+./build/x-claw agent
 ```
 
 ## Gateway 模式
@@ -102,7 +102,7 @@ vim ~/.picoclaw/config.json
 启动 gateway：
 
 ```bash
-./build/picoclaw gateway
+./build/x-claw gateway
 ```
 
 健康检查：
@@ -253,7 +253,7 @@ curl -sS -X POST http://127.0.0.1:18790/api/notify \
 - 建议优先使用反向代理（HTTPS）或私网方案（如 Tailscale）再对外提供 `/api/notify`
 - 如必须直连：将 `gateway.host` 设为 `0.0.0.0` 并配置强随机 `gateway.api_key`
 
-外部 Agent（例如 Claude Code / Codex）对接 PicoClaw 通知的扩展文档见：`extensions/picoclaw-notify/SKILL.md`（通过调用 `/api/notify` 推送提醒）。
+外部 Agent（例如 Claude Code / Codex）对接 X-Claw 通知的扩展文档见：`extensions/x-claw-notify/SKILL.md`（通过调用 `/api/notify` 推送提醒）。
 
 ### 任务完成提醒（notify.on_task_complete）
 
@@ -396,8 +396,8 @@ PicoClaw 的 `exec` 工具支持两种后端：
 
 默认落盘位置（当 `tools.trace.dir` 为空时）：
 
-- ` <workspace>/.picoclaw/audit/tools/<session>/events.jsonl `
-- ` <workspace>/.picoclaw/audit/tools/<session>/calls/*.json|*.md `（当 `tools.trace.write_per_call_files=true`）
+- ` <workspace>/.x-claw/audit/tools/<session>/events.jsonl `
+- ` <workspace>/.x-claw/audit/tools/<session>/calls/*.json|*.md `（当 `tools.trace.write_per_call_files=true`）
 
 配置示例：
 
@@ -656,20 +656,20 @@ CLI 侧常用命令：
 - `agent`：单次/手动执行
 
 容器会挂载本地 `config/config.json`（只读）作为运行配置。
-如果容器日志提示 `permission denied` 无法读取 `/home/picoclaw/.picoclaw/config.json`，通常是因为宿主机上的 `config/config.json` 权限过严（例如 `600`），请确保容器用户可读（例如 `chmod 644 config/config.json`）。
+如果容器日志提示 `permission denied` 无法读取 `/home/xclaw/.x-claw/config.json`，通常是因为宿主机上的 `config/config.json` 权限过严（例如 `600`），请确保容器用户可读（例如 `chmod 644 config/config.json`）。
 
 构建并启动 gateway：
 
 ```bash
-docker compose -p picoclaw -f docker/docker-compose.yml --profile gateway up -d --build
-docker compose -p picoclaw -f docker/docker-compose.yml ps
+docker compose -p x-claw -f docker/docker-compose.yml --profile gateway up -d --build
+docker compose -p x-claw -f docker/docker-compose.yml ps
 curl -sS http://127.0.0.1:18790/health
 ```
 
 执行单次 agent：
 
 ```bash
-docker compose -p picoclaw -f docker/docker-compose.yml run --rm picoclaw-agent -m "hello"
+docker compose -p x-claw -f docker/docker-compose.yml run --rm x-claw-agent -m "hello"
 ```
 
 容器镜像内已包含 `git`，可用于 agent 在工作区内提交/推送代码。请在 `config/config.json` 里配置 `tools.git`（PAT + 身份）：
@@ -695,23 +695,23 @@ docker compose -p picoclaw -f docker/docker-compose.yml run --rm picoclaw-agent 
 停止服务：
 
 ```bash
-docker compose -p picoclaw -f docker/docker-compose.yml down
+docker compose -p x-claw -f docker/docker-compose.yml down
 ```
 
 ## 常用命令
 
-- `picoclaw onboard` 初始化工作区与配置
-- `picoclaw agent` 交互式对话
-- `picoclaw agent -m "..."` 单轮对话
-- `picoclaw gateway` 启动网关服务
-- `picoclaw status` 查看运行状态
-- `picoclaw cron list` 查看定时任务
-- `picoclaw cron add ...` 新增定时任务
+- `x-claw onboard` 初始化工作区与配置
+- `x-claw agent` 交互式对话
+- `x-claw agent -m "..."` 单轮对话
+- `x-claw gateway` 启动网关服务
+- `x-claw status` 查看运行状态
+- `x-claw cron list` 查看定时任务
+- `x-claw cron add ...` 新增定时任务
 
 ## 配置说明
 
-- 主配置文件：`~/.picoclaw/config.json`
-- 默认工作区：`~/.picoclaw/workspace`
+- 主配置文件：`~/.x-claw/config.json`
+- 默认工作区：`~/.x-claw/workspace`
 - 配置模板：`config/config.example.json`
 
 进阶配置可直接查看代码中的配置结构（`pkg/config`）。
@@ -723,7 +723,7 @@ docker compose -p picoclaw -f docker/docker-compose.yml down
 ## 排错
 
 参考：
-- `docker compose ... logs -f picoclaw-gateway`
+- `docker compose ... logs -f x-claw-gateway`
 
 ## 许可证
 

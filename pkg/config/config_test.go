@@ -67,7 +67,7 @@ func TestAgentConfig_FullParse(t *testing.T) {
 	jsonData := `{
 		"agents": {
 			"defaults": {
-				"workspace": "~/.picoclaw/workspace",
+				"workspace": "~/.x-claw/workspace",
 				"model": "glm-4.7",
 				"max_tokens": 8192,
 				"max_tool_iterations": 20
@@ -172,7 +172,7 @@ func TestConfig_BackwardCompat_NoAgentsList(t *testing.T) {
 	jsonData := `{
 		"agents": {
 			"defaults": {
-				"workspace": "~/.picoclaw/workspace",
+				"workspace": "~/.x-claw/workspace",
 				"model": "glm-4.7",
 				"max_tokens": 8192,
 				"max_tool_iterations": 20

@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sipeed/picoclaw/pkg/config"
+	"github.com/xwysyy/picoclaw/pkg/config"
 )
 
 // --- Compile-time interface check ---

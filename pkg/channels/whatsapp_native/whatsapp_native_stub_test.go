@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sipeed/picoclaw/pkg/bus"
-	"github.com/sipeed/picoclaw/pkg/config"
+	"github.com/xwysyy/picoclaw/pkg/bus"
+	"github.com/xwysyy/picoclaw/pkg/config"
 )
 
 func TestNewWhatsAppNativeChannel_StubExplainsBuildTag(t *testing.T) {

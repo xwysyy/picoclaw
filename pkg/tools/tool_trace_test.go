@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sipeed/picoclaw/pkg/providers"
+	"github.com/xwysyy/picoclaw/pkg/providers"
 )
 
 func TestExecuteToolCalls_WritesJSONLToolTraceWhenEnabled(t *testing.T) {
@@ -42,7 +42,7 @@ func TestExecuteToolCalls_WritesJSONLToolTraceWhenEnabled(t *testing.T) {
 		t.Fatalf("len(results) = %d, want 1", len(results))
 	}
 
-	eventsPath := filepath.Join(workspace, ".picoclaw", "audit", "tools", sessionKey, "events.jsonl")
+	eventsPath := filepath.Join(workspace, ".x-claw", "audit", "tools", sessionKey, "events.jsonl")
 	data, err := os.ReadFile(eventsPath)
 	if err != nil {
 		t.Fatalf("failed to read events.jsonl: %v", err)
@@ -85,7 +85,7 @@ func TestExecuteToolCalls_WritesJSONLToolTraceWhenEnabled(t *testing.T) {
 	}
 
 	// Per-call snapshot files should exist.
-	callDir := filepath.Join(workspace, ".picoclaw", "audit", "tools", sessionKey, "calls")
+	callDir := filepath.Join(workspace, ".x-claw", "audit", "tools", sessionKey, "calls")
 	entries, err := os.ReadDir(callDir)
 	if err != nil {
 		t.Fatalf("failed to read per-call dir: %v", err)

@@ -1,4 +1,3 @@
-module github.com/sipeed/picoclaw/ref
+module github.com/xwysyy/picoclaw/ref
 
 go 1.22
-

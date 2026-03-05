@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sipeed/picoclaw/pkg/config"
-	"github.com/sipeed/picoclaw/pkg/tools"
+	"github.com/xwysyy/picoclaw/pkg/config"
+	"github.com/xwysyy/picoclaw/pkg/tools"
 )
 
 func TestHandleSubagentTaskEvent_PersistsParentTaskID(t *testing.T) {

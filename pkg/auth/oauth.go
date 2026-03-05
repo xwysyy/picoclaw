@@ -450,7 +450,7 @@ func buildAuthorizeURL(cfg OAuthProviderConfig, pkce PKCECodes, state, redirectU
 		params.Set("id_token_add_organizations", "true")
 		params.Set("codex_cli_simplified_flow", "true")
 		if strings.Contains(strings.ToLower(cfg.Issuer), "auth.openai.com") {
-			params.Set("originator", "picoclaw")
+			params.Set("originator", "x-claw")
 		}
 		if cfg.Originator != "" {
 			params.Set("originator", cfg.Originator)

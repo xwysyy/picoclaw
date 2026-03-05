@@ -14,11 +14,11 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/sipeed/picoclaw/pkg/logger"
-	"github.com/sipeed/picoclaw/pkg/providers"
-	"github.com/sipeed/picoclaw/pkg/skills"
-	"github.com/sipeed/picoclaw/pkg/tools"
-	"github.com/sipeed/picoclaw/pkg/utils"
+	"github.com/xwysyy/picoclaw/pkg/logger"
+	"github.com/xwysyy/picoclaw/pkg/providers"
+	"github.com/xwysyy/picoclaw/pkg/skills"
+	"github.com/xwysyy/picoclaw/pkg/tools"
+	"github.com/xwysyy/picoclaw/pkg/utils"
 )
 
 type ContextRuntimeSettings struct {
@@ -75,7 +75,7 @@ func getGlobalConfigDir() string {
 	if err != nil {
 		return ""
 	}
-	return filepath.Join(home, ".picoclaw")
+	return filepath.Join(home, ".x-claw")
 }
 
 func NewContextBuilder(workspace string) *ContextBuilder {
@@ -308,12 +308,12 @@ func (cb *ContextBuilder) getIdentity() string {
 			"\n\n8. **Web evidence mode** — When answering facts or latest information from the web, cite at least %d sources from distinct domains (URLs). "+
 				"Never fabricate citations. If evidence is insufficient, explicitly state uncertainty and suggest verification steps.",
 			minDomains,
-		)
+			)
 	}
 
-	return fmt.Sprintf(`# picoclaw 🦞
-
-You are picoclaw, a helpful AI assistant.
+	return fmt.Sprintf(`# X-Claw 🦞
+	
+	You are X-Claw, a helpful AI assistant.
 
 ## Workspace
 Your workspace is at: %s

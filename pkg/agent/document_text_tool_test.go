@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sipeed/picoclaw/pkg/tools"
+	"github.com/xwysyy/picoclaw/pkg/tools"
 )
 
 func writeDocx(t *testing.T, path string, documentXML string) {

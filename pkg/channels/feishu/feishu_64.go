@@ -20,13 +20,13 @@ import (
 	larkim "github.com/larksuite/oapi-sdk-go/v3/service/im/v1"
 	larkws "github.com/larksuite/oapi-sdk-go/v3/ws"
 
-	"github.com/sipeed/picoclaw/pkg/bus"
-	"github.com/sipeed/picoclaw/pkg/channels"
-	"github.com/sipeed/picoclaw/pkg/config"
-	"github.com/sipeed/picoclaw/pkg/identity"
-	"github.com/sipeed/picoclaw/pkg/logger"
-	"github.com/sipeed/picoclaw/pkg/media"
-	"github.com/sipeed/picoclaw/pkg/utils"
+	"github.com/xwysyy/picoclaw/pkg/bus"
+	"github.com/xwysyy/picoclaw/pkg/channels"
+	"github.com/xwysyy/picoclaw/pkg/config"
+	"github.com/xwysyy/picoclaw/pkg/identity"
+	"github.com/xwysyy/picoclaw/pkg/logger"
+	"github.com/xwysyy/picoclaw/pkg/media"
+	"github.com/xwysyy/picoclaw/pkg/utils"
 )
 
 type FeishuChannel struct {
@@ -298,6 +298,15 @@ func (c *FeishuChannel) SendMedia(ctx context.Context, msg bus.OutboundMediaMess
 	for _, part := range msg.Parts {
 		if err := c.sendMediaPart(ctx, msg.ChatID, part, store); err != nil {
 			return err
+		}
+		if strings.TrimSpace(part.Caption) != "" {
+			if err := c.Send(ctx, bus.OutboundMessage{
+				Channel: "feishu",
+				ChatID:  msg.ChatID,
+				Content: part.Caption,
+			}); err != nil {
+				return err
+			}
 		}
 	}
 

@@ -1,18 +1,18 @@
-# PicoClaw
+# X-Claw
 
 <p align="center">
-  <img src="assets/logo.svg" alt="PicoClaw logo" width="120" />
+  <img src="assets/logo.svg" alt="X-Claw logo" width="120" />
 </p>
 
 [中文](README.md) | [Roadmap](ROADMAP.md)
 
-PicoClaw is a lightweight personal AI assistant written in Go.
+X-Claw is a lightweight personal AI assistant written in Go.
 
 This repository contains the core CLI, gateway service, tool system, and channel integrations.
 
 ## Scope
 
-PicoClaw supports:
+X-Claw supports:
 - CLI chat (`agent` mode)
 - Long-running gateway service (`gateway` mode)
 - Multi-model configuration via `model_list`
@@ -36,8 +36,8 @@ This project is under active development.
 ## Quick Start (Local Build)
 
 ```bash
-git clone https://github.com/sipeed/picoclaw.git
-cd picoclaw
+git clone https://github.com/xwysyy/picoclaw.git x-claw
+cd x-claw
 make deps
 make build
 ```
@@ -45,13 +45,13 @@ make build
 Initialize workspace/config:
 
 ```bash
-./build/picoclaw onboard
+./build/x-claw onboard
 ```
 
 Edit config:
 
 ```bash
-vim ~/.picoclaw/config.json
+vim ~/.x-claw/config.json
 ```
 
 Note: PicoClaw runtime configuration is **file-only** (`config.json`, default: `~/.picoclaw/config.json`; Docker deployments typically mount `config/config.json` to that path). Environment-variable overrides for config fields are intentionally not supported to keep behavior reproducible.
@@ -62,7 +62,7 @@ Minimal example:
 {
   "agents": {
     "defaults": {
-      "workspace": "~/.picoclaw/workspace",
+      "workspace": "~/.x-claw/workspace",
       "model": "gpt-5.2",
       "max_tokens": 8192,
       "max_tool_iterations": 20
@@ -82,13 +82,13 @@ Minimal example:
 Run one-shot chat:
 
 ```bash
-./build/picoclaw agent -m "hello"
+./build/x-claw agent -m "hello"
 ```
 
 Run interactive chat:
 
 ```bash
-./build/picoclaw agent
+./build/x-claw agent
 ```
 
 ## Gateway Mode
@@ -96,7 +96,7 @@ Run interactive chat:
 Start gateway:
 
 ```bash
-./build/picoclaw gateway
+./build/x-claw gateway
 ```
 
 Health endpoint:
@@ -185,7 +185,7 @@ Public exposure (remote / cross-machine notifications):
 - Prefer HTTPS reverse proxy or private networking (e.g. Tailscale) for remote access
 - If you must bind it publicly: set `gateway.host` to `0.0.0.0` and configure a strong random `gateway.api_key`
 
-For external agents (Claude Code / Codex) to notify PicoClaw, see: `extensions/picoclaw-notify/SKILL.md` (calls `/api/notify`).
+For external agents (Claude Code / Codex) to notify X-Claw, see: `extensions/x-claw-notify/SKILL.md` (calls `/api/notify`).
 
 ### Tool Trace (replayable tool-call logs)
 
@@ -198,8 +198,8 @@ When `tools.trace.enabled=true`, every tool call appends to an on-disk JSONL eve
 
 Default trace locations (when `tools.trace.dir` is empty):
 
-- ` <workspace>/.picoclaw/audit/tools/<session>/events.jsonl `
-- ` <workspace>/.picoclaw/audit/tools/<session>/calls/*.json|*.md ` (when `tools.trace.write_per_call_files=true`)
+- ` <workspace>/.x-claw/audit/tools/<session>/events.jsonl `
+- ` <workspace>/.x-claw/audit/tools/<session>/calls/*.json|*.md ` (when `tools.trace.write_per_call_files=true`)
 
 Config example:
 
@@ -403,20 +403,20 @@ This repo ships `docker/docker-compose.yml` with profiles:
 - `agent` for one-shot/manual CLI runs
 
 Use your local config at `config/config.json` (mounted read-only into the container).
-If the container logs show `permission denied` for `/home/picoclaw/.picoclaw/config.json`, your host `config/config.json` is likely too strict (e.g. `600`). Ensure it is readable by the container user (e.g. `chmod 644 config/config.json`).
+If the container logs show `permission denied` for `/home/xclaw/.x-claw/config.json`, your host `config/config.json` is likely too strict (e.g. `600`). Ensure it is readable by the container user (e.g. `chmod 644 config/config.json`).
 
 Build and run gateway:
 
 ```bash
-docker compose -p picoclaw -f docker/docker-compose.yml --profile gateway up -d --build
-docker compose -p picoclaw -f docker/docker-compose.yml ps
+docker compose -p x-claw -f docker/docker-compose.yml --profile gateway up -d --build
+docker compose -p x-claw -f docker/docker-compose.yml ps
 curl -sS http://127.0.0.1:18790/health
 ```
 
 Run one-shot agent:
 
 ```bash
-docker compose -p picoclaw -f docker/docker-compose.yml run --rm picoclaw-agent -m "hello"
+docker compose -p x-claw -f docker/docker-compose.yml run --rm x-claw-agent -m "hello"
 ```
 
 Git is available in the container image for agent-side commits/pushes. Configure PAT and identity in `config/config.json` under `tools.git`:
@@ -442,23 +442,23 @@ At container startup, this is written to `~/.git-credentials` and `~/.gitconfig`
 Stop gateway:
 
 ```bash
-docker compose -p picoclaw -f docker/docker-compose.yml down
+docker compose -p x-claw -f docker/docker-compose.yml down
 ```
 
 ## Common Commands
 
-- `picoclaw onboard` initialize workspace and default config
-- `picoclaw agent` interactive chat
-- `picoclaw agent -m "..."` one-shot chat
-- `picoclaw gateway` run channel gateway
-- `picoclaw status` show runtime status
-- `picoclaw cron list` list scheduled jobs
-- `picoclaw cron add ...` add scheduled job
+- `x-claw onboard` initialize workspace and default config
+- `x-claw agent` interactive chat
+- `x-claw agent -m "..."` one-shot chat
+- `x-claw gateway` run channel gateway
+- `x-claw status` show runtime status
+- `x-claw cron list` list scheduled jobs
+- `x-claw cron add ...` add scheduled job
 
 ## Configuration Notes
 
-- Main config file: `~/.picoclaw/config.json`
-- Default workspace: `~/.picoclaw/workspace`
+- Main config file: `~/.x-claw/config.json`
+- Default workspace: `~/.x-claw/workspace`
 - Example config template: `config/config.example.json`
 
 For advanced options, inspect in-code config structs under `pkg/config`.
@@ -470,7 +470,7 @@ See: [UNIT_TESTING.md](UNIT_TESTING.md) (Chinese doc, includes the recommended T
 ## Troubleshooting
 
 Use:
-- `docker compose ... logs -f picoclaw-gateway`
+- `docker compose ... logs -f x-claw-gateway`
 
 ## License
 

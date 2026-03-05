@@ -1,10 +1,10 @@
 #!/bin/sh
 set -e
 
-CONFIG_PATH="${PICOCLAW_CONFIG_PATH:-${HOME}/.picoclaw/config.json}"
+CONFIG_PATH="${X_CLAW_CONFIG_PATH:-${HOME}/.x-claw/config.json}"
 
 setup_git_from_config() {
-    # tools.git in config.json is optional; unknown fields are ignored by picoclaw itself.
+    # tools.git in config.json is optional; unknown fields are ignored by x-claw itself.
     # This hook only prepares git credentials/user identity for shell-based git push/commit.
     [ -f "${CONFIG_PATH}" ] || return 0
     command -v git >/dev/null 2>&1 || return 0
@@ -71,17 +71,17 @@ PY
 # First-run: neither config nor workspace exists.
 # If config.json is already mounted but workspace is missing we skip onboard to
 # avoid the interactive "Overwrite? (y/n)" prompt hanging in a non-TTY container.
-if [ ! -d "${HOME}/.picoclaw/workspace" ] && [ ! -f "${CONFIG_PATH}" ]; then
-    picoclaw onboard
+if [ ! -d "${HOME}/.x-claw/workspace" ] && [ ! -f "${CONFIG_PATH}" ]; then
+    x-claw onboard
     echo ""
     echo "First-run setup complete."
-    echo "Edit ${HOME}/.picoclaw/config.json (add your API key, etc.) then restart the container."
+    echo "Edit ${HOME}/.x-claw/config.json (add your API key, etc.) then restart the container."
     exit 0
 fi
 
 setup_git_from_config
 
-# Keep `docker compose run ... picoclaw-agent -m "hello"` compatible:
+# Keep `docker compose run ... x-claw-agent -m "hello"` compatible:
 # when only flags are passed, default to `agent` subcommand.
 if [ "$#" -eq 0 ]; then
     set -- gateway
@@ -92,4 +92,4 @@ case "$1" in
         ;;
 esac
 
-exec picoclaw "$@"
+exec x-claw "$@"

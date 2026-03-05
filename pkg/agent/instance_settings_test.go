@@ -3,7 +3,7 @@ package agent
 import (
 	"testing"
 
-	"github.com/sipeed/picoclaw/pkg/config"
+	"github.com/xwysyy/picoclaw/pkg/config"
 )
 
 func TestResolveCompaction_Defaults(t *testing.T) {

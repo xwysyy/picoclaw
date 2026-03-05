@@ -9,9 +9,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sipeed/picoclaw/pkg/bus"
-	"github.com/sipeed/picoclaw/pkg/config"
-	"github.com/sipeed/picoclaw/pkg/providers"
+	"github.com/xwysyy/picoclaw/pkg/bus"
+	"github.com/xwysyy/picoclaw/pkg/config"
+	"github.com/xwysyy/picoclaw/pkg/providers"
 )
 
 type SubagentTask struct {
@@ -552,7 +552,7 @@ func (sm *SubagentManager) runTask(ctx context.Context, task *SubagentTask, call
 	sm.updateTaskAndEmit(task, SubagentTaskRunning, "running", task.Result, "")
 
 	// Build system prompt for subagent
-	systemPrompt := fmt.Sprintf(`You are a subagent working under the picoclaw system.
+	systemPrompt := fmt.Sprintf(`You are a subagent working under the X-Claw system.
 
 Complete the given task independently and report the result.
 
@@ -1036,7 +1036,7 @@ func (t *SubagentTool) Execute(ctx context.Context, args map[string]any) *ToolRe
 	messages := []providers.Message{
 		{
 			Role: "system",
-			Content: "You are a subagent working under the picoclaw system. " +
+			Content: "You are a subagent working under the X-Claw system. " +
 				"Complete the given task independently and provide a clear, concise result. " +
 				"Use tools as needed, check results before proceeding, and do NOT fabricate data. " +
 				"If a tool fails, try an alternative. If you cannot complete the task, explain why.",

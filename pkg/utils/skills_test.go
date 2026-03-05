@@ -30,4 +30,3 @@ func TestValidateSkillIdentifier(t *testing.T) {
 		})
 	}
 }
-

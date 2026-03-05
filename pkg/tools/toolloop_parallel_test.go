@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sipeed/picoclaw/pkg/providers"
+	"github.com/xwysyy/picoclaw/pkg/providers"
 )
 
 type scriptedToolLoopProvider struct {

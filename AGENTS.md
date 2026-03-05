@@ -1,7 +1,7 @@
 # AGENTS.md (Project-Level)
 
 ## Scope
-This file applies to the `picoclaw` project root.
+This file applies to the `x-claw` project root.
 
 ## Git Upstream and Periodic Sync
 
@@ -18,10 +18,10 @@ Run these commands regularly to sync latest upstream changes into your fork bran
 2. `git checkout main`
 3. `GIT_EDITOR=true git merge --no-edit upstream/main`
 4. `source ~/.zshrc && proxy_on && git push origin main`
-5. Restart currently running `picoclaw` containers:
-   - `docker ps -q --filter label=com.docker.compose.project=picoclaw | xargs -r docker restart`
+5. Restart currently running `x-claw` containers:
+   - `docker ps -q --filter label=com.docker.compose.project=x-claw | xargs -r docker restart`
 6. Verify current runtime status:
-   - `docker ps --filter label=com.docker.compose.project=picoclaw`
+   - `docker ps --filter label=com.docker.compose.project=x-claw`
    - `curl -sS http://127.0.0.1:18790/health`
 
 If you prefer a linear history (rebase), use:
@@ -130,13 +130,13 @@ Running `docker compose up -d --build` without profile may fail with:
 5. `curl -sS http://127.0.0.1:18790/health`
 
 Expected healthy state:
-- container: `picoclaw-gateway`
+- container: `x-claw-gateway`
 - compose status: `Up ... (healthy)`
 - health response contains `"status":"ok"`
 
 ### Useful checks
-- `docker logs --tail 100 picoclaw-gateway`
-- `docker ps --filter name=picoclaw-gateway`
+- `docker logs --tail 100 x-claw-gateway`
+- `docker ps --filter name=x-claw-gateway`
 
 ## Proxy note for non-interactive shells
 
@@ -155,4 +155,4 @@ When finishing a coding task (feature/fix/docs), proactively notify the user via
 
 Example:
 
-- `curl -sS -X POST http://127.0.0.1:18790/api/notify -H 'Content-Type: application/json' -d '{"content":"✅ PicoClaw: change complete (redeployed)."}'`
+- `curl -sS -X POST http://127.0.0.1:18790/api/notify -H 'Content-Type: application/json' -d '{"content":"✅ X-Claw: change complete (redeployed)."}'`
