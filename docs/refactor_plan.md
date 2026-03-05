@@ -1,6 +1,6 @@
-# PicoClaw 彻底重构计划（基于 `openclaw_review.md` / `refactor_guide1.md`）
+# PicoClaw 彻底重构计划（历史记录）
 
-> 日期：2026-03-04（以仓库内文档为基线）  
+> 日期：2026-03-04（以仓库内文档为基线；当前状态以根目录 `ROADMAP.md` 与 `docs/architecture.md` 为准）  
 > 目标：把当前“功能堆叠导致的耦合与屎山趋势”收敛成 **清晰边界 + 可测试核心 + 可演进基础设施** 的长期形态，并且让每一步都能 `go test` 回归。
 
 ---
@@ -35,7 +35,7 @@
   约束：实现 Core 的端口接口，不把业务策略写死在 infra。
 - **App（应用层 / 组合根）**：CLI/Gateway 的装配、生命周期、热更新、信号处理
 
-> 目录最终建议参考 `refactor_guide1.md` 第 4 节（`internal/{core,extended,infra,app}`）。
+> 目录与分层建议参考 `docs/architecture.md`（`internal/{core,extended}` + adapter/facade 迁移策略）。
 
 ### 1.2 核心不变式（重构中必须保持）
 - Session JSONL/meta 的格式与字段兼容（或提供迁移）。
@@ -44,7 +44,7 @@
 - 渠道收发基本链路可用（至少现有 enabled channels 不因 refactor 崩）。
 
 ### 1.3 验收标准（每阶段都可判定“已完成”）
-- 依赖方向满足分层矩阵（见 `refactor_guide1.md` 3.4）。
+- 依赖方向满足分层矩阵（见 `docs/architecture.md`；并由 `internal/archcheck` 在测试中强制）。
 - 核心逻辑能用 fake provider + fake tools 做单测，不依赖 channels/http。
 - `go test` 可在受限资源环境运行（避免单包测试被 OOM/KILL）。
 - 新增/修改一个 channel/tool/provider 不需要改 AgentLoop 核心逻辑（或改动显著收敛）。
