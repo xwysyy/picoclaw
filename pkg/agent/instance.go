@@ -16,8 +16,9 @@ import (
 	"github.com/sipeed/picoclaw/pkg/tools"
 )
 
-// AgentInstance represents a fully configured agent with its own workspace,
-// session manager, context builder, and tool registry.
+// AgentInstance represents a configured agent with its own workspace, context builder,
+// and tool registry. The session manager may be injected by the composition root
+// (AgentLoop) to enable shared conversation history across agents.
 type AgentInstance struct {
 	ID              string
 	Name            string
@@ -181,11 +182,6 @@ func NewAgentInstance(
 	toolsRegistry.Register(tools.NewEditFileTool(workspace, restrict, allowWritePaths))
 	toolsRegistry.Register(tools.NewAppendFileTool(workspace, restrict, allowWritePaths))
 
-	sessionsDir := filepath.Join(workspace, "sessions")
-	sessionsManager := session.NewSessionManager(sessionsDir)
-	toolsRegistry.Register(tools.NewSessionsListTool(sessionsManager))
-	toolsRegistry.Register(tools.NewSessionsHistoryTool(sessionsManager))
-
 	contextBuilder := NewContextBuilder(workspace)
 
 	agentID, agentName, subagents, skillsFilter := resolveAgentIdentity(agentCfg)
@@ -236,17 +232,19 @@ func NewAgentInstance(
 	candidates := resolveFallbackCandidates(model, fallbacks, defaults.Provider, cfg)
 
 	return &AgentInstance{
-		ID:             agentID,
-		Name:           agentName,
-		Model:          model,
-		Fallbacks:      fallbacks,
-		Workspace:      workspace,
-		MaxIterations:  maxIter,
-		MaxTokens:      maxTokens,
-		Temperature:    temperature,
-		ContextWindow:  maxTokens,
-		Provider:       provider,
-		Sessions:       sessionsManager,
+		ID:            agentID,
+		Name:          agentName,
+		Model:         model,
+		Fallbacks:     fallbacks,
+		Workspace:     workspace,
+		MaxIterations: maxIter,
+		MaxTokens:     maxTokens,
+		Temperature:   temperature,
+		ContextWindow: maxTokens,
+		Provider:      provider,
+		// Sessions are injected by the composition root (AgentLoop) so multi-agent
+		// handoff can share one conversation history across agents.
+		Sessions:       nil,
 		ContextBuilder: contextBuilder,
 		Tools:          toolsRegistry,
 		Subagents:      subagents,

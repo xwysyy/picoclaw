@@ -23,28 +23,53 @@ export GOGC="${GOGC:-30}"
 export GOMAXPROCS="${GOMAXPROCS:-1}"
 export GODEBUG="${GODEBUG:-madvdontneed=1}"
 
+run_go_test_with_oom_retry() {
+  local label="$1"
+  shift
+
+  local tmp
+  tmp="$(mktemp)"
+
+  set +e
+  "$@" >"$tmp" 2>&1
+  local rc=$?
+  cat "$tmp"
+  set -e
+
+  local killed=false
+  if [[ $rc -eq 137 ]]; then
+    killed=true
+  elif grep -q "signal: killed" "$tmp"; then
+    killed=true
+  fi
+  rm -f "$tmp"
+
+  if [[ $rc -ne 0 ]]; then
+    if [[ $killed == true ]]; then
+      echo "$label tests were killed (likely OOM); retrying with more aggressive GC..."
+      GOMEMLIMIT="${GOMEMLIMIT_RETRY:-160MiB}" \
+        GOGC="${GOGC_RETRY:-20}" \
+        "$@"
+    else
+      exit $rc
+    fi
+  fi
+}
+
 go test -p 1 ./internal/archcheck -count=1
+go test -p 1 ./internal/core/routing -count=1
 go test -p 1 ./pkg/utils -count=1
 
 # Agent full-suite may be too heavy in CI sandboxes; run key regression tests.
-set +e
-go test -p 1 ./pkg/agent -run 'TestTargetReasoningChannelID_AllChannels|TestHandleReasoning|TestSanitizeHistoryForProvider' -count=1
-rc=$?
-set -e
-if [[ $rc -ne 0 ]]; then
-  if [[ $rc -eq 137 ]]; then
-    echo "pkg/agent tests were OOM-killed (rc=137); retrying with more aggressive GC..."
-    GOMEMLIMIT="${GOMEMLIMIT_RETRY:-160MiB}" \
-      GOGC="${GOGC_RETRY:-20}" \
-      go test -p 1 ./pkg/agent -run 'TestTargetReasoningChannelID_AllChannels|TestHandleReasoning|TestSanitizeHistoryForProvider' -count=1
-  else
-    exit $rc
-  fi
-fi
+run_go_test_with_oom_retry "pkg/agent" \
+  go test -p 1 ./pkg/agent -run 'TestTargetReasoningChannelID_AllChannels|TestHandleReasoning|TestSanitizeHistoryForProvider' -count=1
 
 # Tools full-suite can be killed in memory-constrained environments; run key regression tests.
-go test -p 1 ./pkg/tools -run 'TestExecuteToolCalls_MaxResultChars_UsesHeadTailTruncation' -count=1
-go test -p 1 ./pkg/tools -run 'TestExecBackground_WithProcessPoll' -count=1
-go test -p 1 ./pkg/tools -run 'TestShellTool_TimeoutKillsChildProcess' -count=1
+run_go_test_with_oom_retry "pkg/tools" \
+  go test -p 1 ./pkg/tools -run 'TestExecuteToolCalls_MaxResultChars_UsesHeadTailTruncation' -count=1
+run_go_test_with_oom_retry "pkg/tools" \
+  go test -p 1 ./pkg/tools -run 'TestExecBackground_WithProcessPoll' -count=1
+run_go_test_with_oom_retry "pkg/tools" \
+  go test -p 1 ./pkg/tools -run 'TestShellTool_TimeoutKillsChildProcess' -count=1
 
 go test -p 1 ./cmd/picoclaw/internal/gateway -count=1

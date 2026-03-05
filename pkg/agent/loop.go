@@ -946,27 +946,27 @@ func (al *AgentLoop) Run(ctx context.Context) error {
 				originChannel = strings.TrimSpace(msg.ChatID[:idx])
 				originChatID = strings.TrimSpace(msg.ChatID[idx+1:])
 			}
-			key := strings.ToLower(routing.BuildConversationPeerSessionKey(routing.SessionKeyParams{
+			key := utils.CanonicalSessionKey(routing.BuildConversationPeerSessionKey(routing.SessionKeyParams{
 				Channel:       originChannel,
 				AccountID:     msg.Metadata["account_id"],
 				Peer:          &routing.RoutePeer{Kind: "direct", ID: originChatID},
 				DMScope:       dmScope,
 				IdentityLinks: identityLinks,
 			}))
-			if strings.TrimSpace(key) != "" {
+			if key != "" {
 				return key
 			}
 		}
 
-		key := strings.ToLower(routing.BuildConversationPeerSessionKey(routing.SessionKeyParams{
+		key := utils.CanonicalSessionKey(routing.BuildConversationPeerSessionKey(routing.SessionKeyParams{
 			Channel:       msg.Channel,
 			AccountID:     msg.Metadata["account_id"],
 			Peer:          extractPeer(msg),
 			DMScope:       dmScope,
 			IdentityLinks: identityLinks,
 		}))
-		if strings.TrimSpace(key) == "" {
-			key = strings.TrimSpace(msg.Channel) + ":" + strings.TrimSpace(msg.ChatID)
+		if key == "" {
+			key = utils.CanonicalSessionKey(strings.TrimSpace(msg.Channel) + ":" + strings.TrimSpace(msg.ChatID))
 		}
 		return key
 	}

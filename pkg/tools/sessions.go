@@ -10,6 +10,7 @@ import (
 
 	"github.com/sipeed/picoclaw/pkg/providers"
 	"github.com/sipeed/picoclaw/pkg/session"
+	"github.com/sipeed/picoclaw/pkg/utils"
 )
 
 const (
@@ -287,7 +288,7 @@ type sessionHistoryOutput struct {
 }
 
 func classifySessionKind(key string) string {
-	k := strings.ToLower(strings.TrimSpace(key))
+	k := utils.CanonicalSessionKey(key)
 	switch {
 	case k == "":
 		return "other"

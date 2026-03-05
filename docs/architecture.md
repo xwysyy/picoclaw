@@ -29,6 +29,12 @@ accidental coupling and long-term "big-ball-of-mud" drift.
   - `MediaResolver` resolves `media://...` refs to local paths + metadata.
   - `pkg/media.AsMediaResolver(store)` adapts `media.MediaStore` to this port.
 
+## Core Algorithms Moved So Far
+
+- `internal/core/routing/*`
+  - Agent ID/account ID normalization and session key construction now live in core.
+  - `pkg/routing` remains as a thin facade to keep existing imports stable during migration.
+
 ## Canonical Event Taxonomy
 
 - `internal/core/events/types.go` defines stable string constants for trace/event types.
@@ -49,4 +55,3 @@ accidental coupling and long-term "big-ball-of-mud" drift.
   - `./scripts/test.sh`
 - Full CLI compile/tests:
   - `go test ./cmd/picoclaw/...`
-

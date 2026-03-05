@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/sipeed/picoclaw/pkg/config"
+	"github.com/sipeed/picoclaw/pkg/utils"
 )
 
 // RouteInput contains the routing context from an inbound message.
@@ -54,7 +55,7 @@ func (r *RouteResolver) ResolveRoute(input RouteInput) ResolvedRoute {
 
 	choose := func(agentID string, matchedBy string) ResolvedRoute {
 		resolvedAgentID := r.pickAgentID(agentID)
-		sessionKey := strings.ToLower(BuildAgentPeerSessionKey(SessionKeyParams{
+		sessionKey := utils.CanonicalSessionKey(BuildAgentPeerSessionKey(SessionKeyParams{
 			AgentID:       resolvedAgentID,
 			Channel:       channel,
 			AccountID:     accountID,
@@ -62,7 +63,7 @@ func (r *RouteResolver) ResolveRoute(input RouteInput) ResolvedRoute {
 			DMScope:       dmScope,
 			IdentityLinks: identityLinks,
 		}))
-		mainSessionKey := strings.ToLower(BuildAgentMainSessionKey(resolvedAgentID))
+		mainSessionKey := utils.CanonicalSessionKey(BuildAgentMainSessionKey(resolvedAgentID))
 		return ResolvedRoute{
 			AgentID:        resolvedAgentID,
 			Channel:        channel,
