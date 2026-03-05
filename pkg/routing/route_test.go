@@ -70,6 +70,48 @@ func TestResolveRoute_PeerBinding(t *testing.T) {
 	}
 }
 
+func TestResolveRoute_PeerBinding_ThreadIDOverridesPeer(t *testing.T) {
+	agents := []config.AgentConfig{
+		{ID: "general", Default: true},
+		{ID: "topic"},
+	}
+	bindings := []config.AgentBinding{
+		{
+			AgentID: "general",
+			Match: config.BindingMatch{
+				Channel:   "telegram",
+				AccountID: "*",
+				Peer:      &config.PeerMatch{Kind: "group", ID: "group-1"},
+			},
+		},
+		{
+			AgentID: "topic",
+			Match: config.BindingMatch{
+				Channel:   "telegram",
+				AccountID: "*",
+				Peer:      &config.PeerMatch{Kind: "group", ID: "group-1"},
+				ThreadID:  "42",
+			},
+		},
+	}
+	cfg := testConfig(agents, bindings)
+	r := NewRouteResolver(cfg)
+
+	route := r.ResolveRoute(RouteInput{
+		Channel:   "telegram",
+		ThreadID:  "42",
+		Peer:      &RoutePeer{Kind: "group", ID: "group-1"},
+		AccountID: "bot1",
+	})
+
+	if route.AgentID != "topic" {
+		t.Errorf("AgentID = %q, want 'topic'", route.AgentID)
+	}
+	if route.MatchedBy != "binding.peer" {
+		t.Errorf("MatchedBy = %q, want 'binding.peer'", route.MatchedBy)
+	}
+}
+
 func TestResolveRoute_GuildBinding(t *testing.T) {
 	agents := []config.AgentConfig{
 		{ID: "general", Default: true},

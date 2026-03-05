@@ -1308,6 +1308,7 @@ func (al *AgentLoop) processMessage(ctx context.Context, msg bus.InboundMessage)
 		AccountID:  msg.Metadata["account_id"],
 		Peer:       extractPeer(msg),
 		ParentPeer: extractParentPeer(msg),
+		ThreadID:   msg.Metadata["thread_id"],
 		GuildID:    msg.Metadata["guild_id"],
 		TeamID:     msg.Metadata["team_id"],
 	})

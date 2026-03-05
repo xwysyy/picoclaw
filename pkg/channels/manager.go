@@ -312,6 +312,12 @@ func (m *Manager) preSend(ctx context.Context, name string, msg bus.OutboundMess
 }
 
 func NewManager(cfg *config.Config, messageBus *bus.MessageBus, store media.MediaStore) (*Manager, error) {
+	if cfg != nil {
+		if err := cfg.ValidateActiveChannelConfig(); err != nil {
+			return nil, err
+		}
+	}
+
 	m := &Manager{
 		channels:   make(map[string]Channel),
 		workers:    make(map[string]*channelWorker),

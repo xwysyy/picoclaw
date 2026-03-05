@@ -243,9 +243,9 @@ curl -sS http://127.0.0.1:18790/readyz
 - [x] PR-02：SessionKey canonicalization（含 CLI/gateway/UI 覆盖点梳理）
 - [x] PR-03：Gateway `/readyz` + 安全头（含 curl 验收）
 - [x] PR-04：`picoclaw config validate`（含 `--json` + 错误路径）
-- [ ] PR-05：Telegram topic/thread sessionKey +（可选）topic→agent 映射
+- [x] PR-05：Telegram topic/thread sessionKey + topic→agent 映射（通过 `bindings.match.thread_id`）
 - [x] PR-06：doctor（只读扫描版）+ 输出建议（后续再加 `--repair`）
-- [ ] PR-07：SecretRef（env/file）+ 原子快照 + active-surface filtering（已完成：SecretRef 类型 + 大范围适配；待完成：原子快照 + active-surface filtering）
+- [x] PR-07：SecretRef（env/file）+ 原子快照 + active-surface filtering（gateway reload fail-fast + enabled channel secret preflight）
 
 ---
 

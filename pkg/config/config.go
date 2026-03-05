@@ -225,8 +225,13 @@ type BindingMatch struct {
 	Channel   string     `json:"channel"`
 	AccountID string     `json:"account_id,omitempty"`
 	Peer      *PeerMatch `json:"peer,omitempty"`
-	GuildID   string     `json:"guild_id,omitempty"`
-	TeamID    string     `json:"team_id,omitempty"`
+	// ThreadID optionally matches a thread/topic identifier within the peer.
+	// Examples:
+	// - Telegram forum topic: message_thread_id
+	// - Slack thread: thread_ts (if mapped into a stable thread identifier)
+	ThreadID string `json:"thread_id,omitempty"`
+	GuildID  string `json:"guild_id,omitempty"`
+	TeamID   string `json:"team_id,omitempty"`
 }
 
 type AgentBinding struct {

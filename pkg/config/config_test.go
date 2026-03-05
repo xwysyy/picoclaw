@@ -92,16 +92,17 @@ func TestAgentConfig_FullParse(t *testing.T) {
 				}
 			]
 		},
-		"bindings": [
-			{
-				"agent_id": "support",
-				"match": {
-					"channel": "telegram",
-					"account_id": "*",
-					"peer": {"kind": "direct", "id": "user123"}
+			"bindings": [
+				{
+					"agent_id": "support",
+					"match": {
+						"channel": "telegram",
+						"account_id": "*",
+						"peer": {"kind": "direct", "id": "user123"},
+						"thread_id": "42"
+					}
 				}
-			}
-		],
+			],
 		"session": {
 			"dm_scope": "per-peer",
 			"identity_links": {
@@ -150,6 +151,9 @@ func TestAgentConfig_FullParse(t *testing.T) {
 	}
 	if binding.Match.Peer == nil || binding.Match.Peer.Kind != "direct" || binding.Match.Peer.ID != "user123" {
 		t.Errorf("binding.Match.Peer = %+v", binding.Match.Peer)
+	}
+	if binding.Match.ThreadID != "42" {
+		t.Errorf("binding.Match.ThreadID = %q, want %q", binding.Match.ThreadID, "42")
 	}
 
 	if cfg.Session.DMScope != "per-peer" {

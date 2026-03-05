@@ -13,6 +13,7 @@ type RouteInput struct {
 	AccountID  string
 	Peer       *RoutePeer
 	ParentPeer *RoutePeer
+	ThreadID   string
 	GuildID    string
 	TeamID     string
 }
@@ -44,6 +45,7 @@ func (r *RouteResolver) ResolveRoute(input RouteInput) ResolvedRoute {
 	channel := strings.ToLower(strings.TrimSpace(input.Channel))
 	accountID := NormalizeAccountID(input.AccountID)
 	peer := input.Peer
+	threadID := strings.TrimSpace(input.ThreadID)
 
 	dmScope := DMScope(r.cfg.Session.DMScope)
 	if dmScope == "" {
@@ -60,6 +62,7 @@ func (r *RouteResolver) ResolveRoute(input RouteInput) ResolvedRoute {
 			Channel:       channel,
 			AccountID:     accountID,
 			Peer:          peer,
+			ThreadID:      threadID,
 			DMScope:       dmScope,
 			IdentityLinks: identityLinks,
 		}))
@@ -76,7 +79,7 @@ func (r *RouteResolver) ResolveRoute(input RouteInput) ResolvedRoute {
 
 	// Priority 1: Peer binding
 	if peer != nil && strings.TrimSpace(peer.ID) != "" {
-		if match := r.findPeerMatch(bindings, peer); match != nil {
+		if match := r.findPeerMatch(bindings, peer, threadID); match != nil {
 			return choose(match.AgentID, "binding.peer")
 		}
 	}
@@ -84,7 +87,7 @@ func (r *RouteResolver) ResolveRoute(input RouteInput) ResolvedRoute {
 	// Priority 2: Parent peer binding
 	parentPeer := input.ParentPeer
 	if parentPeer != nil && strings.TrimSpace(parentPeer.ID) != "" {
-		if match := r.findPeerMatch(bindings, parentPeer); match != nil {
+		if match := r.findPeerMatch(bindings, parentPeer, threadID); match != nil {
 			return choose(match.AgentID, "binding.peer.parent")
 		}
 	}
@@ -145,21 +148,63 @@ func matchesAccountID(matchAccountID, actual string) bool {
 	return strings.ToLower(trimmed) == strings.ToLower(actual)
 }
 
-func (r *RouteResolver) findPeerMatch(bindings []config.AgentBinding, peer *RoutePeer) *config.AgentBinding {
-	for i := range bindings {
-		b := &bindings[i]
-		if b.Match.Peer == nil {
-			continue
+func (r *RouteResolver) findPeerMatch(bindings []config.AgentBinding, peer *RoutePeer, threadID string) *config.AgentBinding {
+	if peer == nil {
+		return nil
+	}
+
+	actualKind := strings.ToLower(strings.TrimSpace(peer.Kind))
+	actualID := strings.TrimSpace(peer.ID)
+	if actualKind == "" || actualID == "" {
+		return nil
+	}
+
+	threadID = strings.ToLower(strings.TrimSpace(threadID))
+
+	matchesPeer := func(b *config.AgentBinding) bool {
+		if b == nil || b.Match.Peer == nil {
+			return false
 		}
 		peerKind := strings.ToLower(strings.TrimSpace(b.Match.Peer.Kind))
 		peerID := strings.TrimSpace(b.Match.Peer.ID)
 		if peerKind == "" || peerID == "" {
+			return false
+		}
+		return peerKind == actualKind && peerID == actualID
+	}
+
+	// Thread/topic bindings should win over non-thread bindings for the same peer.
+	if threadID != "" {
+		for i := range bindings {
+			b := &bindings[i]
+			if !matchesPeer(b) {
+				continue
+			}
+			if strings.ToLower(strings.TrimSpace(b.Match.ThreadID)) == threadID {
+				return b
+			}
+		}
+		for i := range bindings {
+			b := &bindings[i]
+			if !matchesPeer(b) {
+				continue
+			}
+			if strings.TrimSpace(b.Match.ThreadID) == "*" {
+				return b
+			}
+		}
+	}
+
+	for i := range bindings {
+		b := &bindings[i]
+		if !matchesPeer(b) {
 			continue
 		}
-		if peerKind == strings.ToLower(peer.Kind) && peerID == peer.ID {
+		if strings.TrimSpace(b.Match.ThreadID) == "" {
 			return b
 		}
 	}
+
 	return nil
 }
 
