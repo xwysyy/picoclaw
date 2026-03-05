@@ -19,20 +19,20 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/xwysyy/picoclaw/pkg/auditlog"
-	"github.com/xwysyy/picoclaw/pkg/bus"
-	"github.com/xwysyy/picoclaw/pkg/config"
-	"github.com/xwysyy/picoclaw/pkg/constants"
-	"github.com/xwysyy/picoclaw/pkg/logger"
-	"github.com/xwysyy/picoclaw/pkg/mcp"
-	"github.com/xwysyy/picoclaw/pkg/providers"
-	"github.com/xwysyy/picoclaw/pkg/routing"
-	"github.com/xwysyy/picoclaw/pkg/session"
-	"github.com/xwysyy/picoclaw/pkg/skills"
-	"github.com/xwysyy/picoclaw/pkg/state"
-	"github.com/xwysyy/picoclaw/pkg/tools"
-	"github.com/xwysyy/picoclaw/pkg/utils"
-	"github.com/xwysyy/picoclaw/pkg/voice"
+	"github.com/xwysyy/X-Claw/pkg/auditlog"
+	"github.com/xwysyy/X-Claw/pkg/bus"
+	"github.com/xwysyy/X-Claw/pkg/config"
+	"github.com/xwysyy/X-Claw/pkg/constants"
+	"github.com/xwysyy/X-Claw/pkg/logger"
+	"github.com/xwysyy/X-Claw/pkg/mcp"
+	"github.com/xwysyy/X-Claw/pkg/providers"
+	"github.com/xwysyy/X-Claw/pkg/routing"
+	"github.com/xwysyy/X-Claw/pkg/session"
+	"github.com/xwysyy/X-Claw/pkg/skills"
+	"github.com/xwysyy/X-Claw/pkg/state"
+	"github.com/xwysyy/X-Claw/pkg/tools"
+	"github.com/xwysyy/X-Claw/pkg/utils"
+	"github.com/xwysyy/X-Claw/pkg/voice"
 )
 
 type AgentLoop struct {
@@ -619,69 +619,69 @@ func registerSharedTools(
 			}
 			return out
 		}
-			webOpts := tools.WebSearchToolOptions{
-				BraveAPIKey:          resolveKey("tools.web.brave.api_key", cfg.Tools.Web.Brave.APIKey),
-				BraveAPIKeys:         resolveKeyList("tools.web.brave.api_keys", cfg.Tools.Web.Brave.APIKeys),
-				BraveMaxResults:      cfg.Tools.Web.Brave.MaxResults,
-				BraveEnabled:         cfg.Tools.Web.Brave.Enabled,
-				TavilyAPIKey:         resolveKey("tools.web.tavily.api_key", cfg.Tools.Web.Tavily.APIKey),
-				TavilyAPIKeys:        resolveKeyList("tools.web.tavily.api_keys", cfg.Tools.Web.Tavily.APIKeys),
-				TavilyBaseURL:        cfg.Tools.Web.Tavily.BaseURL,
-				TavilyMaxResults:     cfg.Tools.Web.Tavily.MaxResults,
-				TavilyEnabled:        cfg.Tools.Web.Tavily.Enabled,
-				DuckDuckGoMaxResults: cfg.Tools.Web.DuckDuckGo.MaxResults,
-				DuckDuckGoEnabled:    cfg.Tools.Web.DuckDuckGo.Enabled,
-				PerplexityAPIKey:     resolveKey("tools.web.perplexity.api_key", cfg.Tools.Web.Perplexity.APIKey),
-				PerplexityMaxResults: cfg.Tools.Web.Perplexity.MaxResults,
-				PerplexityEnabled:    cfg.Tools.Web.Perplexity.Enabled,
-				GLMSearchAPIKey:      resolveKey("tools.web.glm_search.api_key", cfg.Tools.Web.GLMSearch.APIKey),
-				GLMSearchBaseURL:     cfg.Tools.Web.GLMSearch.BaseURL,
-				GLMSearchEngine:      cfg.Tools.Web.GLMSearch.SearchEngine,
-				GLMSearchMaxResults:  cfg.Tools.Web.GLMSearch.MaxResults,
-				GLMSearchEnabled:     cfg.Tools.Web.GLMSearch.Enabled,
-				GrokAPIKey:           resolveKey("tools.web.grok.api_key", cfg.Tools.Web.Grok.APIKey),
-				GrokAPIKeys:          resolveKeyList("tools.web.grok.api_keys", cfg.Tools.Web.Grok.APIKeys),
-				GrokEndpoint:         cfg.Tools.Web.Grok.Endpoint,
-				GrokModel:            cfg.Tools.Web.Grok.DefaultModel,
-				GrokMaxResults:       cfg.Tools.Web.Grok.MaxResults,
-				GrokEnabled:          cfg.Tools.Web.Grok.Enabled,
-				Proxy:                cfg.Tools.Web.Proxy,
-				EvidenceModeEnabled:  cfg.Tools.Web.Evidence.Enabled,
-				EvidenceMinDomains:   cfg.Tools.Web.Evidence.MinDomains,
+		webOpts := tools.WebSearchToolOptions{
+			BraveAPIKey:          resolveKey("tools.web.brave.api_key", cfg.Tools.Web.Brave.APIKey),
+			BraveAPIKeys:         resolveKeyList("tools.web.brave.api_keys", cfg.Tools.Web.Brave.APIKeys),
+			BraveMaxResults:      cfg.Tools.Web.Brave.MaxResults,
+			BraveEnabled:         cfg.Tools.Web.Brave.Enabled,
+			TavilyAPIKey:         resolveKey("tools.web.tavily.api_key", cfg.Tools.Web.Tavily.APIKey),
+			TavilyAPIKeys:        resolveKeyList("tools.web.tavily.api_keys", cfg.Tools.Web.Tavily.APIKeys),
+			TavilyBaseURL:        cfg.Tools.Web.Tavily.BaseURL,
+			TavilyMaxResults:     cfg.Tools.Web.Tavily.MaxResults,
+			TavilyEnabled:        cfg.Tools.Web.Tavily.Enabled,
+			DuckDuckGoMaxResults: cfg.Tools.Web.DuckDuckGo.MaxResults,
+			DuckDuckGoEnabled:    cfg.Tools.Web.DuckDuckGo.Enabled,
+			PerplexityAPIKey:     resolveKey("tools.web.perplexity.api_key", cfg.Tools.Web.Perplexity.APIKey),
+			PerplexityMaxResults: cfg.Tools.Web.Perplexity.MaxResults,
+			PerplexityEnabled:    cfg.Tools.Web.Perplexity.Enabled,
+			GLMSearchAPIKey:      resolveKey("tools.web.glm_search.api_key", cfg.Tools.Web.GLMSearch.APIKey),
+			GLMSearchBaseURL:     cfg.Tools.Web.GLMSearch.BaseURL,
+			GLMSearchEngine:      cfg.Tools.Web.GLMSearch.SearchEngine,
+			GLMSearchMaxResults:  cfg.Tools.Web.GLMSearch.MaxResults,
+			GLMSearchEnabled:     cfg.Tools.Web.GLMSearch.Enabled,
+			GrokAPIKey:           resolveKey("tools.web.grok.api_key", cfg.Tools.Web.Grok.APIKey),
+			GrokAPIKeys:          resolveKeyList("tools.web.grok.api_keys", cfg.Tools.Web.Grok.APIKeys),
+			GrokEndpoint:         cfg.Tools.Web.Grok.Endpoint,
+			GrokModel:            cfg.Tools.Web.Grok.DefaultModel,
+			GrokMaxResults:       cfg.Tools.Web.Grok.MaxResults,
+			GrokEnabled:          cfg.Tools.Web.Grok.Enabled,
+			Proxy:                cfg.Tools.Web.Proxy,
+			EvidenceModeEnabled:  cfg.Tools.Web.Evidence.Enabled,
+			EvidenceMinDomains:   cfg.Tools.Web.Evidence.MinDomains,
+		}
+		if cfg == nil || cfg.Tools.IsToolEnabled("web") {
+			searchTool := tools.NewWebSearchTool(webOpts)
+			if searchTool != nil {
+				agent.Tools.Register(searchTool)
 			}
-			if cfg == nil || cfg.Tools.IsToolEnabled("web") {
-				searchTool := tools.NewWebSearchTool(webOpts)
-				if searchTool != nil {
-					agent.Tools.Register(searchTool)
-				}
-				dualSearchTool := tools.NewWebSearchDualTool(webOpts)
-				if dualSearchTool != nil {
-					agent.Tools.Register(dualSearchTool)
-				}
+			dualSearchTool := tools.NewWebSearchDualTool(webOpts)
+			if dualSearchTool != nil {
+				agent.Tools.Register(dualSearchTool)
 			}
-			if cfg == nil || cfg.Tools.IsToolEnabled("web_fetch") {
-				fetchTool, err := tools.NewWebFetchToolWithProxy(50000, cfg.Tools.Web.Proxy, cfg.Tools.Web.FetchLimitBytes)
-				if err != nil {
-					logger.ErrorCF("agent", "Failed to create web fetch tool", map[string]any{"error": err.Error()})
-				} else {
-					agent.Tools.Register(fetchTool)
-				}
+		}
+		if cfg == nil || cfg.Tools.IsToolEnabled("web_fetch") {
+			fetchTool, err := tools.NewWebFetchToolWithProxy(50000, cfg.Tools.Web.Proxy, cfg.Tools.Web.FetchLimitBytes)
+			if err != nil {
+				logger.ErrorCF("agent", "Failed to create web fetch tool", map[string]any{"error": err.Error()})
+			} else {
+				agent.Tools.Register(fetchTool)
 			}
+		}
 
-			// Message tool
-			if cfg == nil || cfg.Tools.IsToolEnabled("message") {
-				messageTool := tools.NewMessageTool()
-				messageTool.SetSendCallback(func(channel, chatID, content string) error {
-					pubCtx, pubCancel := context.WithTimeout(context.Background(), 5*time.Second)
-					defer pubCancel()
-					return msgBus.PublishOutbound(pubCtx, bus.OutboundMessage{
-						Channel: channel,
-						ChatID:  chatID,
-						Content: content,
-					})
+		// Message tool
+		if cfg == nil || cfg.Tools.IsToolEnabled("message") {
+			messageTool := tools.NewMessageTool()
+			messageTool.SetSendCallback(func(channel, chatID, content string) error {
+				pubCtx, pubCancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer pubCancel()
+				return msgBus.PublishOutbound(pubCtx, bus.OutboundMessage{
+					Channel: channel,
+					ChatID:  chatID,
+					Content: content,
 				})
-				agent.Tools.Register(messageTool)
-			}
+			})
+			agent.Tools.Register(messageTool)
+		}
 
 		// Tool confirmation (Phase E2): two-phase commit gate for side-effect tools.
 		confirmTTL := time.Duration(cfg.Tools.Policy.Confirm.ExpiresSeconds) * time.Second
@@ -691,41 +691,41 @@ func registerSharedTools(
 		if strings.TrimSpace(cfg.Channels.Feishu.AppID) != "" &&
 			cfg.Channels.Feishu.AppSecret.Present() {
 			agent.Tools.Register(tools.NewFeishuCalendarTool(cfg.Channels.Feishu))
-			}
+		}
 
-			// Skill discovery and installation tools
-			if cfg.Tools.IsToolEnabled("skills") {
-				findEnabled := cfg.Tools.IsToolEnabled("find_skills")
-				installEnabled := cfg.Tools.IsToolEnabled("install_skill")
-				if findEnabled || installEnabled {
-					clawhubAuthToken := resolveKey("tools.skills.registries.clawhub.auth_token", cfg.Tools.Skills.Registries.ClawHub.AuthToken)
-					registryMgr := skills.NewRegistryManagerFromConfig(skills.RegistryConfig{
-						MaxConcurrentSearches: cfg.Tools.Skills.MaxConcurrentSearches,
-						ClawHub: skills.ClawHubConfig{
-							Enabled:         cfg.Tools.Skills.Registries.ClawHub.Enabled,
-							BaseURL:         cfg.Tools.Skills.Registries.ClawHub.BaseURL,
-							AuthToken:       clawhubAuthToken,
-							SearchPath:      cfg.Tools.Skills.Registries.ClawHub.SearchPath,
-							SkillsPath:      cfg.Tools.Skills.Registries.ClawHub.SkillsPath,
-							DownloadPath:    cfg.Tools.Skills.Registries.ClawHub.DownloadPath,
-							Timeout:         cfg.Tools.Skills.Registries.ClawHub.Timeout,
-							MaxZipSize:      cfg.Tools.Skills.Registries.ClawHub.MaxZipSize,
-							MaxResponseSize: cfg.Tools.Skills.Registries.ClawHub.MaxResponseSize,
-						},
-					})
+		// Skill discovery and installation tools
+		if cfg.Tools.IsToolEnabled("skills") {
+			findEnabled := cfg.Tools.IsToolEnabled("find_skills")
+			installEnabled := cfg.Tools.IsToolEnabled("install_skill")
+			if findEnabled || installEnabled {
+				clawhubAuthToken := resolveKey("tools.skills.registries.clawhub.auth_token", cfg.Tools.Skills.Registries.ClawHub.AuthToken)
+				registryMgr := skills.NewRegistryManagerFromConfig(skills.RegistryConfig{
+					MaxConcurrentSearches: cfg.Tools.Skills.MaxConcurrentSearches,
+					ClawHub: skills.ClawHubConfig{
+						Enabled:         cfg.Tools.Skills.Registries.ClawHub.Enabled,
+						BaseURL:         cfg.Tools.Skills.Registries.ClawHub.BaseURL,
+						AuthToken:       clawhubAuthToken,
+						SearchPath:      cfg.Tools.Skills.Registries.ClawHub.SearchPath,
+						SkillsPath:      cfg.Tools.Skills.Registries.ClawHub.SkillsPath,
+						DownloadPath:    cfg.Tools.Skills.Registries.ClawHub.DownloadPath,
+						Timeout:         cfg.Tools.Skills.Registries.ClawHub.Timeout,
+						MaxZipSize:      cfg.Tools.Skills.Registries.ClawHub.MaxZipSize,
+						MaxResponseSize: cfg.Tools.Skills.Registries.ClawHub.MaxResponseSize,
+					},
+				})
 
-					if findEnabled {
-						searchCache := skills.NewSearchCache(
-							cfg.Tools.Skills.SearchCache.MaxSize,
-							time.Duration(cfg.Tools.Skills.SearchCache.TTLSeconds)*time.Second,
-						)
-						agent.Tools.Register(tools.NewFindSkillsTool(registryMgr, searchCache))
-					}
-					if installEnabled {
-						agent.Tools.Register(tools.NewInstallSkillTool(registryMgr, agent.Workspace))
-					}
+				if findEnabled {
+					searchCache := skills.NewSearchCache(
+						cfg.Tools.Skills.SearchCache.MaxSize,
+						time.Duration(cfg.Tools.Skills.SearchCache.TTLSeconds)*time.Second,
+					)
+					agent.Tools.Register(tools.NewFindSkillsTool(registryMgr, searchCache))
+				}
+				if installEnabled {
+					agent.Tools.Register(tools.NewInstallSkillTool(registryMgr, agent.Workspace))
 				}
 			}
+		}
 
 		// Phase F: agent discovery + explicit handoff.
 		agent.Tools.Register(tools.NewAgentsListTool(listAgents))
@@ -742,80 +742,80 @@ func registerSharedTools(
 			}
 			return registry.CanSpawnSubagent(currentAgentID, targetAgentID)
 		})
-			agent.Tools.Register(handoffTool)
+		agent.Tools.Register(handoffTool)
 
-			// Spawn/session tools with allowlist checker.
-			if cfg.Tools.IsToolEnabled("spawn") {
-				if cfg.Tools.IsToolEnabled("subagent") {
-					subagentManager := tools.NewSubagentManager(provider, agent.Model, agent.Workspace, msgBus)
-					subagentManager.SetLLMOptions(agent.MaxTokens, agent.Temperature)
-					subagentManager.SetLimits(
-						cfg.Orchestration.MaxParallelWorkers,
-						cfg.Orchestration.MaxTasksPerAgent,
-						cfg.Orchestration.MaxSpawnDepth,
-					)
-					subagentManager.SetToolCallParallelism(
-						cfg.Orchestration.ToolCallsParallelEnabled,
-						cfg.Orchestration.MaxToolCallConcurrency,
-						cfg.Orchestration.ParallelToolsMode,
-						cfg.Orchestration.ToolParallelOverrides,
-					)
-					subagentManager.SetToolExecutionPolicy(cfg.Tools.Policy, cfg.Tools.Policy.Audit.Tags)
-					subagentManager.SetToolExecutionTracing(
-						tools.ToolTraceOptions{
-							Enabled:               cfg.Tools.Trace.Enabled,
-							Dir:                   cfg.Tools.Trace.Dir,
-							WritePerCallFiles:     cfg.Tools.Trace.WritePerCallFiles,
-							MaxArgPreviewChars:    cfg.Tools.Trace.MaxArgPreviewChars,
-							MaxResultPreviewChars: cfg.Tools.Trace.MaxResultPreviewChars,
-						},
-						tools.ToolErrorTemplateOptions{
-							Enabled:               cfg.Tools.ErrorTemplate.Enabled,
-							IncludeSchema:         cfg.Tools.ErrorTemplate.IncludeSchema,
-							IncludeAvailableTools: true,
-						},
-					)
-					subagentManager.SetToolHooks(tools.BuildDefaultToolHooks(cfg))
-					subagentManager.SetResourceBudgets(cfg.Limits)
-					subagentManager.SetTools(agent.Tools)
-					agent.SubagentManager = subagentManager
-					subagentManager.SetExecutionResolver(func(targetAgentID string) (tools.SubagentExecutionConfig, error) {
-						return resolveSubagentExecution(cfg, registry, provider, currentAgentID, targetAgentID)
+		// Spawn/session tools with allowlist checker.
+		if cfg.Tools.IsToolEnabled("spawn") {
+			if cfg.Tools.IsToolEnabled("subagent") {
+				subagentManager := tools.NewSubagentManager(provider, agent.Model, agent.Workspace, msgBus)
+				subagentManager.SetLLMOptions(agent.MaxTokens, agent.Temperature)
+				subagentManager.SetLimits(
+					cfg.Orchestration.MaxParallelWorkers,
+					cfg.Orchestration.MaxTasksPerAgent,
+					cfg.Orchestration.MaxSpawnDepth,
+				)
+				subagentManager.SetToolCallParallelism(
+					cfg.Orchestration.ToolCallsParallelEnabled,
+					cfg.Orchestration.MaxToolCallConcurrency,
+					cfg.Orchestration.ParallelToolsMode,
+					cfg.Orchestration.ToolParallelOverrides,
+				)
+				subagentManager.SetToolExecutionPolicy(cfg.Tools.Policy, cfg.Tools.Policy.Audit.Tags)
+				subagentManager.SetToolExecutionTracing(
+					tools.ToolTraceOptions{
+						Enabled:               cfg.Tools.Trace.Enabled,
+						Dir:                   cfg.Tools.Trace.Dir,
+						WritePerCallFiles:     cfg.Tools.Trace.WritePerCallFiles,
+						MaxArgPreviewChars:    cfg.Tools.Trace.MaxArgPreviewChars,
+						MaxResultPreviewChars: cfg.Tools.Trace.MaxResultPreviewChars,
+					},
+					tools.ToolErrorTemplateOptions{
+						Enabled:               cfg.Tools.ErrorTemplate.Enabled,
+						IncludeSchema:         cfg.Tools.ErrorTemplate.IncludeSchema,
+						IncludeAvailableTools: true,
+					},
+				)
+				subagentManager.SetToolHooks(tools.BuildDefaultToolHooks(cfg))
+				subagentManager.SetResourceBudgets(cfg.Limits)
+				subagentManager.SetTools(agent.Tools)
+				agent.SubagentManager = subagentManager
+				subagentManager.SetExecutionResolver(func(targetAgentID string) (tools.SubagentExecutionConfig, error) {
+					return resolveSubagentExecution(cfg, registry, provider, currentAgentID, targetAgentID)
+				})
+				if taskLedger != nil {
+					subagentManager.SetEventHandler(func(event tools.SubagentTaskEvent) {
+						handleSubagentTaskEvent(taskLedger, cfg, event)
 					})
-					if taskLedger != nil {
-						subagentManager.SetEventHandler(func(event tools.SubagentTaskEvent) {
-							handleSubagentTaskEvent(taskLedger, cfg, event)
-						})
-					}
-					spawnTool := tools.NewSpawnTool(subagentManager)
-					sessionsSpawnTool := tools.NewSessionsSpawnTool(subagentManager)
-					allowlist := func(targetAgentID string) bool {
-						return registry.CanSpawnSubagent(currentAgentID, targetAgentID)
-					}
-					spawnTool.SetAllowlistChecker(allowlist)
-					sessionsSpawnTool.SetAllowlistChecker(allowlist)
-					agent.Tools.Register(spawnTool)
-					agent.Tools.Register(sessionsSpawnTool)
+				}
+				spawnTool := tools.NewSpawnTool(subagentManager)
+				sessionsSpawnTool := tools.NewSessionsSpawnTool(subagentManager)
+				allowlist := func(targetAgentID string) bool {
+					return registry.CanSpawnSubagent(currentAgentID, targetAgentID)
+				}
+				spawnTool.SetAllowlistChecker(allowlist)
+				sessionsSpawnTool.SetAllowlistChecker(allowlist)
+				agent.Tools.Register(spawnTool)
+				agent.Tools.Register(sessionsSpawnTool)
 
-					if sessionsExecutor != nil {
-						agent.Tools.Register(tools.NewSessionsSendTool(sessionsExecutor))
-					} else {
-						logger.WarnCF("agent", "sessions_send tool disabled: executor unavailable", map[string]any{
-							"agent_id": currentAgentID,
-						})
-					}
+				if sessionsExecutor != nil {
+					agent.Tools.Register(tools.NewSessionsSendTool(sessionsExecutor))
 				} else {
-					logger.WarnCF("agent", "spawn tool requires subagent to be enabled", map[string]any{
+					logger.WarnCF("agent", "sessions_send tool disabled: executor unavailable", map[string]any{
 						"agent_id": currentAgentID,
 					})
 				}
 			} else {
-				// Note: sessions_send/sessions_spawn are part of the spawn/subagent subsystem.
-				// Disabling spawn keeps the tool surface smaller.
+				logger.WarnCF("agent", "spawn tool requires subagent to be enabled", map[string]any{
+					"agent_id": currentAgentID,
+				})
 			}
+		} else {
+			// Note: sessions_send/sessions_spawn are part of the spawn/subagent subsystem.
+			// Disabling spawn keeps the tool surface smaller.
+		}
 
-			// Update context builder with the complete tools registry
-			agent.ContextBuilder.SetToolsRegistry(agent.Tools)
+		// Update context builder with the complete tools registry
+		agent.ContextBuilder.SetToolsRegistry(agent.Tools)
 	}
 }
 
@@ -1972,50 +1972,50 @@ func (al *AgentLoop) runLLMIteration(
 
 		// Call LLM with fallback chain if candidates are configured.
 		var response *providers.LLMResponse
-			var usedModel string
-			var err error
-			var lastFallbackAttempts []providers.FallbackAttempt
+		var usedModel string
+		var err error
+		var lastFallbackAttempts []providers.FallbackAttempt
 
-			llmOpts := map[string]any{
-				"max_tokens":       agent.MaxTokens,
-				"temperature":      agent.Temperature,
-				"prompt_cache_key": agent.ID,
+		llmOpts := map[string]any{
+			"max_tokens":       agent.MaxTokens,
+			"temperature":      agent.Temperature,
+			"prompt_cache_key": agent.ID,
+		}
+		// parseThinkingLevel guarantees ThinkingOff for empty/unknown values,
+		// so checking != ThinkingOff is sufficient.
+		if agent.ThinkingLevel != "" && agent.ThinkingLevel != ThinkingOff {
+			if tc, ok := agent.Provider.(providers.ThinkingCapable); ok && tc.SupportsThinking() {
+				llmOpts["thinking_level"] = string(agent.ThinkingLevel)
+			} else {
+				logger.WarnCF(
+					"agent",
+					"thinking_level is set but current provider does not support it, ignoring",
+					map[string]any{"agent_id": agent.ID, "thinking_level": string(agent.ThinkingLevel)},
+				)
 			}
-			// parseThinkingLevel guarantees ThinkingOff for empty/unknown values,
-			// so checking != ThinkingOff is sufficient.
-			if agent.ThinkingLevel != "" && agent.ThinkingLevel != ThinkingOff {
-				if tc, ok := agent.Provider.(providers.ThinkingCapable); ok && tc.SupportsThinking() {
-					llmOpts["thinking_level"] = string(agent.ThinkingLevel)
-				} else {
-					logger.WarnCF(
-						"agent",
-						"thinking_level is set but current provider does not support it, ignoring",
-						map[string]any{"agent_id": agent.ID, "thinking_level": string(agent.ThinkingLevel)},
-					)
-				}
-			}
+		}
 
-			callLLM := func() (*providers.LLMResponse, string, error) {
-				lastFallbackAttempts = nil
-				if strings.TrimSpace(agent.Model) != "" && modelForRun != strings.TrimSpace(agent.Model) {
-					resp, err := agent.Provider.Chat(ctx, messages, providerToolDefs, modelForRun, llmOpts)
-					return resp, modelForRun, err
-				}
-				if len(agent.Candidates) > 1 && al.fallback != nil {
-					fbResult, fbErr := al.fallback.Execute(
-						ctx,
-						agent.Candidates,
-						func(ctx context.Context, provider, model string) (*providers.LLMResponse, error) {
-							return agent.Provider.Chat(
-								ctx,
-								messages,
-								providerToolDefs,
-								model,
-								llmOpts,
-							)
-						},
-					)
-					if fbErr != nil {
+		callLLM := func() (*providers.LLMResponse, string, error) {
+			lastFallbackAttempts = nil
+			if strings.TrimSpace(agent.Model) != "" && modelForRun != strings.TrimSpace(agent.Model) {
+				resp, err := agent.Provider.Chat(ctx, messages, providerToolDefs, modelForRun, llmOpts)
+				return resp, modelForRun, err
+			}
+			if len(agent.Candidates) > 1 && al.fallback != nil {
+				fbResult, fbErr := al.fallback.Execute(
+					ctx,
+					agent.Candidates,
+					func(ctx context.Context, provider, model string) (*providers.LLMResponse, error) {
+						return agent.Provider.Chat(
+							ctx,
+							messages,
+							providerToolDefs,
+							model,
+							llmOpts,
+						)
+					},
+				)
+				if fbErr != nil {
 					return nil, "", fbErr
 				}
 				if fbResult.Provider != "" && len(fbResult.Attempts) > 0 {
@@ -2026,12 +2026,12 @@ func (al *AgentLoop) runLLMIteration(
 						map[string]any{"agent_id": agent.ID, "iteration": iteration},
 					)
 				}
-					lastFallbackAttempts = fbResult.Attempts
-					return fbResult.Response, strings.TrimSpace(fbResult.Model), nil
-				}
-				resp, err := agent.Provider.Chat(ctx, messages, providerToolDefs, modelForRun, llmOpts)
-				return resp, modelForRun, err
+				lastFallbackAttempts = fbResult.Attempts
+				return fbResult.Response, strings.TrimSpace(fbResult.Model), nil
 			}
+			resp, err := agent.Provider.Chat(ctx, messages, providerToolDefs, modelForRun, llmOpts)
+			return resp, modelForRun, err
+		}
 
 		// Retry loop for context/token errors
 		maxRetries := 2

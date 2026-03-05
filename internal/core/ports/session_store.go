@@ -3,8 +3,8 @@ package ports
 import (
 	"time"
 
-	coreprovider "github.com/sipeed/picoclaw/internal/core/provider/protocoltypes"
-	coresession "github.com/sipeed/picoclaw/internal/core/session"
+	coreprovider "github.com/xwysyy/X-Claw/internal/core/provider/protocoltypes"
+	coresession "github.com/xwysyy/X-Claw/internal/core/session"
 )
 
 // SessionStore is the minimal durable conversation state surface the agent loop,

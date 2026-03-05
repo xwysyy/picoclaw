@@ -6,8 +6,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/xwysyy/picoclaw/cmd/x-claw/internal"
-	"github.com/xwysyy/picoclaw/pkg/config"
+	"github.com/xwysyy/X-Claw/cmd/x-claw/internal"
+	"github.com/xwysyy/X-Claw/pkg/config"
 )
 
 func onboard() {

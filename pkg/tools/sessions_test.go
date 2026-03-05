@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/xwysyy/picoclaw/pkg/providers"
-	"github.com/xwysyy/picoclaw/pkg/session"
+	"github.com/xwysyy/X-Claw/pkg/providers"
+	"github.com/xwysyy/X-Claw/pkg/session"
 )
 
 func TestSessionsListTool_BasicAndKindFilter(t *testing.T) {

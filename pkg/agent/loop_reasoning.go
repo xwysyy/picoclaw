@@ -5,8 +5,8 @@ import (
 	"errors"
 	"time"
 
-	"github.com/sipeed/picoclaw/pkg/bus"
-	"github.com/sipeed/picoclaw/pkg/logger"
+	"github.com/xwysyy/X-Claw/pkg/bus"
+	"github.com/xwysyy/X-Claw/pkg/logger"
 )
 
 func (al *AgentLoop) targetReasoningChannelID(channelName string) (chatID string) {

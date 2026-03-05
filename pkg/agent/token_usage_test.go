@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/sipeed/picoclaw/pkg/providers"
+	"github.com/xwysyy/X-Claw/pkg/providers"
 )
 
 func TestTokenUsageStoreRecord_IgnoresEmptyUsage(t *testing.T) {
@@ -103,4 +103,3 @@ func TestTokenUsageStoreRecord_AccumulatesByModelAndTotals(t *testing.T) {
 		t.Fatalf("by_model[m2].total_tokens = %d, want %d", got, want)
 	}
 }
-

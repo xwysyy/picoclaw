@@ -20,7 +20,7 @@ func NewDoctorCommand() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&opts.Path, "config", "", "Config file path (default: $PICOCLAW_CONFIG or ~/.picoclaw/config.json)")
+	cmd.Flags().StringVar(&opts.Path, "config", "", "Config file path (default: $X_CLAW_CONFIG or ~/.x-claw/config.json)")
 	cmd.Flags().BoolVar(&opts.JSON, "json", false, "Output report as JSON (for scripts)")
 
 	return cmd

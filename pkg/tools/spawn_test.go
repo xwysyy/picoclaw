@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/xwysyy/picoclaw/pkg/providers"
+	"github.com/xwysyy/X-Claw/pkg/providers"
 )
 
 type blockingProvider struct {

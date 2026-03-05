@@ -54,12 +54,12 @@ ENV HTTP_PROXY=$HTTP_PROXY \
 WORKDIR /src
 
 # Cache dependencies
-COPY web/picoclaw-console/package.json web/picoclaw-console/package-lock.json ./web/picoclaw-console/
-RUN cd web/picoclaw-console && npm ci
+	COPY web/x-claw-console/package.json web/x-claw-console/package-lock.json ./web/x-claw-console/
+	RUN cd web/x-claw-console && npm ci
 
 # Copy sources and build
-COPY web/picoclaw-console ./web/picoclaw-console
-RUN cd web/picoclaw-console && npm run build
+	COPY web/x-claw-console ./web/x-claw-console
+	RUN cd web/x-claw-console && npm run build
 
 # ============================================================
 # Stage 2: Minimal runtime image
@@ -101,7 +101,7 @@ COPY docker/entrypoint.sh /usr/local/bin/x-claw-entrypoint.sh
 RUN chmod +x /usr/local/bin/x-claw-entrypoint.sh
 
 # Copy Console UI static assets
-COPY --from=console-builder /src/web/picoclaw-console/out /usr/local/share/picoclaw/console
+	COPY --from=console-builder /src/web/x-claw-console/out /usr/local/share/x-claw/console
 
 # Create non-root user and group
 RUN addgroup -g 1000 xclaw && \

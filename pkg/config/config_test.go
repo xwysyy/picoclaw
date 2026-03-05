@@ -604,8 +604,8 @@ func TestLoadConfig_IgnoresEnvOverrides(t *testing.T) {
 		t.Fatalf("os.WriteFile() error: %v", err)
 	}
 
-	t.Setenv("PICOCLAW_AGENTS_DEFAULTS_MAX_TOKENS", "9999")
-	t.Setenv("PICOCLAW_CHANNELS_TELEGRAM_ENABLED", "true")
+	t.Setenv("X_CLAW_AGENTS_DEFAULTS_MAX_TOKENS", "9999")
+	t.Setenv("X_CLAW_CHANNELS_TELEGRAM_ENABLED", "true")
 
 	cfg, err := LoadConfig(configPath)
 	if err != nil {
@@ -642,19 +642,32 @@ func TestDefaultConfig_DMScope(t *testing.T) {
 
 func TestDefaultConfig_WorkspacePath_Default(t *testing.T) {
 	// Unset to ensure we test the default
+	t.Setenv("X_CLAW_HOME", "")
 	t.Setenv("PICOCLAW_HOME", "")
 	// Set a known home for consistent test results
 	t.Setenv("HOME", "/tmp/home")
 
 	cfg := DefaultConfig()
-	want := filepath.Join("/tmp/home", ".picoclaw", "workspace")
+	want := filepath.Join("/tmp/home", ".x-claw", "workspace")
 
 	if cfg.Agents.Defaults.Workspace != want {
 		t.Errorf("Default workspace path = %q, want %q", cfg.Agents.Defaults.Workspace, want)
 	}
 }
 
-func TestDefaultConfig_WorkspacePath_WithPicoclawHome(t *testing.T) {
+func TestDefaultConfig_WorkspacePath_WithXClawHome(t *testing.T) {
+	t.Setenv("X_CLAW_HOME", "/custom/x-claw/home")
+
+	cfg := DefaultConfig()
+	want := "/custom/x-claw/home/workspace"
+
+	if cfg.Agents.Defaults.Workspace != want {
+		t.Errorf("Workspace path with X_CLAW_HOME = %q, want %q", cfg.Agents.Defaults.Workspace, want)
+	}
+}
+
+func TestDefaultConfig_WorkspacePath_WithLegacyPicoclawHome(t *testing.T) {
+	t.Setenv("X_CLAW_HOME", "")
 	t.Setenv("PICOCLAW_HOME", "/custom/picoclaw/home")
 
 	cfg := DefaultConfig()

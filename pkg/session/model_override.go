@@ -5,8 +5,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sipeed/picoclaw/pkg/providers"
-	"github.com/sipeed/picoclaw/pkg/utils"
+	"github.com/xwysyy/X-Claw/pkg/providers"
+	"github.com/xwysyy/X-Claw/pkg/utils"
 )
 
 func (sm *SessionManager) EffectiveModelOverride(key string) (string, bool) {

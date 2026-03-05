@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/xwysyy/picoclaw/pkg/fileutil"
-	"github.com/xwysyy/picoclaw/pkg/utils"
+	"github.com/xwysyy/X-Claw/pkg/fileutil"
+	"github.com/xwysyy/X-Claw/pkg/utils"
 )
 
 type SkillInstaller struct {

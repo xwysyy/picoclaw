@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/xwysyy/picoclaw/pkg/config"
-	"github.com/xwysyy/picoclaw/pkg/providers"
+	"github.com/xwysyy/X-Claw/pkg/config"
+	"github.com/xwysyy/X-Claw/pkg/providers"
 )
 
 type mockRegistryProvider struct{}

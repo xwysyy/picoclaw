@@ -10,8 +10,8 @@ import (
 
 	"github.com/google/uuid"
 
-	coresession "github.com/sipeed/picoclaw/internal/core/session"
-	"github.com/sipeed/picoclaw/pkg/fileutil"
+	coresession "github.com/xwysyy/X-Claw/internal/core/session"
+	"github.com/xwysyy/X-Claw/pkg/fileutil"
 )
 
 // Type aliases keep existing imports stable while moving canonical session domain

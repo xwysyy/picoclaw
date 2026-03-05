@@ -12,9 +12,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sipeed/picoclaw/internal/core/events"
-	"github.com/sipeed/picoclaw/pkg/logger"
-	"github.com/sipeed/picoclaw/pkg/utils"
+	"github.com/xwysyy/X-Claw/internal/core/events"
+	"github.com/xwysyy/X-Claw/pkg/logger"
+	"github.com/xwysyy/X-Claw/pkg/utils"
 )
 
 type toolPolicyLedgerResult struct {
@@ -99,7 +99,7 @@ func policyRunDir(workspace, sessionKey, runID string) (string, bool) {
 		runKey = "unknown"
 	}
 
-	return filepath.Join(workspace, ".picoclaw", "audit", "runs", dirKey, "runs", runKey), true
+	return filepath.Join(workspace, ".x-claw", "audit", "runs", dirKey, "runs", runKey), true
 }
 
 func getToolPolicyStore(workspace, sessionKey, runID string) *toolPolicyStore {

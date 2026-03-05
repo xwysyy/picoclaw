@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/xwysyy/picoclaw/cmd/x-claw/internal"
+	"github.com/xwysyy/X-Claw/cmd/x-claw/internal"
 )
 
 func TestNewXClawCommand(t *testing.T) {

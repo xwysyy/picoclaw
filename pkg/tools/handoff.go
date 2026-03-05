@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/sipeed/picoclaw/pkg/session"
-	"github.com/sipeed/picoclaw/pkg/utils"
+	"github.com/xwysyy/X-Claw/pkg/session"
+	"github.com/xwysyy/X-Claw/pkg/utils"
 )
 
 type AgentLookupFunc func(agentID string) (AgentInfo, bool)

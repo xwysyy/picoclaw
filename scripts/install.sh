@@ -3,10 +3,10 @@ set -euo pipefail
 
 usage() {
   cat <<'USAGE'
-PicoClaw one-click installer (pico-scale).
+X-Claw one-click installer.
 
 Default behavior:
-  - If running inside a PicoClaw repo: build from source
+  - If running inside an X-Claw repo: build from source
   - Otherwise: attempt to download a GitHub release asset
 
 Usage:
@@ -14,7 +14,7 @@ Usage:
 
 Options:
   --prefix <dir>         Install prefix (default: ~/.local)
-  --repo <owner/name>    GitHub repo for release downloads (default: sipeed/picoclaw)
+  --repo <owner/name>    GitHub repo for release downloads (default: xwysyy/X-Claw)
   --version <tag|latest> Release tag (or "latest") (default: latest)
   --from-source          Build from local source tree
   --from-release         Download release asset from GitHub
@@ -24,11 +24,11 @@ Options:
   -h, --help             Show this help
 
 Notes:
-  - Runtime config is read from config.json (default: ~/.picoclaw/config.json).
+  - Runtime config is read from config.json (default: ~/.x-claw/config.json).
   - Gateway Console UI uses prebuilt static assets when present:
-      ~/.picoclaw/console/
-      ~/.local/share/picoclaw/console/
-      /usr/local/share/picoclaw/console/
+      ~/.x-claw/console/
+      ~/.local/share/x-claw/console/
+      /usr/local/share/x-claw/console/
 USAGE
 }
 
@@ -37,7 +37,7 @@ warn() { printf '[install] WARN: %s\n' "$*" >&2; }
 die() { printf '[install] ERROR: %s\n' "$*" >&2; exit 1; }
 
 prefix="${PREFIX:-$HOME/.local}"
-repo="sipeed/picoclaw"
+repo="xwysyy/X-Claw"
 version="latest"
 from=""
 install_console=true
@@ -63,15 +63,15 @@ prefix="$(cd "${prefix/#\~/$HOME}" 2>/dev/null && pwd -P || echo "$prefix")"
 [[ -n "${prefix:-}" ]] || die "--prefix is required"
 
 bin_dir="$prefix/bin"
-share_dir="$prefix/share/picoclaw"
+share_dir="$prefix/share/x-claw"
 console_dir="$share_dir/console"
 
-cfg_dir="${PICOCLAW_HOME:-$HOME/.picoclaw}"
+cfg_dir="${X_CLAW_HOME:-${PICOCLAW_HOME:-$HOME/.x-claw}}"
 cfg_dir="$(cd "${cfg_dir/#\~/$HOME}" 2>/dev/null && pwd -P || echo "$cfg_dir")"
 cfg_path="$cfg_dir/config.json"
 
 in_repo=false
-if [[ -f "go.mod" && -d "cmd/picoclaw" ]]; then
+if [[ -f "go.mod" && -d "cmd/x-claw" ]]; then
   in_repo=true
 fi
 
@@ -108,11 +108,11 @@ detect_arch() {
 
 build_from_source() {
   command -v go >/dev/null 2>&1 || die "go is required for --from-source"
-  log "Building PicoClaw from source..."
-  local out="$tmp/picoclaw"
-  go build -trimpath -o "$out" ./cmd/picoclaw
-  install -m 0755 "$out" "$bin_dir/picoclaw"
-  log "Installed binary: $bin_dir/picoclaw"
+  log "Building X-Claw from source..."
+  local out="$tmp/x-claw"
+  go build -trimpath -o "$out" ./cmd/x-claw
+  install -m 0755 "$out" "$bin_dir/x-claw"
+  log "Installed binary: $bin_dir/x-claw"
 }
 
 github_api_url() {
@@ -129,9 +129,9 @@ pick_release_asset_url() {
   # Best-effort parsing without jq. Expect "browser_download_url": "..."
   # Try common patterns first.
   local patterns=(
-    "picoclaw.*${os}.*${arch}.*\\.tar\\.gz"
-    "picoclaw.*${os}.*${arch}.*\\.tgz"
-    "picoclaw.*${os}.*${arch}.*\\.zip"
+    "x-claw.*${os}.*${arch}.*\\.tar\\.gz"
+    "x-claw.*${os}.*${arch}.*\\.tgz"
+    "x-claw.*${os}.*${arch}.*\\.zip"
   )
   local p url
   for p in "${patterns[@]}"; do
@@ -168,12 +168,12 @@ download_from_release() {
     tar -xzf "$asset" -C "$extract"
   fi
 
-  # Expect a binary named "picoclaw" somewhere inside.
+  # Expect a binary named "x-claw" somewhere inside.
   local bin
-  bin="$(find "$extract" -maxdepth 3 -type f -name picoclaw -perm -u+x 2>/dev/null | head -n 1 || true)"
-  [[ -n "$bin" ]] || die "Release asset did not contain an executable 'picoclaw' binary"
-  install -m 0755 "$bin" "$bin_dir/picoclaw"
-  log "Installed binary: $bin_dir/picoclaw"
+  bin="$(find "$extract" -maxdepth 3 -type f -name x-claw -perm -u+x 2>/dev/null | head -n 1 || true)"
+  [[ -n "$bin" ]] || die "Release asset did not contain an executable 'x-claw' binary"
+  install -m 0755 "$bin" "$bin_dir/x-claw"
+  log "Installed binary: $bin_dir/x-claw"
 
   # Optional console static assets: look for "console/" directory.
   if [[ "$install_console" == true ]]; then
@@ -194,13 +194,13 @@ install_console_from_repo() {
   if [[ "$install_console" != true ]]; then
     return 0
   fi
-  if [[ -d "web/picoclaw-console/out" ]]; then
+  if [[ -d "web/x-claw-console/out" ]]; then
     rm -rf "$console_dir"
     mkdir -p "$console_dir"
-    cp -R "web/picoclaw-console/out"/. "$console_dir"/
+    cp -R "web/x-claw-console/out"/. "$console_dir"/
     log "Installed Console static assets from repo: $console_dir"
   else
-    warn "Console static assets not found at web/picoclaw-console/out; skip (use Docker build or next export to generate)."
+    warn "Console static assets not found at web/x-claw-console/out; skip (use Docker build or next export to generate)."
   fi
 }
 
@@ -210,24 +210,24 @@ init_workspace() {
     return 0
   fi
   log "Initializing config + workspace via onboard..."
-  "$bin_dir/picoclaw" onboard
+  "$bin_dir/x-claw" onboard
   log "Config created: $cfg_path"
 }
 
 install_systemd_user_service() {
   [[ "$(detect_os)" == "linux" ]] || die "--systemd-user is only supported on Linux"
   local unit_dir="$HOME/.config/systemd/user"
-  local unit="$unit_dir/picoclaw-gateway.service"
+  local unit="$unit_dir/x-claw-gateway.service"
   mkdir -p "$unit_dir"
 
   cat >"$unit" <<EOF
 [Unit]
-Description=PicoClaw Gateway
+Description=X-Claw Gateway
 After=network-online.target
 
 [Service]
 Type=simple
-ExecStart=$bin_dir/picoclaw gateway
+ExecStart=$bin_dir/x-claw gateway
 Restart=always
 RestartSec=2
 
@@ -239,15 +239,15 @@ EOF
   cat <<'NEXT'
 Next:
   systemctl --user daemon-reload
-  systemctl --user enable --now picoclaw-gateway.service
-  journalctl --user -u picoclaw-gateway.service -f
+  systemctl --user enable --now x-claw-gateway.service
+  journalctl --user -u x-claw-gateway.service -f
 NEXT
 }
 
 install_launchd_agent() {
   [[ "$(detect_os)" == "darwin" ]] || die "--launchd is only supported on macOS"
   local plist_dir="$HOME/Library/LaunchAgents"
-  local plist="$plist_dir/io.picoclaw.gateway.plist"
+  local plist="$plist_dir/io.x-claw.gateway.plist"
   mkdir -p "$plist_dir"
 
   cat >"$plist" <<EOF
@@ -255,10 +255,10 @@ install_launchd_agent() {
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
   <dict>
-    <key>Label</key><string>io.picoclaw.gateway</string>
+    <key>Label</key><string>io.x-claw.gateway</string>
     <key>ProgramArguments</key>
     <array>
-      <string>$bin_dir/picoclaw</string>
+      <string>$bin_dir/x-claw</string>
       <string>gateway</string>
     </array>
     <key>RunAtLoad</key><true/>
@@ -283,7 +283,7 @@ log "Config path:    $cfg_path"
 
 case "$from" in
   source)
-    [[ "$in_repo" == true ]] || die "--from-source requires running inside the PicoClaw repo"
+    [[ "$in_repo" == true ]] || die "--from-source requires running inside the X-Claw repo"
     build_from_source
     install_console_from_repo
     ;;
@@ -308,12 +308,11 @@ fi
 cat <<EOF
 
 Done.
-  - binary: $bin_dir/picoclaw
+  - binary: $bin_dir/x-claw
   - config: $cfg_path
 
 Tip:
   Add "$bin_dir" to PATH, then run:
-    picoclaw gateway
-    picoclaw status --json
+    x-claw gateway
+    x-claw status --json
 EOF
-

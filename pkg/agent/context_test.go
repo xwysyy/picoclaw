@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/xwysyy/picoclaw/pkg/providers"
+	"github.com/xwysyy/X-Claw/pkg/providers"
 )
 
 func TestSanitizeHistoryForProvider_KeepMultipleToolOutputsFromOneAssistantTurn(t *testing.T) {

@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/sipeed/picoclaw/pkg/bus"
-	"github.com/sipeed/picoclaw/pkg/config"
+	"github.com/xwysyy/X-Claw/pkg/bus"
+	"github.com/xwysyy/X-Claw/pkg/config"
 )
 
 func TestNewWeComAIBotChannel(t *testing.T) {

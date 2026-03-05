@@ -22,7 +22,7 @@ import (
 
 	"golang.org/x/sync/singleflight"
 
-	"github.com/sipeed/picoclaw/pkg/utils"
+	"github.com/xwysyy/X-Claw/pkg/utils"
 )
 
 const (

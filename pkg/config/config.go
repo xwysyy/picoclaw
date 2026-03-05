@@ -8,7 +8,7 @@ import (
 	"strings"
 	"sync/atomic"
 
-	"github.com/sipeed/picoclaw/pkg/fileutil"
+	"github.com/xwysyy/X-Claw/pkg/fileutil"
 )
 
 // rrCounter is a global counter for round-robin load balancing across models.
@@ -115,22 +115,22 @@ type SecurityConfig struct {
 type BreakGlassConfig struct {
 	// AllowPublicGateway acknowledges that gateway.host binds to a non-loopback address
 	// (e.g., 0.0.0.0 or a LAN IP). When false, such configs are rejected.
-	AllowPublicGateway bool `json:"allow_public_gateway,omitempty" env:"PICOCLAW_SECURITY_BREAK_GLASS_ALLOW_PUBLIC_GATEWAY"`
+	AllowPublicGateway bool `json:"allow_public_gateway,omitempty" env:"X_CLAW_SECURITY_BREAK_GLASS_ALLOW_PUBLIC_GATEWAY"`
 
 	// AllowUnsafeWorkspace disables workspace-only filesystem restrictions. This is high risk:
 	// tools can read/write arbitrary host paths if other guards are also loosened.
-	AllowUnsafeWorkspace bool `json:"allow_unsafe_workspace,omitempty" env:"PICOCLAW_SECURITY_BREAK_GLASS_ALLOW_UNSAFE_WORKSPACE"`
+	AllowUnsafeWorkspace bool `json:"allow_unsafe_workspace,omitempty" env:"X_CLAW_SECURITY_BREAK_GLASS_ALLOW_UNSAFE_WORKSPACE"`
 
 	// AllowUnsafeExec acknowledges disabling deny patterns for the exec tool.
-	AllowUnsafeExec bool `json:"allow_unsafe_exec,omitempty" env:"PICOCLAW_SECURITY_BREAK_GLASS_ALLOW_UNSAFE_EXEC"`
+	AllowUnsafeExec bool `json:"allow_unsafe_exec,omitempty" env:"X_CLAW_SECURITY_BREAK_GLASS_ALLOW_UNSAFE_EXEC"`
 
 	// AllowExecInheritEnv acknowledges passing the full host environment into exec tool commands.
 	// Prefer tools.exec.env.mode="allowlist" to avoid leaking host secrets into subprocesses.
-	AllowExecInheritEnv bool `json:"allow_exec_inherit_env,omitempty" env:"PICOCLAW_SECURITY_BREAK_GLASS_ALLOW_EXEC_INHERIT_ENV"`
+	AllowExecInheritEnv bool `json:"allow_exec_inherit_env,omitempty" env:"X_CLAW_SECURITY_BREAK_GLASS_ALLOW_EXEC_INHERIT_ENV"`
 
 	// AllowDockerNetwork acknowledges enabling networking for the exec docker sandbox
 	// (tools.exec.docker.network != "none").
-	AllowDockerNetwork bool `json:"allow_docker_network,omitempty" env:"PICOCLAW_SECURITY_BREAK_GLASS_ALLOW_DOCKER_NETWORK"`
+	AllowDockerNetwork bool `json:"allow_docker_network,omitempty" env:"X_CLAW_SECURITY_BREAK_GLASS_ALLOW_DOCKER_NETWORK"`
 }
 
 type AgentsConfig struct {
@@ -245,28 +245,28 @@ type SessionConfig struct {
 }
 
 type AgentDefaults struct {
-	Workspace                 string                          `json:"workspace"                       env:"PICOCLAW_AGENTS_DEFAULTS_WORKSPACE"`
-	RestrictToWorkspace       bool                            `json:"restrict_to_workspace"           env:"PICOCLAW_AGENTS_DEFAULTS_RESTRICT_TO_WORKSPACE"`
-	AllowReadOutsideWorkspace bool                            `json:"allow_read_outside_workspace"    env:"PICOCLAW_AGENTS_DEFAULTS_ALLOW_READ_OUTSIDE_WORKSPACE"`
-	Provider                  string                          `json:"provider"                        env:"PICOCLAW_AGENTS_DEFAULTS_PROVIDER"`
-	ModelName                 string                          `json:"model_name,omitempty"            env:"PICOCLAW_AGENTS_DEFAULTS_MODEL_NAME"`
-	Model                     string                          `json:"model"                           env:"PICOCLAW_AGENTS_DEFAULTS_MODEL"` // Deprecated: use model_name instead
+	Workspace                 string                          `json:"workspace"                       env:"X_CLAW_AGENTS_DEFAULTS_WORKSPACE"`
+	RestrictToWorkspace       bool                            `json:"restrict_to_workspace"           env:"X_CLAW_AGENTS_DEFAULTS_RESTRICT_TO_WORKSPACE"`
+	AllowReadOutsideWorkspace bool                            `json:"allow_read_outside_workspace"    env:"X_CLAW_AGENTS_DEFAULTS_ALLOW_READ_OUTSIDE_WORKSPACE"`
+	Provider                  string                          `json:"provider"                        env:"X_CLAW_AGENTS_DEFAULTS_PROVIDER"`
+	ModelName                 string                          `json:"model_name,omitempty"            env:"X_CLAW_AGENTS_DEFAULTS_MODEL_NAME"`
+	Model                     string                          `json:"model"                           env:"X_CLAW_AGENTS_DEFAULTS_MODEL"` // Deprecated: use model_name instead
 	ModelFallbacks            []string                        `json:"model_fallbacks,omitempty"`
 	SessionModelAutoDowngrade SessionModelAutoDowngradeConfig `json:"session_model_auto_downgrade,omitempty"`
-	ImageModel                string                          `json:"image_model,omitempty"           env:"PICOCLAW_AGENTS_DEFAULTS_IMAGE_MODEL"`
+	ImageModel                string                          `json:"image_model,omitempty"           env:"X_CLAW_AGENTS_DEFAULTS_IMAGE_MODEL"`
 	ImageModelFallbacks       []string                        `json:"image_model_fallbacks,omitempty"`
-	MaxTokens                 int                             `json:"max_tokens"                      env:"PICOCLAW_AGENTS_DEFAULTS_MAX_TOKENS"`
-	Temperature               *float64                        `json:"temperature,omitempty"           env:"PICOCLAW_AGENTS_DEFAULTS_TEMPERATURE"`
-	MaxToolIterations         int                             `json:"max_tool_iterations"             env:"PICOCLAW_AGENTS_DEFAULTS_MAX_TOOL_ITERATIONS"`
+	MaxTokens                 int                             `json:"max_tokens"                      env:"X_CLAW_AGENTS_DEFAULTS_MAX_TOKENS"`
+	Temperature               *float64                        `json:"temperature,omitempty"           env:"X_CLAW_AGENTS_DEFAULTS_TEMPERATURE"`
+	MaxToolIterations         int                             `json:"max_tool_iterations"             env:"X_CLAW_AGENTS_DEFAULTS_MAX_TOOL_ITERATIONS"`
 	// Legacy summarization controls (still supported for compatibility).
 	// Prefer compaction/context_pruning for more predictable behavior.
-	SummarizeMessageThreshold int `json:"summarize_message_threshold,omitempty" env:"PICOCLAW_AGENTS_DEFAULTS_SUMMARIZE_MESSAGE_THRESHOLD"`
-	SummarizeTokenPercent     int `json:"summarize_token_percent,omitempty"     env:"PICOCLAW_AGENTS_DEFAULTS_SUMMARIZE_TOKEN_PERCENT"`
-	MaxMediaSize              int                             `json:"max_media_size,omitempty"        env:"PICOCLAW_AGENTS_DEFAULTS_MAX_MEDIA_SIZE"`
-	Compaction                AgentCompactionConfig           `json:"compaction,omitempty"`
-	ContextPruning            AgentContextPruningConfig       `json:"context_pruning,omitempty"`
-	BootstrapSnapshot         AgentBootstrapSnapshotConfig    `json:"bootstrap_snapshot,omitempty"`
-	MemoryVector              AgentMemoryVectorConfig         `json:"memory_vector,omitempty"`
+	SummarizeMessageThreshold int                          `json:"summarize_message_threshold,omitempty" env:"X_CLAW_AGENTS_DEFAULTS_SUMMARIZE_MESSAGE_THRESHOLD"`
+	SummarizeTokenPercent     int                          `json:"summarize_token_percent,omitempty"     env:"X_CLAW_AGENTS_DEFAULTS_SUMMARIZE_TOKEN_PERCENT"`
+	MaxMediaSize              int                          `json:"max_media_size,omitempty"        env:"X_CLAW_AGENTS_DEFAULTS_MAX_MEDIA_SIZE"`
+	Compaction                AgentCompactionConfig        `json:"compaction,omitempty"`
+	ContextPruning            AgentContextPruningConfig    `json:"context_pruning,omitempty"`
+	BootstrapSnapshot         AgentBootstrapSnapshotConfig `json:"bootstrap_snapshot,omitempty"`
+	MemoryVector              AgentMemoryVectorConfig      `json:"memory_vector,omitempty"`
 }
 
 const DefaultMaxMediaSize = 20 * 1024 * 1024 // 20 MB
@@ -327,15 +327,15 @@ type EmbeddingConfig struct {
 }
 
 type AgentMemoryVectorConfig struct {
-	Enabled         bool    `json:"enabled,omitempty"           env:"PICOCLAW_AGENTS_DEFAULTS_MEMORY_VECTOR_ENABLED"`
-	Dimensions      int     `json:"dimensions,omitempty"        env:"PICOCLAW_AGENTS_DEFAULTS_MEMORY_VECTOR_DIMENSIONS"`
-	TopK            int     `json:"top_k,omitempty"             env:"PICOCLAW_AGENTS_DEFAULTS_MEMORY_VECTOR_TOP_K"`
-	MinScore        float64 `json:"min_score,omitempty"         env:"PICOCLAW_AGENTS_DEFAULTS_MEMORY_VECTOR_MIN_SCORE"`
-	MaxContextChars int     `json:"max_context_chars,omitempty" env:"PICOCLAW_AGENTS_DEFAULTS_MEMORY_VECTOR_MAX_CONTEXT_CHARS"`
-	RecentDailyDays int     `json:"recent_daily_days,omitempty" env:"PICOCLAW_AGENTS_DEFAULTS_MEMORY_VECTOR_RECENT_DAILY_DAYS"`
+	Enabled         bool    `json:"enabled,omitempty"           env:"X_CLAW_AGENTS_DEFAULTS_MEMORY_VECTOR_ENABLED"`
+	Dimensions      int     `json:"dimensions,omitempty"        env:"X_CLAW_AGENTS_DEFAULTS_MEMORY_VECTOR_DIMENSIONS"`
+	TopK            int     `json:"top_k,omitempty"             env:"X_CLAW_AGENTS_DEFAULTS_MEMORY_VECTOR_TOP_K"`
+	MinScore        float64 `json:"min_score,omitempty"         env:"X_CLAW_AGENTS_DEFAULTS_MEMORY_VECTOR_MIN_SCORE"`
+	MaxContextChars int     `json:"max_context_chars,omitempty" env:"X_CLAW_AGENTS_DEFAULTS_MEMORY_VECTOR_MAX_CONTEXT_CHARS"`
+	RecentDailyDays int     `json:"recent_daily_days,omitempty" env:"X_CLAW_AGENTS_DEFAULTS_MEMORY_VECTOR_RECENT_DAILY_DAYS"`
 
 	// Embedding controls how semantic vectors are generated.
-	// When omitted, PicoClaw uses a fast local hashing embedder (no network).
+	// When omitted, X-Claw uses a fast local hashing embedder (no network).
 	Embedding EmbeddingConfig `json:"embedding,omitempty"`
 
 	// Hybrid controls how FTS vs vector signals are blended when both are available.
@@ -407,214 +407,214 @@ type PlaceholderConfig struct {
 }
 
 type WhatsAppConfig struct {
-	Enabled            bool                `json:"enabled"              env:"PICOCLAW_CHANNELS_WHATSAPP_ENABLED"`
-	BridgeURL          string              `json:"bridge_url"           env:"PICOCLAW_CHANNELS_WHATSAPP_BRIDGE_URL"`
-	UseNative          bool                `json:"use_native"           env:"PICOCLAW_CHANNELS_WHATSAPP_USE_NATIVE"`
-	SessionStorePath   string              `json:"session_store_path"   env:"PICOCLAW_CHANNELS_WHATSAPP_SESSION_STORE_PATH"`
-	AllowFrom          FlexibleStringSlice `json:"allow_from"           env:"PICOCLAW_CHANNELS_WHATSAPP_ALLOW_FROM"`
-	ReasoningChannelID string              `json:"reasoning_channel_id" env:"PICOCLAW_CHANNELS_WHATSAPP_REASONING_CHANNEL_ID"`
+	Enabled            bool                `json:"enabled"              env:"X_CLAW_CHANNELS_WHATSAPP_ENABLED"`
+	BridgeURL          string              `json:"bridge_url"           env:"X_CLAW_CHANNELS_WHATSAPP_BRIDGE_URL"`
+	UseNative          bool                `json:"use_native"           env:"X_CLAW_CHANNELS_WHATSAPP_USE_NATIVE"`
+	SessionStorePath   string              `json:"session_store_path"   env:"X_CLAW_CHANNELS_WHATSAPP_SESSION_STORE_PATH"`
+	AllowFrom          FlexibleStringSlice `json:"allow_from"           env:"X_CLAW_CHANNELS_WHATSAPP_ALLOW_FROM"`
+	ReasoningChannelID string              `json:"reasoning_channel_id" env:"X_CLAW_CHANNELS_WHATSAPP_REASONING_CHANNEL_ID"`
 }
 
 type TelegramConfig struct {
-	Enabled            bool                `json:"enabled"                 env:"PICOCLAW_CHANNELS_TELEGRAM_ENABLED"`
-	Token              SecretRef           `json:"token"                   env:"PICOCLAW_CHANNELS_TELEGRAM_TOKEN"`
-	BaseURL            string              `json:"base_url"                env:"PICOCLAW_CHANNELS_TELEGRAM_BASE_URL"`
-	Proxy              string              `json:"proxy"                   env:"PICOCLAW_CHANNELS_TELEGRAM_PROXY"`
-	AllowFrom          FlexibleStringSlice `json:"allow_from"              env:"PICOCLAW_CHANNELS_TELEGRAM_ALLOW_FROM"`
+	Enabled            bool                `json:"enabled"                 env:"X_CLAW_CHANNELS_TELEGRAM_ENABLED"`
+	Token              SecretRef           `json:"token"                   env:"X_CLAW_CHANNELS_TELEGRAM_TOKEN"`
+	BaseURL            string              `json:"base_url"                env:"X_CLAW_CHANNELS_TELEGRAM_BASE_URL"`
+	Proxy              string              `json:"proxy"                   env:"X_CLAW_CHANNELS_TELEGRAM_PROXY"`
+	AllowFrom          FlexibleStringSlice `json:"allow_from"              env:"X_CLAW_CHANNELS_TELEGRAM_ALLOW_FROM"`
 	GroupTrigger       GroupTriggerConfig  `json:"group_trigger,omitempty"`
 	Typing             TypingConfig        `json:"typing,omitempty"`
 	Placeholder        PlaceholderConfig   `json:"placeholder,omitempty"`
-	ReasoningChannelID string              `json:"reasoning_channel_id"    env:"PICOCLAW_CHANNELS_TELEGRAM_REASONING_CHANNEL_ID"`
+	ReasoningChannelID string              `json:"reasoning_channel_id"    env:"X_CLAW_CHANNELS_TELEGRAM_REASONING_CHANNEL_ID"`
 }
 
 type FeishuConfig struct {
-	Enabled            bool                `json:"enabled"                 env:"PICOCLAW_CHANNELS_FEISHU_ENABLED"`
-	AppID              string              `json:"app_id"                  env:"PICOCLAW_CHANNELS_FEISHU_APP_ID"`
-	AppSecret          SecretRef           `json:"app_secret"              env:"PICOCLAW_CHANNELS_FEISHU_APP_SECRET"`
-	EncryptKey         SecretRef           `json:"encrypt_key"             env:"PICOCLAW_CHANNELS_FEISHU_ENCRYPT_KEY"`
-	VerificationToken  SecretRef           `json:"verification_token"      env:"PICOCLAW_CHANNELS_FEISHU_VERIFICATION_TOKEN"`
-	BotID              string              `json:"bot_id,omitempty"         env:"PICOCLAW_CHANNELS_FEISHU_BOT_ID"`
-	AllowFrom          FlexibleStringSlice `json:"allow_from"              env:"PICOCLAW_CHANNELS_FEISHU_ALLOW_FROM"`
+	Enabled            bool                `json:"enabled"                 env:"X_CLAW_CHANNELS_FEISHU_ENABLED"`
+	AppID              string              `json:"app_id"                  env:"X_CLAW_CHANNELS_FEISHU_APP_ID"`
+	AppSecret          SecretRef           `json:"app_secret"              env:"X_CLAW_CHANNELS_FEISHU_APP_SECRET"`
+	EncryptKey         SecretRef           `json:"encrypt_key"             env:"X_CLAW_CHANNELS_FEISHU_ENCRYPT_KEY"`
+	VerificationToken  SecretRef           `json:"verification_token"      env:"X_CLAW_CHANNELS_FEISHU_VERIFICATION_TOKEN"`
+	BotID              string              `json:"bot_id,omitempty"         env:"X_CLAW_CHANNELS_FEISHU_BOT_ID"`
+	AllowFrom          FlexibleStringSlice `json:"allow_from"              env:"X_CLAW_CHANNELS_FEISHU_ALLOW_FROM"`
 	GroupTrigger       GroupTriggerConfig  `json:"group_trigger,omitempty"`
 	Typing             TypingConfig        `json:"typing,omitempty"`
 	Placeholder        PlaceholderConfig   `json:"placeholder,omitempty"`
-	ReasoningChannelID string              `json:"reasoning_channel_id"    env:"PICOCLAW_CHANNELS_FEISHU_REASONING_CHANNEL_ID"`
+	ReasoningChannelID string              `json:"reasoning_channel_id"    env:"X_CLAW_CHANNELS_FEISHU_REASONING_CHANNEL_ID"`
 }
 
 type DiscordConfig struct {
-	Enabled            bool                `json:"enabled"                 env:"PICOCLAW_CHANNELS_DISCORD_ENABLED"`
-	Token              SecretRef           `json:"token"                   env:"PICOCLAW_CHANNELS_DISCORD_TOKEN"`
-	Proxy              string              `json:"proxy"                   env:"PICOCLAW_CHANNELS_DISCORD_PROXY"`
-	AllowFrom          FlexibleStringSlice `json:"allow_from"              env:"PICOCLAW_CHANNELS_DISCORD_ALLOW_FROM"`
-	MentionOnly        bool                `json:"mention_only"            env:"PICOCLAW_CHANNELS_DISCORD_MENTION_ONLY"`
+	Enabled            bool                `json:"enabled"                 env:"X_CLAW_CHANNELS_DISCORD_ENABLED"`
+	Token              SecretRef           `json:"token"                   env:"X_CLAW_CHANNELS_DISCORD_TOKEN"`
+	Proxy              string              `json:"proxy"                   env:"X_CLAW_CHANNELS_DISCORD_PROXY"`
+	AllowFrom          FlexibleStringSlice `json:"allow_from"              env:"X_CLAW_CHANNELS_DISCORD_ALLOW_FROM"`
+	MentionOnly        bool                `json:"mention_only"            env:"X_CLAW_CHANNELS_DISCORD_MENTION_ONLY"`
 	GroupTrigger       GroupTriggerConfig  `json:"group_trigger,omitempty"`
 	Typing             TypingConfig        `json:"typing,omitempty"`
 	Placeholder        PlaceholderConfig   `json:"placeholder,omitempty"`
-	ReasoningChannelID string              `json:"reasoning_channel_id"    env:"PICOCLAW_CHANNELS_DISCORD_REASONING_CHANNEL_ID"`
+	ReasoningChannelID string              `json:"reasoning_channel_id"    env:"X_CLAW_CHANNELS_DISCORD_REASONING_CHANNEL_ID"`
 }
 
 type MaixCamConfig struct {
-	Enabled            bool                `json:"enabled"              env:"PICOCLAW_CHANNELS_MAIXCAM_ENABLED"`
-	Host               string              `json:"host"                 env:"PICOCLAW_CHANNELS_MAIXCAM_HOST"`
-	Port               int                 `json:"port"                 env:"PICOCLAW_CHANNELS_MAIXCAM_PORT"`
-	AllowFrom          FlexibleStringSlice `json:"allow_from"           env:"PICOCLAW_CHANNELS_MAIXCAM_ALLOW_FROM"`
-	ReasoningChannelID string              `json:"reasoning_channel_id" env:"PICOCLAW_CHANNELS_MAIXCAM_REASONING_CHANNEL_ID"`
+	Enabled            bool                `json:"enabled"              env:"X_CLAW_CHANNELS_MAIXCAM_ENABLED"`
+	Host               string              `json:"host"                 env:"X_CLAW_CHANNELS_MAIXCAM_HOST"`
+	Port               int                 `json:"port"                 env:"X_CLAW_CHANNELS_MAIXCAM_PORT"`
+	AllowFrom          FlexibleStringSlice `json:"allow_from"           env:"X_CLAW_CHANNELS_MAIXCAM_ALLOW_FROM"`
+	ReasoningChannelID string              `json:"reasoning_channel_id" env:"X_CLAW_CHANNELS_MAIXCAM_REASONING_CHANNEL_ID"`
 }
 
 type QQConfig struct {
-	Enabled            bool                `json:"enabled"                 env:"PICOCLAW_CHANNELS_QQ_ENABLED"`
-	AppID              string              `json:"app_id"                  env:"PICOCLAW_CHANNELS_QQ_APP_ID"`
-	AppSecret          SecretRef           `json:"app_secret"              env:"PICOCLAW_CHANNELS_QQ_APP_SECRET"`
-	AllowFrom          FlexibleStringSlice `json:"allow_from"              env:"PICOCLAW_CHANNELS_QQ_ALLOW_FROM"`
+	Enabled            bool                `json:"enabled"                 env:"X_CLAW_CHANNELS_QQ_ENABLED"`
+	AppID              string              `json:"app_id"                  env:"X_CLAW_CHANNELS_QQ_APP_ID"`
+	AppSecret          SecretRef           `json:"app_secret"              env:"X_CLAW_CHANNELS_QQ_APP_SECRET"`
+	AllowFrom          FlexibleStringSlice `json:"allow_from"              env:"X_CLAW_CHANNELS_QQ_ALLOW_FROM"`
 	GroupTrigger       GroupTriggerConfig  `json:"group_trigger,omitempty"`
-	ReasoningChannelID string              `json:"reasoning_channel_id"    env:"PICOCLAW_CHANNELS_QQ_REASONING_CHANNEL_ID"`
+	ReasoningChannelID string              `json:"reasoning_channel_id"    env:"X_CLAW_CHANNELS_QQ_REASONING_CHANNEL_ID"`
 }
 
 type DingTalkConfig struct {
-	Enabled            bool                `json:"enabled"                 env:"PICOCLAW_CHANNELS_DINGTALK_ENABLED"`
-	ClientID           string              `json:"client_id"               env:"PICOCLAW_CHANNELS_DINGTALK_CLIENT_ID"`
-	ClientSecret       SecretRef           `json:"client_secret"           env:"PICOCLAW_CHANNELS_DINGTALK_CLIENT_SECRET"`
-	AllowFrom          FlexibleStringSlice `json:"allow_from"              env:"PICOCLAW_CHANNELS_DINGTALK_ALLOW_FROM"`
+	Enabled            bool                `json:"enabled"                 env:"X_CLAW_CHANNELS_DINGTALK_ENABLED"`
+	ClientID           string              `json:"client_id"               env:"X_CLAW_CHANNELS_DINGTALK_CLIENT_ID"`
+	ClientSecret       SecretRef           `json:"client_secret"           env:"X_CLAW_CHANNELS_DINGTALK_CLIENT_SECRET"`
+	AllowFrom          FlexibleStringSlice `json:"allow_from"              env:"X_CLAW_CHANNELS_DINGTALK_ALLOW_FROM"`
 	GroupTrigger       GroupTriggerConfig  `json:"group_trigger,omitempty"`
-	ReasoningChannelID string              `json:"reasoning_channel_id"    env:"PICOCLAW_CHANNELS_DINGTALK_REASONING_CHANNEL_ID"`
+	ReasoningChannelID string              `json:"reasoning_channel_id"    env:"X_CLAW_CHANNELS_DINGTALK_REASONING_CHANNEL_ID"`
 }
 
 type SlackConfig struct {
-	Enabled            bool                `json:"enabled"                 env:"PICOCLAW_CHANNELS_SLACK_ENABLED"`
-	BotToken           SecretRef           `json:"bot_token"               env:"PICOCLAW_CHANNELS_SLACK_BOT_TOKEN"`
-	AppToken           SecretRef           `json:"app_token"               env:"PICOCLAW_CHANNELS_SLACK_APP_TOKEN"`
-	AllowFrom          FlexibleStringSlice `json:"allow_from"              env:"PICOCLAW_CHANNELS_SLACK_ALLOW_FROM"`
+	Enabled            bool                `json:"enabled"                 env:"X_CLAW_CHANNELS_SLACK_ENABLED"`
+	BotToken           SecretRef           `json:"bot_token"               env:"X_CLAW_CHANNELS_SLACK_BOT_TOKEN"`
+	AppToken           SecretRef           `json:"app_token"               env:"X_CLAW_CHANNELS_SLACK_APP_TOKEN"`
+	AllowFrom          FlexibleStringSlice `json:"allow_from"              env:"X_CLAW_CHANNELS_SLACK_ALLOW_FROM"`
 	GroupTrigger       GroupTriggerConfig  `json:"group_trigger,omitempty"`
 	Typing             TypingConfig        `json:"typing,omitempty"`
 	Placeholder        PlaceholderConfig   `json:"placeholder,omitempty"`
-	ReasoningChannelID string              `json:"reasoning_channel_id"    env:"PICOCLAW_CHANNELS_SLACK_REASONING_CHANNEL_ID"`
+	ReasoningChannelID string              `json:"reasoning_channel_id"    env:"X_CLAW_CHANNELS_SLACK_REASONING_CHANNEL_ID"`
 }
 
 type LINEConfig struct {
-	Enabled            bool                `json:"enabled"                 env:"PICOCLAW_CHANNELS_LINE_ENABLED"`
-	ChannelSecret      SecretRef           `json:"channel_secret"          env:"PICOCLAW_CHANNELS_LINE_CHANNEL_SECRET"`
-	ChannelAccessToken SecretRef           `json:"channel_access_token"    env:"PICOCLAW_CHANNELS_LINE_CHANNEL_ACCESS_TOKEN"`
-	WebhookHost        string              `json:"webhook_host"            env:"PICOCLAW_CHANNELS_LINE_WEBHOOK_HOST"`
-	WebhookPort        int                 `json:"webhook_port"            env:"PICOCLAW_CHANNELS_LINE_WEBHOOK_PORT"`
-	WebhookPath        string              `json:"webhook_path"            env:"PICOCLAW_CHANNELS_LINE_WEBHOOK_PATH"`
-	AllowFrom          FlexibleStringSlice `json:"allow_from"              env:"PICOCLAW_CHANNELS_LINE_ALLOW_FROM"`
+	Enabled            bool                `json:"enabled"                 env:"X_CLAW_CHANNELS_LINE_ENABLED"`
+	ChannelSecret      SecretRef           `json:"channel_secret"          env:"X_CLAW_CHANNELS_LINE_CHANNEL_SECRET"`
+	ChannelAccessToken SecretRef           `json:"channel_access_token"    env:"X_CLAW_CHANNELS_LINE_CHANNEL_ACCESS_TOKEN"`
+	WebhookHost        string              `json:"webhook_host"            env:"X_CLAW_CHANNELS_LINE_WEBHOOK_HOST"`
+	WebhookPort        int                 `json:"webhook_port"            env:"X_CLAW_CHANNELS_LINE_WEBHOOK_PORT"`
+	WebhookPath        string              `json:"webhook_path"            env:"X_CLAW_CHANNELS_LINE_WEBHOOK_PATH"`
+	AllowFrom          FlexibleStringSlice `json:"allow_from"              env:"X_CLAW_CHANNELS_LINE_ALLOW_FROM"`
 	GroupTrigger       GroupTriggerConfig  `json:"group_trigger,omitempty"`
 	Typing             TypingConfig        `json:"typing,omitempty"`
 	Placeholder        PlaceholderConfig   `json:"placeholder,omitempty"`
-	ReasoningChannelID string              `json:"reasoning_channel_id"    env:"PICOCLAW_CHANNELS_LINE_REASONING_CHANNEL_ID"`
+	ReasoningChannelID string              `json:"reasoning_channel_id"    env:"X_CLAW_CHANNELS_LINE_REASONING_CHANNEL_ID"`
 }
 
 type OneBotConfig struct {
-	Enabled            bool                `json:"enabled"                 env:"PICOCLAW_CHANNELS_ONEBOT_ENABLED"`
-	WSUrl              string              `json:"ws_url"                  env:"PICOCLAW_CHANNELS_ONEBOT_WS_URL"`
-	AccessToken        SecretRef           `json:"access_token"            env:"PICOCLAW_CHANNELS_ONEBOT_ACCESS_TOKEN"`
-	ReconnectInterval  int                 `json:"reconnect_interval"      env:"PICOCLAW_CHANNELS_ONEBOT_RECONNECT_INTERVAL"`
-	GroupTriggerPrefix []string            `json:"group_trigger_prefix"    env:"PICOCLAW_CHANNELS_ONEBOT_GROUP_TRIGGER_PREFIX"`
-	AllowFrom          FlexibleStringSlice `json:"allow_from"              env:"PICOCLAW_CHANNELS_ONEBOT_ALLOW_FROM"`
+	Enabled            bool                `json:"enabled"                 env:"X_CLAW_CHANNELS_ONEBOT_ENABLED"`
+	WSUrl              string              `json:"ws_url"                  env:"X_CLAW_CHANNELS_ONEBOT_WS_URL"`
+	AccessToken        SecretRef           `json:"access_token"            env:"X_CLAW_CHANNELS_ONEBOT_ACCESS_TOKEN"`
+	ReconnectInterval  int                 `json:"reconnect_interval"      env:"X_CLAW_CHANNELS_ONEBOT_RECONNECT_INTERVAL"`
+	GroupTriggerPrefix []string            `json:"group_trigger_prefix"    env:"X_CLAW_CHANNELS_ONEBOT_GROUP_TRIGGER_PREFIX"`
+	AllowFrom          FlexibleStringSlice `json:"allow_from"              env:"X_CLAW_CHANNELS_ONEBOT_ALLOW_FROM"`
 	GroupTrigger       GroupTriggerConfig  `json:"group_trigger,omitempty"`
 	Typing             TypingConfig        `json:"typing,omitempty"`
 	Placeholder        PlaceholderConfig   `json:"placeholder,omitempty"`
-	ReasoningChannelID string              `json:"reasoning_channel_id"    env:"PICOCLAW_CHANNELS_ONEBOT_REASONING_CHANNEL_ID"`
+	ReasoningChannelID string              `json:"reasoning_channel_id"    env:"X_CLAW_CHANNELS_ONEBOT_REASONING_CHANNEL_ID"`
 }
 
 type WeComConfig struct {
-	Enabled            bool                `json:"enabled"                 env:"PICOCLAW_CHANNELS_WECOM_ENABLED"`
-	Token              SecretRef           `json:"token"                   env:"PICOCLAW_CHANNELS_WECOM_TOKEN"`
-	EncodingAESKey     SecretRef           `json:"encoding_aes_key"        env:"PICOCLAW_CHANNELS_WECOM_ENCODING_AES_KEY"`
-	WebhookURL         string              `json:"webhook_url"             env:"PICOCLAW_CHANNELS_WECOM_WEBHOOK_URL"`
-	WebhookHost        string              `json:"webhook_host"            env:"PICOCLAW_CHANNELS_WECOM_WEBHOOK_HOST"`
-	WebhookPort        int                 `json:"webhook_port"            env:"PICOCLAW_CHANNELS_WECOM_WEBHOOK_PORT"`
-	WebhookPath        string              `json:"webhook_path"            env:"PICOCLAW_CHANNELS_WECOM_WEBHOOK_PATH"`
-	AllowFrom          FlexibleStringSlice `json:"allow_from"              env:"PICOCLAW_CHANNELS_WECOM_ALLOW_FROM"`
-	ReplyTimeout       int                 `json:"reply_timeout"           env:"PICOCLAW_CHANNELS_WECOM_REPLY_TIMEOUT"`
+	Enabled            bool                `json:"enabled"                 env:"X_CLAW_CHANNELS_WECOM_ENABLED"`
+	Token              SecretRef           `json:"token"                   env:"X_CLAW_CHANNELS_WECOM_TOKEN"`
+	EncodingAESKey     SecretRef           `json:"encoding_aes_key"        env:"X_CLAW_CHANNELS_WECOM_ENCODING_AES_KEY"`
+	WebhookURL         string              `json:"webhook_url"             env:"X_CLAW_CHANNELS_WECOM_WEBHOOK_URL"`
+	WebhookHost        string              `json:"webhook_host"            env:"X_CLAW_CHANNELS_WECOM_WEBHOOK_HOST"`
+	WebhookPort        int                 `json:"webhook_port"            env:"X_CLAW_CHANNELS_WECOM_WEBHOOK_PORT"`
+	WebhookPath        string              `json:"webhook_path"            env:"X_CLAW_CHANNELS_WECOM_WEBHOOK_PATH"`
+	AllowFrom          FlexibleStringSlice `json:"allow_from"              env:"X_CLAW_CHANNELS_WECOM_ALLOW_FROM"`
+	ReplyTimeout       int                 `json:"reply_timeout"           env:"X_CLAW_CHANNELS_WECOM_REPLY_TIMEOUT"`
 	GroupTrigger       GroupTriggerConfig  `json:"group_trigger,omitempty"`
-	ReasoningChannelID string              `json:"reasoning_channel_id"    env:"PICOCLAW_CHANNELS_WECOM_REASONING_CHANNEL_ID"`
+	ReasoningChannelID string              `json:"reasoning_channel_id"    env:"X_CLAW_CHANNELS_WECOM_REASONING_CHANNEL_ID"`
 }
 
 type WeComAppConfig struct {
-	Enabled            bool                `json:"enabled"                 env:"PICOCLAW_CHANNELS_WECOM_APP_ENABLED"`
-	CorpID             string              `json:"corp_id"                 env:"PICOCLAW_CHANNELS_WECOM_APP_CORP_ID"`
-	CorpSecret         SecretRef           `json:"corp_secret"             env:"PICOCLAW_CHANNELS_WECOM_APP_CORP_SECRET"`
-	AgentID            int64               `json:"agent_id"                env:"PICOCLAW_CHANNELS_WECOM_APP_AGENT_ID"`
-	Token              SecretRef           `json:"token"                   env:"PICOCLAW_CHANNELS_WECOM_APP_TOKEN"`
-	EncodingAESKey     SecretRef           `json:"encoding_aes_key"        env:"PICOCLAW_CHANNELS_WECOM_APP_ENCODING_AES_KEY"`
-	WebhookHost        string              `json:"webhook_host"            env:"PICOCLAW_CHANNELS_WECOM_APP_WEBHOOK_HOST"`
-	WebhookPort        int                 `json:"webhook_port"            env:"PICOCLAW_CHANNELS_WECOM_APP_WEBHOOK_PORT"`
-	WebhookPath        string              `json:"webhook_path"            env:"PICOCLAW_CHANNELS_WECOM_APP_WEBHOOK_PATH"`
-	AllowFrom          FlexibleStringSlice `json:"allow_from"              env:"PICOCLAW_CHANNELS_WECOM_APP_ALLOW_FROM"`
-	ReplyTimeout       int                 `json:"reply_timeout"           env:"PICOCLAW_CHANNELS_WECOM_APP_REPLY_TIMEOUT"`
+	Enabled            bool                `json:"enabled"                 env:"X_CLAW_CHANNELS_WECOM_APP_ENABLED"`
+	CorpID             string              `json:"corp_id"                 env:"X_CLAW_CHANNELS_WECOM_APP_CORP_ID"`
+	CorpSecret         SecretRef           `json:"corp_secret"             env:"X_CLAW_CHANNELS_WECOM_APP_CORP_SECRET"`
+	AgentID            int64               `json:"agent_id"                env:"X_CLAW_CHANNELS_WECOM_APP_AGENT_ID"`
+	Token              SecretRef           `json:"token"                   env:"X_CLAW_CHANNELS_WECOM_APP_TOKEN"`
+	EncodingAESKey     SecretRef           `json:"encoding_aes_key"        env:"X_CLAW_CHANNELS_WECOM_APP_ENCODING_AES_KEY"`
+	WebhookHost        string              `json:"webhook_host"            env:"X_CLAW_CHANNELS_WECOM_APP_WEBHOOK_HOST"`
+	WebhookPort        int                 `json:"webhook_port"            env:"X_CLAW_CHANNELS_WECOM_APP_WEBHOOK_PORT"`
+	WebhookPath        string              `json:"webhook_path"            env:"X_CLAW_CHANNELS_WECOM_APP_WEBHOOK_PATH"`
+	AllowFrom          FlexibleStringSlice `json:"allow_from"              env:"X_CLAW_CHANNELS_WECOM_APP_ALLOW_FROM"`
+	ReplyTimeout       int                 `json:"reply_timeout"           env:"X_CLAW_CHANNELS_WECOM_APP_REPLY_TIMEOUT"`
 	GroupTrigger       GroupTriggerConfig  `json:"group_trigger,omitempty"`
-	ReasoningChannelID string              `json:"reasoning_channel_id"    env:"PICOCLAW_CHANNELS_WECOM_APP_REASONING_CHANNEL_ID"`
+	ReasoningChannelID string              `json:"reasoning_channel_id"    env:"X_CLAW_CHANNELS_WECOM_APP_REASONING_CHANNEL_ID"`
 }
 
 type WeComAIBotConfig struct {
-	Enabled            bool                `json:"enabled"              env:"PICOCLAW_CHANNELS_WECOM_AIBOT_ENABLED"`
-	Token              SecretRef           `json:"token"                env:"PICOCLAW_CHANNELS_WECOM_AIBOT_TOKEN"`
-	EncodingAESKey     SecretRef           `json:"encoding_aes_key"     env:"PICOCLAW_CHANNELS_WECOM_AIBOT_ENCODING_AES_KEY"`
-	WebhookPath        string              `json:"webhook_path"         env:"PICOCLAW_CHANNELS_WECOM_AIBOT_WEBHOOK_PATH"`
-	AllowFrom          FlexibleStringSlice `json:"allow_from"           env:"PICOCLAW_CHANNELS_WECOM_AIBOT_ALLOW_FROM"`
-	ReplyTimeout       int                 `json:"reply_timeout"        env:"PICOCLAW_CHANNELS_WECOM_AIBOT_REPLY_TIMEOUT"`
-	MaxSteps           int                 `json:"max_steps"            env:"PICOCLAW_CHANNELS_WECOM_AIBOT_MAX_STEPS"`       // Maximum streaming steps
-	WelcomeMessage     string              `json:"welcome_message"      env:"PICOCLAW_CHANNELS_WECOM_AIBOT_WELCOME_MESSAGE"` // Sent on enter_chat event; empty = no welcome
-	ReasoningChannelID string              `json:"reasoning_channel_id" env:"PICOCLAW_CHANNELS_WECOM_AIBOT_REASONING_CHANNEL_ID"`
+	Enabled            bool                `json:"enabled"              env:"X_CLAW_CHANNELS_WECOM_AIBOT_ENABLED"`
+	Token              SecretRef           `json:"token"                env:"X_CLAW_CHANNELS_WECOM_AIBOT_TOKEN"`
+	EncodingAESKey     SecretRef           `json:"encoding_aes_key"     env:"X_CLAW_CHANNELS_WECOM_AIBOT_ENCODING_AES_KEY"`
+	WebhookPath        string              `json:"webhook_path"         env:"X_CLAW_CHANNELS_WECOM_AIBOT_WEBHOOK_PATH"`
+	AllowFrom          FlexibleStringSlice `json:"allow_from"           env:"X_CLAW_CHANNELS_WECOM_AIBOT_ALLOW_FROM"`
+	ReplyTimeout       int                 `json:"reply_timeout"        env:"X_CLAW_CHANNELS_WECOM_AIBOT_REPLY_TIMEOUT"`
+	MaxSteps           int                 `json:"max_steps"            env:"X_CLAW_CHANNELS_WECOM_AIBOT_MAX_STEPS"`       // Maximum streaming steps
+	WelcomeMessage     string              `json:"welcome_message"      env:"X_CLAW_CHANNELS_WECOM_AIBOT_WELCOME_MESSAGE"` // Sent on enter_chat event; empty = no welcome
+	ReasoningChannelID string              `json:"reasoning_channel_id" env:"X_CLAW_CHANNELS_WECOM_AIBOT_REASONING_CHANNEL_ID"`
 }
 
 type PicoConfig struct {
-	Enabled         bool                `json:"enabled"                     env:"PICOCLAW_CHANNELS_PICO_ENABLED"`
-	Token           SecretRef           `json:"token"                       env:"PICOCLAW_CHANNELS_PICO_TOKEN"`
+	Enabled         bool                `json:"enabled"                     env:"X_CLAW_CHANNELS_PICO_ENABLED"`
+	Token           SecretRef           `json:"token"                       env:"X_CLAW_CHANNELS_PICO_TOKEN"`
 	AllowTokenQuery bool                `json:"allow_token_query,omitempty"`
 	AllowOrigins    []string            `json:"allow_origins,omitempty"`
 	PingInterval    int                 `json:"ping_interval,omitempty"`
 	ReadTimeout     int                 `json:"read_timeout,omitempty"`
 	WriteTimeout    int                 `json:"write_timeout,omitempty"`
 	MaxConnections  int                 `json:"max_connections,omitempty"`
-	AllowFrom       FlexibleStringSlice `json:"allow_from"                  env:"PICOCLAW_CHANNELS_PICO_ALLOW_FROM"`
+	AllowFrom       FlexibleStringSlice `json:"allow_from"                  env:"X_CLAW_CHANNELS_PICO_ALLOW_FROM"`
 	Placeholder     PlaceholderConfig   `json:"placeholder,omitempty"`
 }
 
 type HeartbeatConfig struct {
-	Enabled  bool `json:"enabled"  env:"PICOCLAW_HEARTBEAT_ENABLED"`
-	Interval int  `json:"interval" env:"PICOCLAW_HEARTBEAT_INTERVAL"` // minutes, min 5
+	Enabled  bool `json:"enabled"  env:"X_CLAW_HEARTBEAT_ENABLED"`
+	Interval int  `json:"interval" env:"X_CLAW_HEARTBEAT_INTERVAL"` // minutes, min 5
 }
 
 type OrchestrationConfig struct {
-	Enabled                   bool              `json:"enabled"                      env:"PICOCLAW_ORCHESTRATION_ENABLED"`
-	MaxSpawnDepth             int               `json:"max_spawn_depth"              env:"PICOCLAW_ORCHESTRATION_MAX_SPAWN_DEPTH"`
-	MaxParallelWorkers        int               `json:"max_parallel_workers"         env:"PICOCLAW_ORCHESTRATION_MAX_PARALLEL_WORKERS"`
-	MaxTasksPerAgent          int               `json:"max_tasks_per_agent"          env:"PICOCLAW_ORCHESTRATION_MAX_TASKS_PER_AGENT"`
-	DefaultTaskTimeoutSeconds int               `json:"default_task_timeout_seconds" env:"PICOCLAW_ORCHESTRATION_DEFAULT_TASK_TIMEOUT_SECONDS"`
-	RetryLimitPerTask         int               `json:"retry_limit_per_task"         env:"PICOCLAW_ORCHESTRATION_RETRY_LIMIT_PER_TASK"`
-	ToolCallsParallelEnabled  bool              `json:"tool_calls_parallel_enabled"  env:"PICOCLAW_ORCHESTRATION_TOOL_CALLS_PARALLEL_ENABLED"`
-	MaxToolCallConcurrency    int               `json:"max_tool_call_concurrency"    env:"PICOCLAW_ORCHESTRATION_MAX_TOOL_CALL_CONCURRENCY"`
-	ParallelToolsMode         string            `json:"parallel_tools_mode"          env:"PICOCLAW_ORCHESTRATION_PARALLEL_TOOLS_MODE"`
+	Enabled                   bool              `json:"enabled"                      env:"X_CLAW_ORCHESTRATION_ENABLED"`
+	MaxSpawnDepth             int               `json:"max_spawn_depth"              env:"X_CLAW_ORCHESTRATION_MAX_SPAWN_DEPTH"`
+	MaxParallelWorkers        int               `json:"max_parallel_workers"         env:"X_CLAW_ORCHESTRATION_MAX_PARALLEL_WORKERS"`
+	MaxTasksPerAgent          int               `json:"max_tasks_per_agent"          env:"X_CLAW_ORCHESTRATION_MAX_TASKS_PER_AGENT"`
+	DefaultTaskTimeoutSeconds int               `json:"default_task_timeout_seconds" env:"X_CLAW_ORCHESTRATION_DEFAULT_TASK_TIMEOUT_SECONDS"`
+	RetryLimitPerTask         int               `json:"retry_limit_per_task"         env:"X_CLAW_ORCHESTRATION_RETRY_LIMIT_PER_TASK"`
+	ToolCallsParallelEnabled  bool              `json:"tool_calls_parallel_enabled"  env:"X_CLAW_ORCHESTRATION_TOOL_CALLS_PARALLEL_ENABLED"`
+	MaxToolCallConcurrency    int               `json:"max_tool_call_concurrency"    env:"X_CLAW_ORCHESTRATION_MAX_TOOL_CALL_CONCURRENCY"`
+	ParallelToolsMode         string            `json:"parallel_tools_mode"          env:"X_CLAW_ORCHESTRATION_PARALLEL_TOOLS_MODE"`
 	ToolParallelOverrides     map[string]string `json:"tool_parallel_overrides,omitempty"`
 }
 
 type AuditConfig struct {
-	Enabled             bool                  `json:"enabled"               env:"PICOCLAW_AUDIT_ENABLED"`
-	IntervalMinutes     int                   `json:"interval_minutes"      env:"PICOCLAW_AUDIT_INTERVAL_MINUTES"`
-	LookbackMinutes     int                   `json:"lookback_minutes"      env:"PICOCLAW_AUDIT_LOOKBACK_MINUTES"`
+	Enabled             bool                  `json:"enabled"               env:"X_CLAW_AUDIT_ENABLED"`
+	IntervalMinutes     int                   `json:"interval_minutes"      env:"X_CLAW_AUDIT_INTERVAL_MINUTES"`
+	LookbackMinutes     int                   `json:"lookback_minutes"      env:"X_CLAW_AUDIT_LOOKBACK_MINUTES"`
 	Supervisor          AuditSupervisorConfig `json:"supervisor"`
-	MinConfidence       float64               `json:"min_confidence"        env:"PICOCLAW_AUDIT_MIN_CONFIDENCE"`
-	InconsistencyPolicy string                `json:"inconsistency_policy"  env:"PICOCLAW_AUDIT_INCONSISTENCY_POLICY"`
-	AutoRemediation     string                `json:"auto_remediation"      env:"PICOCLAW_AUDIT_AUTO_REMEDIATION"`
+	MinConfidence       float64               `json:"min_confidence"        env:"X_CLAW_AUDIT_MIN_CONFIDENCE"`
+	InconsistencyPolicy string                `json:"inconsistency_policy"  env:"X_CLAW_AUDIT_INCONSISTENCY_POLICY"`
+	AutoRemediation     string                `json:"auto_remediation"      env:"X_CLAW_AUDIT_AUTO_REMEDIATION"`
 	// MaxAutoRemediationsPerCycle limits how many retry/fix tasks can be spawned
 	// in one audit cycle to avoid runaway loops.
-	MaxAutoRemediationsPerCycle int `json:"max_auto_remediations_per_cycle" env:"PICOCLAW_AUDIT_MAX_AUTO_REMEDIATIONS_PER_CYCLE"`
+	MaxAutoRemediationsPerCycle int `json:"max_auto_remediations_per_cycle" env:"X_CLAW_AUDIT_MAX_AUTO_REMEDIATIONS_PER_CYCLE"`
 	// RemediationCooldownMinutes prevents re-triggering remediation for the same
 	// task too frequently.
-	RemediationCooldownMinutes int `json:"remediation_cooldown_minutes"     env:"PICOCLAW_AUDIT_REMEDIATION_COOLDOWN_MINUTES"`
+	RemediationCooldownMinutes int `json:"remediation_cooldown_minutes"     env:"X_CLAW_AUDIT_REMEDIATION_COOLDOWN_MINUTES"`
 	// RemediationAgentID optionally delegates remediation retries to a specific
 	// agent id (requires subagent allowlist when targeting a different agent).
-	RemediationAgentID string `json:"remediation_agent_id"               env:"PICOCLAW_AUDIT_REMEDIATION_AGENT_ID"`
-	NotifyChannel      string `json:"notify_channel"        env:"PICOCLAW_AUDIT_NOTIFY_CHANNEL"`
+	RemediationAgentID string `json:"remediation_agent_id"               env:"X_CLAW_AUDIT_REMEDIATION_AGENT_ID"`
+	NotifyChannel      string `json:"notify_channel"        env:"X_CLAW_AUDIT_NOTIFY_CHANNEL"`
 }
 
 type AuditSupervisorConfig struct {
-	Enabled     bool              `json:"enabled"     env:"PICOCLAW_AUDIT_SUPERVISOR_ENABLED"`
+	Enabled     bool              `json:"enabled"     env:"X_CLAW_AUDIT_SUPERVISOR_ENABLED"`
 	Model       *AgentModelConfig `json:"model,omitempty"`
-	Temperature *float64          `json:"temperature,omitempty" env:"PICOCLAW_AUDIT_SUPERVISOR_TEMPERATURE"`
-	MaxTokens   int               `json:"max_tokens,omitempty"  env:"PICOCLAW_AUDIT_SUPERVISOR_MAX_TOKENS"`
+	Temperature *float64          `json:"temperature,omitempty" env:"X_CLAW_AUDIT_SUPERVISOR_TEMPERATURE"`
+	MaxTokens   int               `json:"max_tokens,omitempty"  env:"X_CLAW_AUDIT_SUPERVISOR_MAX_TOKENS"`
 
 	// Mode controls when the supervisor LLM is used:
 	// - "always" (default): review every completed task in the lookback window.
@@ -632,23 +632,23 @@ type AuditSupervisorConfig struct {
 // keeping behavior predictable. They are "soft" in the sense that exceeding a
 // limit results in a controlled, user-visible stop rather than a hard crash.
 type LimitsConfig struct {
-	Enabled bool `json:"enabled,omitempty" env:"PICOCLAW_LIMITS_ENABLED"`
+	Enabled bool `json:"enabled,omitempty" env:"X_CLAW_LIMITS_ENABLED"`
 
 	// MaxRunWallTimeSeconds caps a single agent run (one inbound message -> one response).
 	// 0 disables the wall-time budget.
-	MaxRunWallTimeSeconds int `json:"max_run_wall_time_seconds,omitempty" env:"PICOCLAW_LIMITS_MAX_RUN_WALL_TIME_SECONDS"`
+	MaxRunWallTimeSeconds int `json:"max_run_wall_time_seconds,omitempty" env:"X_CLAW_LIMITS_MAX_RUN_WALL_TIME_SECONDS"`
 
 	// MaxToolCallsPerRun caps the total number of tool calls executed in one run.
 	// 0 disables the budget.
-	MaxToolCallsPerRun int `json:"max_tool_calls_per_run,omitempty" env:"PICOCLAW_LIMITS_MAX_TOOL_CALLS_PER_RUN"`
+	MaxToolCallsPerRun int `json:"max_tool_calls_per_run,omitempty" env:"X_CLAW_LIMITS_MAX_TOOL_CALLS_PER_RUN"`
 
 	// MaxToolResultChars truncates ToolResult.ForLLM/ForUser to control memory usage.
 	// 0 disables truncation.
-	MaxToolResultChars int `json:"max_tool_result_chars,omitempty" env:"PICOCLAW_LIMITS_MAX_TOOL_RESULT_CHARS"`
+	MaxToolResultChars int `json:"max_tool_result_chars,omitempty" env:"X_CLAW_LIMITS_MAX_TOOL_RESULT_CHARS"`
 
 	// MaxReadFileBytes limits how many bytes the read_file tool reads from disk by default.
 	// 0 means use the built-in default.
-	MaxReadFileBytes int `json:"max_read_file_bytes,omitempty" env:"PICOCLAW_LIMITS_MAX_READ_FILE_BYTES"`
+	MaxReadFileBytes int `json:"max_read_file_bytes,omitempty" env:"X_CLAW_LIMITS_MAX_READ_FILE_BYTES"`
 }
 
 // AuditLogConfig controls the append-only operational audit log (JSONL).
@@ -658,28 +658,28 @@ type LimitsConfig struct {
 //
 // This is intentionally separate from `audit` (task auditing / supervisor checks).
 type AuditLogConfig struct {
-	Enabled bool `json:"enabled,omitempty" env:"PICOCLAW_AUDIT_LOG_ENABLED"`
+	Enabled bool `json:"enabled,omitempty" env:"X_CLAW_AUDIT_LOG_ENABLED"`
 
 	// Dir overrides the default audit log directory.
-	// When empty, defaults to: <workspace>/.picoclaw/audit
-	Dir string `json:"dir,omitempty" env:"PICOCLAW_AUDIT_LOG_DIR"`
+	// When empty, defaults to: <workspace>/.x-claw/audit
+	Dir string `json:"dir,omitempty" env:"X_CLAW_AUDIT_LOG_DIR"`
 
 	// MaxBytes rotates the log when it grows beyond this size.
 	// 0 disables size-based rotation.
-	MaxBytes int `json:"max_bytes,omitempty" env:"PICOCLAW_AUDIT_LOG_MAX_BYTES"`
+	MaxBytes int `json:"max_bytes,omitempty" env:"X_CLAW_AUDIT_LOG_MAX_BYTES"`
 
 	// MaxBackups controls how many rotated files to keep (best-effort).
 	// 0 means keep all rotated files.
-	MaxBackups int `json:"max_backups,omitempty" env:"PICOCLAW_AUDIT_LOG_MAX_BACKUPS"`
+	MaxBackups int `json:"max_backups,omitempty" env:"X_CLAW_AUDIT_LOG_MAX_BACKUPS"`
 
 	// HMACKey enables per-line HMAC signatures on audit.jsonl entries.
 	// When empty, signing is disabled. Prefer setting this via SecretRef (env/file)
 	// to avoid embedding plaintext keys in config files.
-	HMACKey SecretRef `json:"hmac_key,omitempty" env:"PICOCLAW_AUDIT_LOG_HMAC_KEY"`
+	HMACKey SecretRef `json:"hmac_key,omitempty" env:"X_CLAW_AUDIT_LOG_HMAC_KEY"`
 
 	// HMACKeyID is an optional identifier written into each signed line
 	// to support key rotation and log forensics.
-	HMACKeyID string `json:"hmac_key_id,omitempty" env:"PICOCLAW_AUDIT_LOG_HMAC_KEY_ID"`
+	HMACKeyID string `json:"hmac_key_id,omitempty" env:"X_CLAW_AUDIT_LOG_HMAC_KEY_ID"`
 }
 
 type ProvidersConfig struct {
@@ -741,17 +741,17 @@ func (p ProvidersConfig) MarshalJSON() ([]byte, error) {
 }
 
 type ProviderConfig struct {
-	APIKey         SecretRef `json:"api_key"                   env:"PICOCLAW_PROVIDERS_{{.Name}}_API_KEY"`
-	APIBase        string    `json:"api_base"                  env:"PICOCLAW_PROVIDERS_{{.Name}}_API_BASE"`
-	Proxy          string    `json:"proxy,omitempty"           env:"PICOCLAW_PROVIDERS_{{.Name}}_PROXY"`
-	RequestTimeout int       `json:"request_timeout,omitempty" env:"PICOCLAW_PROVIDERS_{{.Name}}_REQUEST_TIMEOUT"`
-	AuthMethod     string    `json:"auth_method,omitempty"     env:"PICOCLAW_PROVIDERS_{{.Name}}_AUTH_METHOD"`
-	ConnectMode    string    `json:"connect_mode,omitempty"    env:"PICOCLAW_PROVIDERS_{{.Name}}_CONNECT_MODE"` // only for Github Copilot, `stdio` or `grpc`
+	APIKey         SecretRef `json:"api_key"                   env:"X_CLAW_PROVIDERS_{{.Name}}_API_KEY"`
+	APIBase        string    `json:"api_base"                  env:"X_CLAW_PROVIDERS_{{.Name}}_API_BASE"`
+	Proxy          string    `json:"proxy,omitempty"           env:"X_CLAW_PROVIDERS_{{.Name}}_PROXY"`
+	RequestTimeout int       `json:"request_timeout,omitempty" env:"X_CLAW_PROVIDERS_{{.Name}}_REQUEST_TIMEOUT"`
+	AuthMethod     string    `json:"auth_method,omitempty"     env:"X_CLAW_PROVIDERS_{{.Name}}_AUTH_METHOD"`
+	ConnectMode    string    `json:"connect_mode,omitempty"    env:"X_CLAW_PROVIDERS_{{.Name}}_CONNECT_MODE"` // only for Github Copilot, `stdio` or `grpc`
 }
 
 type OpenAIProviderConfig struct {
 	ProviderConfig
-	WebSearch bool `json:"web_search" env:"PICOCLAW_PROVIDERS_OPENAI_WEB_SEARCH"`
+	WebSearch bool `json:"web_search" env:"X_CLAW_PROVIDERS_OPENAI_WEB_SEARCH"`
 }
 
 // ModelConfig represents a model-centric provider configuration.
@@ -793,9 +793,9 @@ func (c *ModelConfig) Validate() error {
 }
 
 type GatewayConfig struct {
-	Host   string    `json:"host"    env:"PICOCLAW_GATEWAY_HOST"`
-	Port   int       `json:"port"    env:"PICOCLAW_GATEWAY_PORT"`
-	APIKey SecretRef `json:"api_key,omitempty" env:"PICOCLAW_GATEWAY_API_KEY"`
+	Host   string    `json:"host"    env:"X_CLAW_GATEWAY_HOST"`
+	Port   int       `json:"port"    env:"X_CLAW_GATEWAY_PORT"`
+	APIKey SecretRef `json:"api_key,omitempty" env:"X_CLAW_GATEWAY_API_KEY"`
 
 	// InboundQueue enables per-session serial processing with a global concurrency cap.
 	InboundQueue GatewayInboundQueueConfig `json:"inbound_queue,omitempty"`
@@ -834,32 +834,32 @@ type ToolConfig struct {
 }
 
 type BraveConfig struct {
-	Enabled    bool        `json:"enabled"     env:"PICOCLAW_TOOLS_WEB_BRAVE_ENABLED"`
-	APIKey     SecretRef   `json:"api_key"     env:"PICOCLAW_TOOLS_WEB_BRAVE_API_KEY"`
+	Enabled    bool        `json:"enabled"     env:"X_CLAW_TOOLS_WEB_BRAVE_ENABLED"`
+	APIKey     SecretRef   `json:"api_key"     env:"X_CLAW_TOOLS_WEB_BRAVE_API_KEY"`
 	APIKeys    []SecretRef `json:"api_keys,omitempty"`
-	MaxResults int         `json:"max_results" env:"PICOCLAW_TOOLS_WEB_BRAVE_MAX_RESULTS"`
+	MaxResults int         `json:"max_results" env:"X_CLAW_TOOLS_WEB_BRAVE_MAX_RESULTS"`
 }
 
 type TavilyConfig struct {
-	Enabled    bool        `json:"enabled"     env:"PICOCLAW_TOOLS_WEB_TAVILY_ENABLED"`
-	APIKey     SecretRef   `json:"api_key"     env:"PICOCLAW_TOOLS_WEB_TAVILY_API_KEY"`
+	Enabled    bool        `json:"enabled"     env:"X_CLAW_TOOLS_WEB_TAVILY_ENABLED"`
+	APIKey     SecretRef   `json:"api_key"     env:"X_CLAW_TOOLS_WEB_TAVILY_API_KEY"`
 	APIKeys    []SecretRef `json:"api_keys,omitempty"`
-	BaseURL    string      `json:"base_url"    env:"PICOCLAW_TOOLS_WEB_TAVILY_BASE_URL"`
-	MaxResults int         `json:"max_results" env:"PICOCLAW_TOOLS_WEB_TAVILY_MAX_RESULTS"`
+	BaseURL    string      `json:"base_url"    env:"X_CLAW_TOOLS_WEB_TAVILY_BASE_URL"`
+	MaxResults int         `json:"max_results" env:"X_CLAW_TOOLS_WEB_TAVILY_MAX_RESULTS"`
 }
 
 type DuckDuckGoConfig struct {
-	Enabled    bool `json:"enabled"     env:"PICOCLAW_TOOLS_WEB_DUCKDUCKGO_ENABLED"`
-	MaxResults int  `json:"max_results" env:"PICOCLAW_TOOLS_WEB_DUCKDUCKGO_MAX_RESULTS"`
+	Enabled    bool `json:"enabled"     env:"X_CLAW_TOOLS_WEB_DUCKDUCKGO_ENABLED"`
+	MaxResults int  `json:"max_results" env:"X_CLAW_TOOLS_WEB_DUCKDUCKGO_MAX_RESULTS"`
 }
 
 type GrokConfig struct {
-	Enabled      bool        `json:"enabled"       env:"PICOCLAW_TOOLS_WEB_GROK_ENABLED"`
-	APIKey       SecretRef   `json:"api_key"       env:"PICOCLAW_TOOLS_WEB_GROK_API_KEY"`
+	Enabled      bool        `json:"enabled"       env:"X_CLAW_TOOLS_WEB_GROK_ENABLED"`
+	APIKey       SecretRef   `json:"api_key"       env:"X_CLAW_TOOLS_WEB_GROK_API_KEY"`
 	APIKeys      []SecretRef `json:"api_keys,omitempty"`
-	Endpoint     string      `json:"endpoint"      env:"PICOCLAW_TOOLS_WEB_GROK_ENDPOINT"`
-	DefaultModel string      `json:"default_model" env:"PICOCLAW_TOOLS_WEB_GROK_DEFAULT_MODEL"`
-	MaxResults   int         `json:"max_results"   env:"PICOCLAW_TOOLS_WEB_GROK_MAX_RESULTS"`
+	Endpoint     string      `json:"endpoint"      env:"X_CLAW_TOOLS_WEB_GROK_ENDPOINT"`
+	DefaultModel string      `json:"default_model" env:"X_CLAW_TOOLS_WEB_GROK_DEFAULT_MODEL"`
+	MaxResults   int         `json:"max_results"   env:"X_CLAW_TOOLS_WEB_GROK_MAX_RESULTS"`
 }
 
 // WebEvidenceModeConfig enables "evidence mode" for web tools.
@@ -876,34 +876,34 @@ type WebEvidenceModeConfig struct {
 }
 
 type GLMSearchConfig struct {
-	Enabled bool      `json:"enabled"  env:"PICOCLAW_TOOLS_WEB_GLM_ENABLED"`
-	APIKey  SecretRef `json:"api_key"  env:"PICOCLAW_TOOLS_WEB_GLM_API_KEY"`
-	BaseURL string    `json:"base_url" env:"PICOCLAW_TOOLS_WEB_GLM_BASE_URL"`
+	Enabled bool      `json:"enabled"  env:"X_CLAW_TOOLS_WEB_GLM_ENABLED"`
+	APIKey  SecretRef `json:"api_key"  env:"X_CLAW_TOOLS_WEB_GLM_API_KEY"`
+	BaseURL string    `json:"base_url" env:"X_CLAW_TOOLS_WEB_GLM_BASE_URL"`
 	// SearchEngine specifies the search backend: "search_std" (default),
 	// "search_pro", "search_pro_sogou", or "search_pro_quark".
-	SearchEngine string `json:"search_engine" env:"PICOCLAW_TOOLS_WEB_GLM_SEARCH_ENGINE"`
-	MaxResults   int    `json:"max_results"   env:"PICOCLAW_TOOLS_WEB_GLM_MAX_RESULTS"`
+	SearchEngine string `json:"search_engine" env:"X_CLAW_TOOLS_WEB_GLM_SEARCH_ENGINE"`
+	MaxResults   int    `json:"max_results"   env:"X_CLAW_TOOLS_WEB_GLM_MAX_RESULTS"`
 }
 
 type PerplexityConfig struct {
-	Enabled    bool      `json:"enabled"     env:"PICOCLAW_TOOLS_WEB_PERPLEXITY_ENABLED"`
-	APIKey     SecretRef `json:"api_key"     env:"PICOCLAW_TOOLS_WEB_PERPLEXITY_API_KEY"`
-	MaxResults int       `json:"max_results" env:"PICOCLAW_TOOLS_WEB_PERPLEXITY_MAX_RESULTS"`
+	Enabled    bool      `json:"enabled"     env:"X_CLAW_TOOLS_WEB_PERPLEXITY_ENABLED"`
+	APIKey     SecretRef `json:"api_key"     env:"X_CLAW_TOOLS_WEB_PERPLEXITY_API_KEY"`
+	MaxResults int       `json:"max_results" env:"X_CLAW_TOOLS_WEB_PERPLEXITY_MAX_RESULTS"`
 }
 
 type WebToolsConfig struct {
-	ToolConfig `envPrefix:"PICOCLAW_TOOLS_WEB_"`
-	Brave      BraveConfig      `json:"brave"`
-	Tavily     TavilyConfig     `json:"tavily"`
-	DuckDuckGo DuckDuckGoConfig `json:"duckduckgo"`
-	Perplexity PerplexityConfig `json:"perplexity"`
-	GLMSearch  GLMSearchConfig  `json:"glm_search"`
-	Grok       GrokConfig       `json:"grok"`
+	ToolConfig `envPrefix:"X_CLAW_TOOLS_WEB_"`
+	Brave      BraveConfig           `json:"brave"`
+	Tavily     TavilyConfig          `json:"tavily"`
+	DuckDuckGo DuckDuckGoConfig      `json:"duckduckgo"`
+	Perplexity PerplexityConfig      `json:"perplexity"`
+	GLMSearch  GLMSearchConfig       `json:"glm_search"`
+	Grok       GrokConfig            `json:"grok"`
 	Evidence   WebEvidenceModeConfig `json:"evidence_mode,omitempty"`
 	// Proxy is an optional proxy URL for web tools (http/https/socks5/socks5h).
 	// For authenticated proxies, prefer HTTP_PROXY/HTTPS_PROXY env vars instead of embedding credentials in config.
-	Proxy           string `json:"proxy,omitempty"             env:"PICOCLAW_TOOLS_WEB_PROXY"`
-	FetchLimitBytes int64  `json:"fetch_limit_bytes,omitempty" env:"PICOCLAW_TOOLS_WEB_FETCH_LIMIT_BYTES"`
+	Proxy           string `json:"proxy,omitempty"             env:"X_CLAW_TOOLS_WEB_PROXY"`
+	FetchLimitBytes int64  `json:"fetch_limit_bytes,omitempty" env:"X_CLAW_TOOLS_WEB_FETCH_LIMIT_BYTES"`
 
 	FetchCache WebFetchCacheConfig `json:"fetch_cache,omitempty"`
 }
@@ -925,27 +925,27 @@ type WebFetchCacheConfig struct {
 }
 
 type CronToolsConfig struct {
-	ToolConfig         `    envPrefix:"PICOCLAW_TOOLS_CRON_"`
-	ExecTimeoutMinutes int `                                 env:"PICOCLAW_TOOLS_CRON_EXEC_TIMEOUT_MINUTES" json:"exec_timeout_minutes"` // 0 means no timeout
+	ToolConfig         `    envPrefix:"X_CLAW_TOOLS_CRON_"`
+	ExecTimeoutMinutes int `                                 env:"X_CLAW_TOOLS_CRON_EXEC_TIMEOUT_MINUTES" json:"exec_timeout_minutes"` // 0 means no timeout
 }
 
 // ToolTraceConfig controls on-disk tracing of tool calls for debugging and replay.
 //
-// When enabled, PicoClaw appends an event stream (JSONL) and (optionally) writes
+// When enabled, X-Claw appends an event stream (JSONL) and (optionally) writes
 // per-call snapshots (JSON/Markdown) under the agent workspace.
 type ToolTraceConfig struct {
-	Enabled bool `json:"enabled" env:"PICOCLAW_TOOLS_TRACE_ENABLED"`
+	Enabled bool `json:"enabled" env:"X_CLAW_TOOLS_TRACE_ENABLED"`
 	// Dir overrides the default trace directory.
-	// When empty, traces are written under: <workspace>/.picoclaw/audit/tools/<session>/
-	Dir string `json:"dir,omitempty" env:"PICOCLAW_TOOLS_TRACE_DIR"`
+	// When empty, traces are written under: <workspace>/.x-claw/audit/tools/<session>/
+	Dir string `json:"dir,omitempty" env:"X_CLAW_TOOLS_TRACE_DIR"`
 
 	// WritePerCallFiles controls writing one JSON + one Markdown file per tool call.
-	WritePerCallFiles bool `json:"write_per_call_files" env:"PICOCLAW_TOOLS_TRACE_WRITE_PER_CALL_FILES"`
+	WritePerCallFiles bool `json:"write_per_call_files" env:"X_CLAW_TOOLS_TRACE_WRITE_PER_CALL_FILES"`
 
 	// MaxArgPreviewChars controls args_preview truncation in the JSONL event stream.
-	MaxArgPreviewChars int `json:"max_arg_preview_chars" env:"PICOCLAW_TOOLS_TRACE_MAX_ARG_PREVIEW_CHARS"`
+	MaxArgPreviewChars int `json:"max_arg_preview_chars" env:"X_CLAW_TOOLS_TRACE_MAX_ARG_PREVIEW_CHARS"`
 	// MaxResultPreviewChars controls output previews truncation in the JSONL event stream.
-	MaxResultPreviewChars int `json:"max_result_preview_chars" env:"PICOCLAW_TOOLS_TRACE_MAX_RESULT_PREVIEW_CHARS"`
+	MaxResultPreviewChars int `json:"max_result_preview_chars" env:"X_CLAW_TOOLS_TRACE_MAX_RESULT_PREVIEW_CHARS"`
 }
 
 // ToolErrorTemplateConfig controls executor-level tool error wrapping for the LLM.
@@ -954,19 +954,19 @@ type ToolTraceConfig struct {
 // minimal recovery hints. This helps the model self-correct by adjusting args
 // or switching tools, without changing each individual tool implementation.
 type ToolErrorTemplateConfig struct {
-	Enabled bool `json:"enabled" env:"PICOCLAW_TOOLS_ERROR_TEMPLATE_ENABLED"`
+	Enabled bool `json:"enabled" env:"X_CLAW_TOOLS_ERROR_TEMPLATE_ENABLED"`
 
 	// IncludeSchema adds a small summary of tool parameters (required + known keys)
 	// when the tool definition is available.
-	IncludeSchema bool `json:"include_schema" env:"PICOCLAW_TOOLS_ERROR_TEMPLATE_INCLUDE_SCHEMA"`
+	IncludeSchema bool `json:"include_schema" env:"X_CLAW_TOOLS_ERROR_TEMPLATE_INCLUDE_SCHEMA"`
 }
 
 type ExecConfig struct {
-	ToolConfig `envPrefix:"PICOCLAW_TOOLS_EXEC_"`
+	ToolConfig `envPrefix:"X_CLAW_TOOLS_EXEC_"`
 
-	EnableDenyPatterns  bool     `json:"enable_deny_patterns"  env:"PICOCLAW_TOOLS_EXEC_ENABLE_DENY_PATTERNS"`
-	CustomDenyPatterns  []string `json:"custom_deny_patterns"  env:"PICOCLAW_TOOLS_EXEC_CUSTOM_DENY_PATTERNS"`
-	CustomAllowPatterns []string `json:"custom_allow_patterns" env:"PICOCLAW_TOOLS_EXEC_CUSTOM_ALLOW_PATTERNS"`
+	EnableDenyPatterns  bool     `json:"enable_deny_patterns"  env:"X_CLAW_TOOLS_EXEC_ENABLE_DENY_PATTERNS"`
+	CustomDenyPatterns  []string `json:"custom_deny_patterns"  env:"X_CLAW_TOOLS_EXEC_CUSTOM_DENY_PATTERNS"`
+	CustomAllowPatterns []string `json:"custom_allow_patterns" env:"X_CLAW_TOOLS_EXEC_CUSTOM_ALLOW_PATTERNS"`
 
 	Env ExecEnvConfig `json:"env,omitempty"`
 
@@ -986,23 +986,23 @@ type ExecEnvConfig struct {
 	// Mode controls which environment variables are passed to exec tool commands:
 	// - "inherit": pass the full host environment (break-glass required; may leak secrets)
 	// - "allowlist": pass only EnvAllow (plus platform defaults)
-	Mode string `json:"mode,omitempty" env:"PICOCLAW_TOOLS_EXEC_ENV_MODE"`
+	Mode string `json:"mode,omitempty" env:"X_CLAW_TOOLS_EXEC_ENV_MODE"`
 
 	// EnvAllow is the allow-list of environment variable names (exact match).
-	EnvAllow []string `json:"allow,omitempty" env:"PICOCLAW_TOOLS_EXEC_ENV_ALLOW"`
+	EnvAllow []string `json:"allow,omitempty" env:"X_CLAW_TOOLS_EXEC_ENV_ALLOW"`
 }
 
 // ExecHostLimitsConfig controls optional OS-level hard limits for host exec tool backend.
 // All fields are optional; zero/negative values disable that limit.
 type ExecHostLimitsConfig struct {
 	// MemoryMB maps to ulimit -v (virtual memory) on Unix. It is approximate.
-	MemoryMB int `json:"memory_mb,omitempty" env:"PICOCLAW_TOOLS_EXEC_HOST_MEMORY_MB"`
+	MemoryMB int `json:"memory_mb,omitempty" env:"X_CLAW_TOOLS_EXEC_HOST_MEMORY_MB"`
 	// CPUSeconds maps to ulimit -t (CPU time) on Unix.
-	CPUSeconds int `json:"cpu_seconds,omitempty" env:"PICOCLAW_TOOLS_EXEC_HOST_CPU_SECONDS"`
+	CPUSeconds int `json:"cpu_seconds,omitempty" env:"X_CLAW_TOOLS_EXEC_HOST_CPU_SECONDS"`
 	// FileSizeMB maps to ulimit -f (max file size) on Unix.
-	FileSizeMB int `json:"file_size_mb,omitempty" env:"PICOCLAW_TOOLS_EXEC_HOST_FILE_SIZE_MB"`
+	FileSizeMB int `json:"file_size_mb,omitempty" env:"X_CLAW_TOOLS_EXEC_HOST_FILE_SIZE_MB"`
 	// NProc maps to ulimit -u (max user processes) on Unix.
-	NProc int `json:"nproc,omitempty" env:"PICOCLAW_TOOLS_EXEC_HOST_NPROC"`
+	NProc int `json:"nproc,omitempty" env:"X_CLAW_TOOLS_EXEC_HOST_NPROC"`
 }
 
 type ExecDockerConfig struct {
@@ -1017,19 +1017,19 @@ type ExecDockerConfig struct {
 	ReadOnlyRootFS bool `json:"read_only_rootfs,omitempty"`
 
 	// MemoryMB maps to docker run --memory (in megabytes). 0 disables the limit.
-	MemoryMB int `json:"memory_mb,omitempty" env:"PICOCLAW_TOOLS_EXEC_DOCKER_MEMORY_MB"`
+	MemoryMB int `json:"memory_mb,omitempty" env:"X_CLAW_TOOLS_EXEC_DOCKER_MEMORY_MB"`
 
 	// CPUs maps to docker run --cpus (e.g. 0.5). 0 disables the limit.
-	CPUs float64 `json:"cpus,omitempty" env:"PICOCLAW_TOOLS_EXEC_DOCKER_CPUS"`
+	CPUs float64 `json:"cpus,omitempty" env:"X_CLAW_TOOLS_EXEC_DOCKER_CPUS"`
 
 	// PidsLimit maps to docker run --pids-limit. 0 disables the limit.
-	PidsLimit int `json:"pids_limit,omitempty" env:"PICOCLAW_TOOLS_EXEC_DOCKER_PIDS_LIMIT"`
+	PidsLimit int `json:"pids_limit,omitempty" env:"X_CLAW_TOOLS_EXEC_DOCKER_PIDS_LIMIT"`
 }
 
 // EstopConfig enables a global kill switch for tool execution (Policy-first Tools).
 //
 // ROADMAP.md:1138 - estop subsystem as a durable safety control plane.
-// When enabled, PicoClaw reads <workspace>/.picoclaw/state/estop.json and denies
+// When enabled, X-Claw reads <workspace>/.x-claw/state/estop.json and denies
 // tools accordingly (kill_all / network_kill / frozen tools / blocked domains).
 type EstopConfig struct {
 	Enabled bool `json:"enabled,omitempty"`
@@ -1063,14 +1063,14 @@ type PlanModeConfig struct {
 }
 
 type MediaCleanupConfig struct {
-	ToolConfig `    envPrefix:"PICOCLAW_MEDIA_CLEANUP_"`
-	MaxAge     int `                                    env:"PICOCLAW_MEDIA_CLEANUP_MAX_AGE"  json:"max_age_minutes"`
-	Interval   int `                                    env:"PICOCLAW_MEDIA_CLEANUP_INTERVAL" json:"interval_minutes"`
+	ToolConfig `    envPrefix:"X_CLAW_MEDIA_CLEANUP_"`
+	MaxAge     int `                                    env:"X_CLAW_MEDIA_CLEANUP_MAX_AGE"  json:"max_age_minutes"`
+	Interval   int `                                    env:"X_CLAW_MEDIA_CLEANUP_INTERVAL" json:"interval_minutes"`
 }
 
 type ToolsConfig struct {
-	AllowReadPaths  []string `json:"allow_read_paths"  env:"PICOCLAW_TOOLS_ALLOW_READ_PATHS"`
-	AllowWritePaths []string `json:"allow_write_paths" env:"PICOCLAW_TOOLS_ALLOW_WRITE_PATHS"`
+	AllowReadPaths  []string `json:"allow_read_paths"  env:"X_CLAW_TOOLS_ALLOW_READ_PATHS"`
+	AllowWritePaths []string `json:"allow_write_paths" env:"X_CLAW_TOOLS_ALLOW_WRITE_PATHS"`
 
 	Web          WebToolsConfig     `json:"web"`
 	Cron         CronToolsConfig    `json:"cron"`
@@ -1088,19 +1088,19 @@ type ToolsConfig struct {
 	ErrorTemplate ToolErrorTemplateConfig `json:"error_template,omitempty"`
 
 	// Tool-level toggles (coarse enable/disable per tool name).
-	AppendFile   ToolConfig `json:"append_file,omitempty"   envPrefix:"PICOCLAW_TOOLS_APPEND_FILE_"`
-	EditFile     ToolConfig `json:"edit_file,omitempty"     envPrefix:"PICOCLAW_TOOLS_EDIT_FILE_"`
-	FindSkills   ToolConfig `json:"find_skills,omitempty"   envPrefix:"PICOCLAW_TOOLS_FIND_SKILLS_"`
-	I2C          ToolConfig `json:"i2c,omitempty"           envPrefix:"PICOCLAW_TOOLS_I2C_"`
-	InstallSkill ToolConfig `json:"install_skill,omitempty" envPrefix:"PICOCLAW_TOOLS_INSTALL_SKILL_"`
-	ListDir      ToolConfig `json:"list_dir,omitempty"      envPrefix:"PICOCLAW_TOOLS_LIST_DIR_"`
-	Message      ToolConfig `json:"message,omitempty"       envPrefix:"PICOCLAW_TOOLS_MESSAGE_"`
-	ReadFile     ToolConfig `json:"read_file,omitempty"     envPrefix:"PICOCLAW_TOOLS_READ_FILE_"`
-	Spawn        ToolConfig `json:"spawn,omitempty"         envPrefix:"PICOCLAW_TOOLS_SPAWN_"`
-	SPI          ToolConfig `json:"spi,omitempty"           envPrefix:"PICOCLAW_TOOLS_SPI_"`
-	Subagent     ToolConfig `json:"subagent,omitempty"      envPrefix:"PICOCLAW_TOOLS_SUBAGENT_"`
-	WebFetch     ToolConfig `json:"web_fetch,omitempty"     envPrefix:"PICOCLAW_TOOLS_WEB_FETCH_"`
-	WriteFile    ToolConfig `json:"write_file,omitempty"    envPrefix:"PICOCLAW_TOOLS_WRITE_FILE_"`
+	AppendFile   ToolConfig `json:"append_file,omitempty"   envPrefix:"X_CLAW_TOOLS_APPEND_FILE_"`
+	EditFile     ToolConfig `json:"edit_file,omitempty"     envPrefix:"X_CLAW_TOOLS_EDIT_FILE_"`
+	FindSkills   ToolConfig `json:"find_skills,omitempty"   envPrefix:"X_CLAW_TOOLS_FIND_SKILLS_"`
+	I2C          ToolConfig `json:"i2c,omitempty"           envPrefix:"X_CLAW_TOOLS_I2C_"`
+	InstallSkill ToolConfig `json:"install_skill,omitempty" envPrefix:"X_CLAW_TOOLS_INSTALL_SKILL_"`
+	ListDir      ToolConfig `json:"list_dir,omitempty"      envPrefix:"X_CLAW_TOOLS_LIST_DIR_"`
+	Message      ToolConfig `json:"message,omitempty"       envPrefix:"X_CLAW_TOOLS_MESSAGE_"`
+	ReadFile     ToolConfig `json:"read_file,omitempty"     envPrefix:"X_CLAW_TOOLS_READ_FILE_"`
+	Spawn        ToolConfig `json:"spawn,omitempty"         envPrefix:"X_CLAW_TOOLS_SPAWN_"`
+	SPI          ToolConfig `json:"spi,omitempty"           envPrefix:"X_CLAW_TOOLS_SPI_"`
+	Subagent     ToolConfig `json:"subagent,omitempty"      envPrefix:"X_CLAW_TOOLS_SUBAGENT_"`
+	WebFetch     ToolConfig `json:"web_fetch,omitempty"     envPrefix:"X_CLAW_TOOLS_WEB_FETCH_"`
+	WriteFile    ToolConfig `json:"write_file,omitempty"    envPrefix:"X_CLAW_TOOLS_WRITE_FILE_"`
 }
 
 // ToolPolicyConfig defines a centralized policy/middleware for all tool calls.
@@ -1195,16 +1195,16 @@ type ToolPolicyAuditConfig struct {
 }
 
 type SkillsToolsConfig struct {
-	ToolConfig `envPrefix:"PICOCLAW_TOOLS_SKILLS_"`
+	ToolConfig `envPrefix:"X_CLAW_TOOLS_SKILLS_"`
 
 	Registries            SkillsRegistriesConfig `json:"registries"`
-	MaxConcurrentSearches int                    `json:"max_concurrent_searches" env:"PICOCLAW_TOOLS_SKILLS_MAX_CONCURRENT_SEARCHES"`
+	MaxConcurrentSearches int                    `json:"max_concurrent_searches" env:"X_CLAW_TOOLS_SKILLS_MAX_CONCURRENT_SEARCHES"`
 	SearchCache           SearchCacheConfig      `json:"search_cache"`
 }
 
 type SearchCacheConfig struct {
-	MaxSize    int `json:"max_size"    env:"PICOCLAW_SKILLS_SEARCH_CACHE_MAX_SIZE"`
-	TTLSeconds int `json:"ttl_seconds" env:"PICOCLAW_SKILLS_SEARCH_CACHE_TTL_SECONDS"`
+	MaxSize    int `json:"max_size"    env:"X_CLAW_SKILLS_SEARCH_CACHE_MAX_SIZE"`
+	TTLSeconds int `json:"ttl_seconds" env:"X_CLAW_SKILLS_SEARCH_CACHE_TTL_SECONDS"`
 }
 
 type SkillsRegistriesConfig struct {
@@ -1212,15 +1212,15 @@ type SkillsRegistriesConfig struct {
 }
 
 type ClawHubRegistryConfig struct {
-	Enabled         bool      `json:"enabled"           env:"PICOCLAW_SKILLS_REGISTRIES_CLAWHUB_ENABLED"`
-	BaseURL         string    `json:"base_url"          env:"PICOCLAW_SKILLS_REGISTRIES_CLAWHUB_BASE_URL"`
-	AuthToken       SecretRef `json:"auth_token"        env:"PICOCLAW_SKILLS_REGISTRIES_CLAWHUB_AUTH_TOKEN"`
-	SearchPath      string    `json:"search_path"       env:"PICOCLAW_SKILLS_REGISTRIES_CLAWHUB_SEARCH_PATH"`
-	SkillsPath      string    `json:"skills_path"       env:"PICOCLAW_SKILLS_REGISTRIES_CLAWHUB_SKILLS_PATH"`
-	DownloadPath    string    `json:"download_path"     env:"PICOCLAW_SKILLS_REGISTRIES_CLAWHUB_DOWNLOAD_PATH"`
-	Timeout         int       `json:"timeout"           env:"PICOCLAW_SKILLS_REGISTRIES_CLAWHUB_TIMEOUT"`
-	MaxZipSize      int       `json:"max_zip_size"      env:"PICOCLAW_SKILLS_REGISTRIES_CLAWHUB_MAX_ZIP_SIZE"`
-	MaxResponseSize int       `json:"max_response_size" env:"PICOCLAW_SKILLS_REGISTRIES_CLAWHUB_MAX_RESPONSE_SIZE"`
+	Enabled         bool      `json:"enabled"           env:"X_CLAW_SKILLS_REGISTRIES_CLAWHUB_ENABLED"`
+	BaseURL         string    `json:"base_url"          env:"X_CLAW_SKILLS_REGISTRIES_CLAWHUB_BASE_URL"`
+	AuthToken       SecretRef `json:"auth_token"        env:"X_CLAW_SKILLS_REGISTRIES_CLAWHUB_AUTH_TOKEN"`
+	SearchPath      string    `json:"search_path"       env:"X_CLAW_SKILLS_REGISTRIES_CLAWHUB_SEARCH_PATH"`
+	SkillsPath      string    `json:"skills_path"       env:"X_CLAW_SKILLS_REGISTRIES_CLAWHUB_SKILLS_PATH"`
+	DownloadPath    string    `json:"download_path"     env:"X_CLAW_SKILLS_REGISTRIES_CLAWHUB_DOWNLOAD_PATH"`
+	Timeout         int       `json:"timeout"           env:"X_CLAW_SKILLS_REGISTRIES_CLAWHUB_TIMEOUT"`
+	MaxZipSize      int       `json:"max_zip_size"      env:"X_CLAW_SKILLS_REGISTRIES_CLAWHUB_MAX_ZIP_SIZE"`
+	MaxResponseSize int       `json:"max_response_size" env:"X_CLAW_SKILLS_REGISTRIES_CLAWHUB_MAX_RESPONSE_SIZE"`
 }
 
 // MCPServerConfig defines configuration for a single MCP server
@@ -1245,7 +1245,7 @@ type MCPServerConfig struct {
 
 // MCPConfig defines configuration for all MCP servers
 type MCPConfig struct {
-	ToolConfig `envPrefix:"PICOCLAW_TOOLS_MCP_"`
+	ToolConfig `envPrefix:"X_CLAW_TOOLS_MCP_"`
 	// Servers is a map of server name to server configuration
 	Servers map[string]MCPServerConfig `json:"servers,omitempty"`
 }

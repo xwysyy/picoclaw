@@ -10,11 +10,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/xwysyy/picoclaw/pkg/bus"
-	"github.com/xwysyy/picoclaw/pkg/config"
-	"github.com/xwysyy/picoclaw/pkg/identity"
-	"github.com/xwysyy/picoclaw/pkg/logger"
-	"github.com/xwysyy/picoclaw/pkg/media"
+	"github.com/xwysyy/X-Claw/pkg/bus"
+	"github.com/xwysyy/X-Claw/pkg/config"
+	"github.com/xwysyy/X-Claw/pkg/identity"
+	"github.com/xwysyy/X-Claw/pkg/logger"
+	"github.com/xwysyy/X-Claw/pkg/media"
 )
 
 var (

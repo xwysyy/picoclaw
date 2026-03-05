@@ -1,4 +1,4 @@
-# PicoClaw 彻底重构计划（历史记录）
+# X-Claw 彻底重构计划（历史记录）
 
 > 日期：2026-03-04（以仓库内文档为基线；当前状态以根目录 `ROADMAP.md` 与 `docs/architecture.md` 为准）  
 > 目标：把当前“功能堆叠导致的耦合与屎山趋势”收敛成 **清晰边界 + 可测试核心 + 可演进基础设施** 的长期形态，并且让每一步都能 `go test` 回归。
@@ -14,7 +14,7 @@
 - **运维闭环**：validate/doctor/status/health、升级迁移与修复
 - **默认安全**：sandbox/tool policy/elevated 的清晰边界 + SSRF/路径/权限护栏
 
-### 0.2 当前 PicoClaw 的主要屎山成因
+### 0.2 当前 X-Claw 的主要屎山成因
 来自历史重构指南的诊断（并与代码现状吻合；历史版本已移除，可在 git history 中追溯）：
 - `pkg/agent` 单包职责混杂，核心 loop 反向依赖 channels/media/http 等基础设施概念，测试隔离困难。
 - `pkg/tools` 抽象/治理/实现混在一起，生产治理（policy/trace/timeout）不易收口。

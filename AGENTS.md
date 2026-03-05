@@ -6,7 +6,7 @@ This file applies to the `x-claw` project root.
 ## Git Upstream and Periodic Sync
 
 Current remote setup:
-- `origin`: `https://github.com/xwysyy/picoclaw.git` (your fork)
+- `origin`: `https://github.com/xwysyy/X-Claw.git` (your fork)
 - `upstream`: `https://github.com/sipeed/picoclaw.git` (original project)
 
 If `upstream` is missing, add it:
@@ -124,9 +124,9 @@ Running `docker compose up -d --build` without profile may fail with:
 
 ### Gateway redeploy
 1. `cd docker`
-2. `docker compose -p picoclaw down`
-3. `docker compose -p picoclaw --profile gateway up -d --build`
-4. `docker compose -p picoclaw ps`
+2. `docker compose -p x-claw down`
+3. `docker compose -p x-claw --profile gateway up -d --build`
+4. `docker compose -p x-claw ps`
 5. `curl -sS http://127.0.0.1:18790/health`
 
 Expected healthy state:

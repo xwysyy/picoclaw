@@ -13,11 +13,11 @@ import (
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 
-	"github.com/xwysyy/picoclaw/pkg/bus"
-	"github.com/xwysyy/picoclaw/pkg/channels"
-	"github.com/xwysyy/picoclaw/pkg/config"
-	"github.com/xwysyy/picoclaw/pkg/identity"
-	"github.com/xwysyy/picoclaw/pkg/logger"
+	"github.com/xwysyy/X-Claw/pkg/bus"
+	"github.com/xwysyy/X-Claw/pkg/channels"
+	"github.com/xwysyy/X-Claw/pkg/config"
+	"github.com/xwysyy/X-Claw/pkg/identity"
+	"github.com/xwysyy/X-Claw/pkg/logger"
 )
 
 // picoConn represents a single WebSocket connection.

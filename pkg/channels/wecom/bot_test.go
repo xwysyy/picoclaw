@@ -17,8 +17,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/xwysyy/picoclaw/pkg/bus"
-	"github.com/xwysyy/picoclaw/pkg/config"
+	"github.com/xwysyy/X-Claw/pkg/bus"
+	"github.com/xwysyy/X-Claw/pkg/config"
 )
 
 // generateTestAESKey generates a valid test AES key

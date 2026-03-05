@@ -1,7 +1,7 @@
-// PicoClaw - Ultra-lightweight personal AI agent
+// X-Claw - Ultra-lightweight personal AI agent
 // License: MIT
 //
-// Copyright (c) 2026 PicoClaw contributors
+// Copyright (c) 2026 X-Claw contributors
 
 package config
 
@@ -10,16 +10,18 @@ import (
 	"path/filepath"
 )
 
-// DefaultConfig returns the default configuration for PicoClaw.
+// DefaultConfig returns the default configuration for X-Claw.
 func DefaultConfig() *Config {
 	// Determine the base path for the workspace.
-	// Priority: $PICOCLAW_HOME > ~/.picoclaw
+	// Priority: $X_CLAW_HOME > $PICOCLAW_HOME (legacy) > ~/.x-claw
 	var homePath string
-	if picoclawHome := os.Getenv("PICOCLAW_HOME"); picoclawHome != "" {
-		homePath = picoclawHome
+	if xClawHome := os.Getenv("X_CLAW_HOME"); xClawHome != "" {
+		homePath = xClawHome
+	} else if legacyHome := os.Getenv("PICOCLAW_HOME"); legacyHome != "" {
+		homePath = legacyHome
 	} else {
 		userHome, _ := os.UserHomeDir()
-		homePath = filepath.Join(userHome, ".picoclaw")
+		homePath = filepath.Join(userHome, ".x-claw")
 	}
 	workspacePath := filepath.Join(homePath, "workspace")
 
@@ -365,18 +367,18 @@ func DefaultConfig() *Config {
 			},
 
 			// Avian - https://avian.io
-				{
-					ModelName: "deepseek-v3.2",
-					Model:     "avian/deepseek/deepseek-v3.2",
-					APIBase:   "https://api.avian.io/v1",
-					APIKey:    SecretRef{},
-				},
-				{
-					ModelName: "kimi-k2.5",
-					Model:     "avian/moonshotai/kimi-k2.5",
-					APIBase:   "https://api.avian.io/v1",
-					APIKey:    SecretRef{},
-				},
+			{
+				ModelName: "deepseek-v3.2",
+				Model:     "avian/deepseek/deepseek-v3.2",
+				APIBase:   "https://api.avian.io/v1",
+				APIKey:    SecretRef{},
+			},
+			{
+				ModelName: "kimi-k2.5",
+				Model:     "avian/moonshotai/kimi-k2.5",
+				APIBase:   "https://api.avian.io/v1",
+				APIKey:    SecretRef{},
+			},
 
 			// VLLM (local) - http://localhost:8000
 			{

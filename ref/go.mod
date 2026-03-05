@@ -1,3 +1,3 @@
-module github.com/xwysyy/picoclaw/ref
+module github.com/xwysyy/X-Claw/ref
 
 go 1.22

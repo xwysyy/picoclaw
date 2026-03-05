@@ -12,10 +12,14 @@ import (
 // stable in memory-constrained environments. Some tests exercise memory and
 // embedding paths that can temporarily increase heap usage.
 //
-// To disable, set PICOCLAW_TEST_MEMLIMIT=0.
+// To disable, set X_CLAW_TEST_MEMLIMIT=0 (or legacy PICOCLAW_TEST_MEMLIMIT=0).
 func TestMain(m *testing.M) {
 	memLimit := int64(384 << 20) // 384 MiB default
-	if raw := strings.TrimSpace(os.Getenv("PICOCLAW_TEST_MEMLIMIT")); raw != "" {
+	raw := strings.TrimSpace(os.Getenv("X_CLAW_TEST_MEMLIMIT"))
+	if raw == "" {
+		raw = strings.TrimSpace(os.Getenv("PICOCLAW_TEST_MEMLIMIT"))
+	}
+	if raw != "" {
 		if n, err := strconv.ParseInt(raw, 10, 64); err == nil {
 			memLimit = n
 		}

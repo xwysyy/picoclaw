@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/xwysyy/picoclaw/pkg/fileutil"
+	"github.com/xwysyy/X-Claw/pkg/fileutil"
 )
 
 type AuthCredential struct {

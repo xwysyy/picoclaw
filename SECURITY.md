@@ -1,12 +1,12 @@
 # Security (Trust Model + Defaults + Break‑Glass)
 
-PicoClaw is designed as a **personal, single-operator assistant** that runs locally (or on a private host) and can call tools with real side effects (file I/O, process execution, network access, MCP servers, etc.). This document explains:
+X-Claw is designed as a **personal, single-operator assistant** that runs locally (or on a private host) and can call tools with real side effects (file I/O, process execution, network access, MCP servers, etc.). This document explains:
 
-- What PicoClaw **does and does not** try to protect against
+- What X-Claw **does and does not** try to protect against
 - The **trust boundaries** (what is in the TCB)
 - The **default-safe posture** and how to open things up (break‑glass)
 
-If you are deploying PicoClaw in a shared / multi-tenant environment, read this first and consider whether your threat model is compatible.
+If you are deploying X-Claw in a shared / multi-tenant environment, read this first and consider whether your threat model is compatible.
 
 ---
 
@@ -23,7 +23,7 @@ If you are deploying PicoClaw in a shared / multi-tenant environment, read this 
 ### Out-of-scope (by design, not guaranteed)
 
 - Strong isolation against a **malicious operator** (the person controlling config / skills / MCP servers)
-- Hardened sandboxing for **multi-tenant** workloads (PicoClaw is not a hosted platform)
+- Hardened sandboxing for **multi-tenant** workloads (X-Claw is not a hosted platform)
 - Perfect defense against **prompt injection** (LLMs can be socially engineered; policies help but do not eliminate the risk)
 - OS/kernel escapes (if you run untrusted code via `exec`, that is your responsibility to sandbox at the OS/container layer)
 
@@ -47,12 +47,12 @@ User messages, web content, and external channel messages should be considered *
 
 ## 3) Default posture (what we ship with)
 
-PicoClaw defaults are intentionally conservative for a personal assistant:
+X-Claw defaults are intentionally conservative for a personal assistant:
 
 - Gateway binds to **localhost** by default (`127.0.0.1`)
 - Agent filesystem tools default to **workspace-only** access
 - Plan Mode is enabled by default to reduce accidental side effects during planning phases
-- Tool trace / audit outputs are written under the workspace `.picoclaw/` directory when enabled
+- Tool trace / audit outputs are written under the workspace `.x-claw/` directory when enabled
 
 Note: “default-safe” here means **reasonable for a single operator**. You should still enable additional guardrails for production or remote deployments.
 

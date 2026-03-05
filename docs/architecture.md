@@ -68,4 +68,4 @@ accidental coupling and long-term "big-ball-of-mud" drift.
 - Minimal stable test suite for constrained environments:
   - `./scripts/test.sh`
 - Full CLI compile/tests:
-  - `go test ./cmd/picoclaw/...`
+  - `go test ./cmd/x-claw/...`

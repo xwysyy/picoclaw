@@ -1,6 +1,6 @@
 package media
 
-import "github.com/sipeed/picoclaw/internal/core/ports"
+import "github.com/xwysyy/X-Claw/internal/core/ports"
 
 // AsMediaResolver adapts a MediaStore to the core MediaResolver port.
 // Returns nil when store is nil.

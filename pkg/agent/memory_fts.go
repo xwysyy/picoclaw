@@ -15,7 +15,7 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	"github.com/sipeed/picoclaw/pkg/logger"
+	"github.com/xwysyy/X-Claw/pkg/logger"
 )
 
 const memoryFTSDriver = "sqlite"

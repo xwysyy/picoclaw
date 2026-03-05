@@ -13,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sipeed/picoclaw/pkg/config"
+	"github.com/xwysyy/X-Claw/pkg/config"
 )
 
 type Event struct {
@@ -85,7 +85,7 @@ func Configure(workspace string, cfg config.AuditLogConfig) {
 	w.enabled = cfg.Enabled
 	w.dir = strings.TrimSpace(cfg.Dir)
 	if w.dir == "" {
-		w.dir = filepath.Join(workspace, ".picoclaw", "audit")
+		w.dir = filepath.Join(workspace, ".x-claw", "audit")
 	}
 	w.maxBytes = int64(cfg.MaxBytes)
 	w.maxBackups = cfg.MaxBackups
@@ -212,8 +212,8 @@ func getOrCreateWriter(workspace string) *writer {
 	w := &writer{
 		workspace: workspace,
 		enabled:   false,
-		dir:       filepath.Join(workspace, ".picoclaw", "audit"),
-		path:      filepath.Join(workspace, ".picoclaw", "audit", "audit.jsonl"),
+		dir:       filepath.Join(workspace, ".x-claw", "audit"),
+		path:      filepath.Join(workspace, ".x-claw", "audit", "audit.jsonl"),
 	}
 	actual, _ := writers.LoadOrStore(workspace, w)
 	if ww, ok := actual.(*writer); ok && ww != nil {

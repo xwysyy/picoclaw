@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/xwysyy/picoclaw/pkg/fileutil"
+	"github.com/xwysyy/X-Claw/pkg/fileutil"
 )
 
 // validatePath ensures the given path is within the workspace if restrict is true.

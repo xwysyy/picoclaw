@@ -11,8 +11,8 @@ import (
 	"github.com/openai/openai-go/v3/option"
 	"github.com/openai/openai-go/v3/responses"
 
-	"github.com/xwysyy/picoclaw/pkg/auth"
-	"github.com/xwysyy/picoclaw/pkg/logger"
+	"github.com/xwysyy/X-Claw/pkg/auth"
+	"github.com/xwysyy/X-Claw/pkg/logger"
 )
 
 const (

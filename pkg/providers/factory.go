@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/xwysyy/picoclaw/pkg/auth"
-	"github.com/xwysyy/picoclaw/pkg/config"
+	"github.com/xwysyy/X-Claw/pkg/auth"
+	"github.com/xwysyy/X-Claw/pkg/config"
 )
 
 const defaultAnthropicAPIBase = "https://api.anthropic.com/v1"
@@ -179,12 +179,12 @@ func resolveProviderSelection(cfg *config.Config) (providerSelection, error) {
 					sel.model = "deepseek-chat"
 				}
 			}
-			case "avian":
-				if cfg.Providers.Avian.APIKey.Present() {
-					if err := applyProviderConfig(&sel, cfg.Providers.Avian, "https://api.avian.io/v1"); err != nil {
-						return providerSelection{}, err
-					}
+		case "avian":
+			if cfg.Providers.Avian.APIKey.Present() {
+				if err := applyProviderConfig(&sel, cfg.Providers.Avian, "https://api.avian.io/v1"); err != nil {
+					return providerSelection{}, err
 				}
+			}
 		case "mistral":
 			if cfg.Providers.Mistral.APIKey.Present() {
 				if err := applyProviderConfig(&sel, cfg.Providers.Mistral, "https://api.mistral.ai/v1"); err != nil {
@@ -268,10 +268,10 @@ func resolveProviderSelection(cfg *config.Config) (providerSelection, error) {
 			if err := applyProviderConfig(&sel, cfg.Providers.Mistral, "https://api.mistral.ai/v1"); err != nil {
 				return providerSelection{}, err
 			}
-			case strings.HasPrefix(model, "avian/") && cfg.Providers.Avian.APIKey.Present():
-				if err := applyProviderConfig(&sel, cfg.Providers.Avian, "https://api.avian.io/v1"); err != nil {
-					return providerSelection{}, err
-				}
+		case strings.HasPrefix(model, "avian/") && cfg.Providers.Avian.APIKey.Present():
+			if err := applyProviderConfig(&sel, cfg.Providers.Avian, "https://api.avian.io/v1"); err != nil {
+				return providerSelection{}, err
+			}
 		case cfg.Providers.VLLM.APIBase != "":
 			if err := applyProviderConfig(&sel, cfg.Providers.VLLM, ""); err != nil {
 				return providerSelection{}, err

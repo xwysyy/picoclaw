@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/xwysyy/picoclaw/pkg/skills"
+	"github.com/xwysyy/X-Claw/pkg/skills"
 )
 
 func TestInstallSkillToolName(t *testing.T) {

@@ -9,22 +9,22 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/xwysyy/picoclaw/pkg/config"
-	"github.com/xwysyy/picoclaw/pkg/providers"
-	"github.com/xwysyy/picoclaw/pkg/routing"
-	"github.com/xwysyy/picoclaw/pkg/session"
-	"github.com/xwysyy/picoclaw/pkg/tools"
+	"github.com/xwysyy/X-Claw/pkg/config"
+	"github.com/xwysyy/X-Claw/pkg/providers"
+	"github.com/xwysyy/X-Claw/pkg/routing"
+	"github.com/xwysyy/X-Claw/pkg/session"
+	"github.com/xwysyy/X-Claw/pkg/tools"
 )
 
 // AgentInstance represents a configured agent with its own workspace, context builder,
 // and tool registry. The session manager may be injected by the composition root
 // (AgentLoop) to enable shared conversation history across agents.
 type AgentInstance struct {
-	ID          string
-	Name        string
-	Model       string
-	Fallbacks   []string
-	Workspace   string
+	ID            string
+	Name          string
+	Model         string
+	Fallbacks     []string
+	Workspace     string
 	MaxIterations int
 	MaxTokens     int
 	Temperature   float64
@@ -302,11 +302,11 @@ func NewAgentInstance(
 		// Sessions are injected by the composition root (AgentLoop) so multi-agent
 		// handoff can share one conversation history across agents.
 		Sessions:       nil,
-		ContextBuilder:            contextBuilder,
-		Tools:                     toolsRegistry,
-		Subagents:                 subagents,
-		SkillsFilter:              skillsFilter,
-		Candidates:                candidates,
+		ContextBuilder: contextBuilder,
+		Tools:          toolsRegistry,
+		Subagents:      subagents,
+		SkillsFilter:   skillsFilter,
+		Candidates:     candidates,
 		Compaction:     compaction,
 		ContextPruning: pruning,
 		MemoryVector:   memVec,

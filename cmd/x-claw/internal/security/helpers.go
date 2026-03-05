@@ -8,10 +8,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sipeed/picoclaw/cmd/picoclaw/internal"
-	"github.com/sipeed/picoclaw/cmd/picoclaw/internal/cliutil"
-	"github.com/sipeed/picoclaw/pkg/config"
-	"github.com/sipeed/picoclaw/pkg/tools"
+	"github.com/xwysyy/X-Claw/cmd/x-claw/internal"
+	"github.com/xwysyy/X-Claw/cmd/x-claw/internal/cliutil"
+	"github.com/xwysyy/X-Claw/pkg/config"
+	"github.com/xwysyy/X-Claw/pkg/tools"
 )
 
 type securityReport struct {
@@ -169,7 +169,7 @@ func securityCmd(opts securityOptions) error {
 
 func buildSecurityReport(cfg *config.Config) securityReport {
 	report := securityReport{
-		Kind:      "picoclaw_security_check",
+		Kind:      "x_claw_security_check",
 		Workspace: strings.TrimSpace(cfg.WorkspacePath()),
 		Timestamp: time.Now().UTC().Format(time.RFC3339Nano),
 		Warnings:  []string{},
@@ -212,7 +212,7 @@ func buildSecurityReport(cfg *config.Config) securityReport {
 	if workspace != "" {
 		auditDir := strings.TrimSpace(report.AuditLog.Dir)
 		if auditDir == "" {
-			auditDir = filepath.Join(workspace, ".picoclaw", "audit")
+			auditDir = filepath.Join(workspace, ".x-claw", "audit")
 		}
 		report.AuditLog.Path = filepath.Join(auditDir, "audit.jsonl")
 		if _, err := os.Stat(report.AuditLog.Path); err == nil {

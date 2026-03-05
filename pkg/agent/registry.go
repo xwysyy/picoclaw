@@ -3,10 +3,10 @@ package agent
 import (
 	"sync"
 
-	"github.com/xwysyy/picoclaw/pkg/config"
-	"github.com/xwysyy/picoclaw/pkg/logger"
-	"github.com/xwysyy/picoclaw/pkg/providers"
-	"github.com/xwysyy/picoclaw/pkg/routing"
+	"github.com/xwysyy/X-Claw/pkg/config"
+	"github.com/xwysyy/X-Claw/pkg/logger"
+	"github.com/xwysyy/X-Claw/pkg/providers"
+	"github.com/xwysyy/X-Claw/pkg/routing"
 )
 
 // AgentRegistry manages multiple agent instances and routes messages to them.

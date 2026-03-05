@@ -44,11 +44,11 @@ Ultra-lightweight personal AI assistant written in Go, inspired by nanobot.
 MIT License - Free and open source
 
 ## Repository
-https://github.com/xwysyy/picoclaw
+https://github.com/xwysyy/X-Claw
 
 ## Contact
-Issues: https://github.com/xwysyy/picoclaw/issues
-Discussions: https://github.com/xwysyy/picoclaw/discussions
+Issues: https://github.com/xwysyy/X-Claw/issues
+Discussions: https://github.com/xwysyy/X-Claw/discussions
 
 ---
 

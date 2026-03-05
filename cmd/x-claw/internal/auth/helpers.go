@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/xwysyy/picoclaw/cmd/x-claw/internal"
-	"github.com/xwysyy/picoclaw/pkg/auth"
-	"github.com/xwysyy/picoclaw/pkg/config"
-	"github.com/xwysyy/picoclaw/pkg/providers"
+	"github.com/xwysyy/X-Claw/cmd/x-claw/internal"
+	"github.com/xwysyy/X-Claw/pkg/auth"
+	"github.com/xwysyy/X-Claw/pkg/config"
+	"github.com/xwysyy/X-Claw/pkg/providers"
 )
 
 const supportedProvidersMsg = "supported providers: openai, anthropic, google-antigravity"

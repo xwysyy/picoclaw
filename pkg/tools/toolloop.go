@@ -12,9 +12,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/xwysyy/picoclaw/pkg/config"
-	"github.com/xwysyy/picoclaw/pkg/logger"
-	"github.com/xwysyy/picoclaw/pkg/providers"
+	"github.com/xwysyy/X-Claw/pkg/config"
+	"github.com/xwysyy/X-Claw/pkg/logger"
+	"github.com/xwysyy/X-Claw/pkg/providers"
 )
 
 // ToolLoopConfig configures the tool execution loop.

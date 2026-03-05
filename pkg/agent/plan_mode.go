@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sipeed/picoclaw/pkg/fileutil"
-	"github.com/sipeed/picoclaw/pkg/tools"
-	"github.com/sipeed/picoclaw/pkg/utils"
+	"github.com/xwysyy/X-Claw/pkg/fileutil"
+	"github.com/xwysyy/X-Claw/pkg/tools"
+	"github.com/xwysyy/X-Claw/pkg/utils"
 )
 
 type sessionPermissionMode string
@@ -69,7 +69,7 @@ func sessionPermissionStatePath(workspace, sessionKey string) (string, error) {
 		token = "unknown"
 	}
 
-	return filepath.Join(workspace, ".picoclaw", "state", "sessions", token, "permission.json"), nil
+	return filepath.Join(workspace, ".x-claw", "state", "sessions", token, "permission.json"), nil
 }
 
 func loadSessionPermissionStateWithDefault(workspace, sessionKey string, defaultMode sessionPermissionMode) sessionPermissionState {

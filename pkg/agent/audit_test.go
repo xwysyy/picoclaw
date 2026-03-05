@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/xwysyy/picoclaw/pkg/bus"
-	"github.com/xwysyy/picoclaw/pkg/config"
-	"github.com/xwysyy/picoclaw/pkg/tools"
+	"github.com/xwysyy/X-Claw/pkg/bus"
+	"github.com/xwysyy/X-Claw/pkg/config"
+	"github.com/xwysyy/X-Claw/pkg/tools"
 )
 
 func TestRunTaskAudit_DetectsMissedAndQualityIssues(t *testing.T) {

@@ -3,8 +3,8 @@ package channels
 import (
 	"sync"
 
-	"github.com/xwysyy/picoclaw/pkg/bus"
-	"github.com/xwysyy/picoclaw/pkg/config"
+	"github.com/xwysyy/X-Claw/pkg/bus"
+	"github.com/xwysyy/X-Claw/pkg/config"
 )
 
 // ChannelFactory is a constructor function that creates a Channel from config and message bus.

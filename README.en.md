@@ -36,7 +36,7 @@ This project is under active development.
 ## Quick Start (Local Build)
 
 ```bash
-git clone https://github.com/xwysyy/picoclaw.git x-claw
+git clone https://github.com/xwysyy/X-Claw.git x-claw
 cd x-claw
 make deps
 make build
@@ -54,7 +54,7 @@ Edit config:
 vim ~/.x-claw/config.json
 ```
 
-Note: PicoClaw runtime configuration is **file-only** (`config.json`, default: `~/.picoclaw/config.json`; Docker deployments typically mount `config/config.json` to that path). Environment-variable overrides for config fields are intentionally not supported to keep behavior reproducible.
+Note: X-Claw runtime configuration is **file-only** (`config.json`, default: `~/.x-claw/config.json`; Docker deployments typically mount `config/config.json` to that path). Environment-variable overrides for config fields are intentionally not supported to keep behavior reproducible.
 
 Minimal example:
 
@@ -108,8 +108,8 @@ curl -sS http://127.0.0.1:18790/health
 Check runtime status (includes `last_active` / cron / trace, etc.):
 
 ```bash
-./build/picoclaw status
-./build/picoclaw status --json
+./build/x-claw status
+./build/x-claw status --json
 ```
 
 ### Gateway Console (`/console/`)
@@ -118,7 +118,7 @@ Gateway includes a **read-only Console** (Web UI, Next.js + shadcn/ui) for self-
 - basic status + `last_active`
 - cron jobs (`cron/jobs.json`)
 - sessions list (`sessions/*.json`)
-- run trace / tool trace (`<workspace>/.picoclaw/audit/**/events.jsonl`)
+- run trace / tool trace (`<workspace>/.x-claw/audit/**/events.jsonl`)
 - health links (`/health` / `/ready`)
 
 Open in a browser:
@@ -142,7 +142,7 @@ curl -sS http://127.0.0.1:18790/api/console/runs
 curl -sS http://127.0.0.1:18790/api/console/tools
 ```
 
-Download workspace audit/state files (only allows whitelisted paths under `.picoclaw/audit/`, `cron/`, `state/`):
+Download workspace audit/state files (only allows whitelisted paths under `.x-claw/audit/`, `cron/`, `state/`):
 
 ```bash
 curl -sS -OJ "http://127.0.0.1:18790/api/console/file?path=cron/jobs.json"
@@ -151,7 +151,7 @@ curl -sS -OJ "http://127.0.0.1:18790/api/console/file?path=cron/jobs.json"
 Tail last N lines (useful for `events.jsonl` without downloading the whole file):
 
 ```bash
-curl -sS "http://127.0.0.1:18790/api/console/tail?path=.picoclaw/audit/runs/<session>/events.jsonl&lines=200"
+curl -sS "http://127.0.0.1:18790/api/console/tail?path=.x-claw/audit/runs/<session>/events.jsonl&lines=200"
 ```
 
 ### Notification API (`/api/notify`)
@@ -218,14 +218,14 @@ Config example:
 
 Tool Trace answers “what happened in each tool call”. Run Trace answers “what happened in this whole user request/run” (LLM turns, tool batches, final output).
 
-When `tools.trace.enabled=true`, PicoClaw also appends a per-session run-level JSONL event stream (append-only), used for:
+When `tools.trace.enabled=true`, X-Claw also appends a per-session run-level JSONL event stream (append-only), used for:
 - debugging / post-mortems
 - durable long tasks (the foundation for resume)
-- export bundles (`picoclaw export --trace`)
+- export bundles (`x-claw export --trace`)
 
 Default location:
 
-- ` <workspace>/.picoclaw/audit/runs/<session>/events.jsonl `
+- ` <workspace>/.x-claw/audit/runs/<session>/events.jsonl `
 
 ### Tool Policy (`tools.policy`: unified guardrails + audit)
 
@@ -278,7 +278,7 @@ Enable “confirmation gate + idempotent replay” (recommended to confirm only 
 
 Notes:
 - When blocked by policy, tools return structured JSON (`kind=tool_policy_*`). The model should ask the user, then call `tool_confirm(confirm_key)`.
-- The idempotency ledger is stored at: ` <workspace>/.picoclaw/audit/runs/<session>/runs/<run_id>/policy.jsonl `
+- The idempotency ledger is stored at: ` <workspace>/.x-claw/audit/runs/<session>/runs/<run_id>/policy.jsonl `
 
 ### Resume last task (`/api/resume_last_task`)
 
@@ -294,7 +294,7 @@ Auth is the same as `/api/notify`:
 
 Strongly recommended: enable `tools.policy.confirm` + `tools.policy.idempotency` to prevent side effects from being repeated on resume.
 
-### Run/Session Export (`picoclaw export`)
+### Run/Session Export (`x-claw export`)
 
 When you need to file a bug report, review a conversation, or share a replay bundle, you can export a zip bundle (by default it includes: session snapshot + tool traces + cron/state + redacted config snapshot + manifest).
 
@@ -302,10 +302,10 @@ Common usage:
 
 ```bash
 # Export the session matching workspace last_active (recommended)
-./build/picoclaw export --last-active
+./build/x-claw export --last-active
 
 # Or export an explicit session key
-./build/picoclaw export --session 'agent:main:feishu:group:oc_xxx'
+./build/x-claw export --session 'agent:main:feishu:group:oc_xxx'
 ```
 
 Default output directory:
@@ -314,7 +314,7 @@ Default output directory:
 
 ### Unified Tool Error Template (`tools.error_template`)
 
-When a tool execution fails (`is_error=true`), PicoClaw wraps the error into a small structured JSON payload (`kind=tool_error`) with minimal recovery hints (required args, available/similar tool names, etc.). This helps the model self-correct (adjust args / switch tools / read-before-write).
+When a tool execution fails (`is_error=true`), X-Claw wraps the error into a small structured JSON payload (`kind=tool_error`) with minimal recovery hints (required args, available/similar tool names, etc.). This helps the model self-correct (adjust args / switch tools / read-before-write).
 
 Notes:
 - This is implemented at the executor layer (no per-tool changes required)
@@ -344,9 +344,9 @@ This significantly improves second-pass consumption and reduces “model misread
 
 ### Remote Embeddings for Semantic Memory (Optional)
 
-By default, PicoClaw semantic memory (`agents.defaults.memory_vector`) uses a local deterministic `hashed` embedder: fast, stable, and no extra network/API required.
+By default, X-Claw semantic memory (`agents.defaults.memory_vector`) uses a local deterministic `hashed` embedder: fast, stable, and no extra network/API required.
 
-If you want higher-quality semantic retrieval, you can point PicoClaw to an OpenAI-compatible embeddings endpoint (`POST <api_base>/embeddings`), such as SiliconFlow / OpenAI / other compatible services.
+If you want higher-quality semantic retrieval, you can point X-Claw to an OpenAI-compatible embeddings endpoint (`POST <api_base>/embeddings`), such as SiliconFlow / OpenAI / other compatible services.
 
 In this project, embeddings settings are read **only from `config.json`**. Example (place under `agents.defaults.memory_vector.embedding`):
 
@@ -372,7 +372,7 @@ In this project, embeddings settings are read **only from `config.json`**. Examp
 ```
 
 Notes:
-- If `embedding.kind` is empty or `hashed`, PicoClaw uses the local deterministic `hashed` embedder (no network)
+- If `embedding.kind` is empty or `hashed`, X-Claw uses the local deterministic `hashed` embedder (no network)
 - The first semantic search / index rebuild will make network requests; the index is persisted and automatically rebuilt when sources or `api_base/model` changes
 - If you explicitly set `embedding.kind` to `openai_compat`, then `api_base` and `model` are required (otherwise it errors)
 
@@ -391,9 +391,9 @@ The `state` section records:
 Common CLI commands:
 
 ```bash
-./build/picoclaw cron list
-./build/picoclaw cron show <job_id>
-./build/picoclaw cron show <job_id> --json
+./build/x-claw cron list
+./build/x-claw cron show <job_id>
+./build/x-claw cron show <job_id> --json
 ```
 
 ## Docker Compose

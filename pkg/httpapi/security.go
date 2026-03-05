@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sipeed/picoclaw/pkg/config"
-	"github.com/sipeed/picoclaw/pkg/tools"
+	"github.com/xwysyy/X-Claw/pkg/config"
+	"github.com/xwysyy/X-Claw/pkg/tools"
 )
 
 type SecurityHandlerOptions struct {
@@ -195,7 +195,7 @@ func (h *SecurityHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	auditDir := strings.TrimSpace(resp.AuditLog.Dir)
 	if auditDir == "" {
-		auditDir = filepath.Join(workspace, ".picoclaw", "audit")
+		auditDir = filepath.Join(workspace, ".x-claw", "audit")
 	}
 	resp.AuditLog.Path = filepath.ToSlash(filepath.Join(auditDir, "audit.jsonl"))
 	if _, err := os.Stat(filepath.Join(auditDir, "audit.jsonl")); err == nil {

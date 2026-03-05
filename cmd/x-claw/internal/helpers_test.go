@@ -97,7 +97,7 @@ func TestGetVersion(t *testing.T) {
 }
 
 func TestGetConfigPath_WithEnv(t *testing.T) {
-	t.Setenv("PICOCLAW_CONFIG", "/tmp/custom/config.json")
+	t.Setenv("X_CLAW_CONFIG", "/tmp/custom/config.json")
 	t.Setenv("HOME", "/tmp/home") // Also set home to ensure env is preferred
 
 	got := GetConfigPath()

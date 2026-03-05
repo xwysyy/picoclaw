@@ -10,7 +10,7 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/option"
 
-	"github.com/xwysyy/picoclaw/pkg/providers/protocoltypes"
+	"github.com/xwysyy/X-Claw/pkg/providers/protocoltypes"
 )
 
 type (

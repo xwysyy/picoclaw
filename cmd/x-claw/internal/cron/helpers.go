@@ -5,8 +5,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/xwysyy/picoclaw/cmd/x-claw/internal/cliutil"
-	"github.com/xwysyy/picoclaw/pkg/cron"
+	"github.com/xwysyy/X-Claw/cmd/x-claw/internal/cliutil"
+	"github.com/xwysyy/X-Claw/pkg/cron"
 )
 
 func cronListCmd(storePath string) {

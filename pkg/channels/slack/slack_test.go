@@ -3,8 +3,8 @@ package slack
 import (
 	"testing"
 
-	"github.com/xwysyy/picoclaw/pkg/bus"
-	"github.com/xwysyy/picoclaw/pkg/config"
+	"github.com/xwysyy/X-Claw/pkg/bus"
+	"github.com/xwysyy/X-Claw/pkg/config"
 )
 
 func TestParseSlackChatID(t *testing.T) {

@@ -7,13 +7,14 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
-	"github.com/xwysyy/picoclaw/cmd/x-claw/internal"
-	"github.com/xwysyy/picoclaw/cmd/x-claw/internal/onboard"
-	"github.com/xwysyy/picoclaw/pkg/config"
-	"github.com/xwysyy/picoclaw/pkg/skills"
-	"github.com/xwysyy/picoclaw/pkg/utils"
+	"github.com/xwysyy/X-Claw/cmd/x-claw/internal"
+	"github.com/xwysyy/X-Claw/cmd/x-claw/internal/onboard"
+	"github.com/xwysyy/X-Claw/pkg/config"
+	"github.com/xwysyy/X-Claw/pkg/skills"
+	"github.com/xwysyy/X-Claw/pkg/utils"
 )
 
 const skillsSearchMaxResults = 20

@@ -11,11 +11,11 @@ import (
 
 	"github.com/chzyer/readline"
 
-	"github.com/xwysyy/picoclaw/cmd/x-claw/internal"
-	"github.com/xwysyy/picoclaw/pkg/agent"
-	"github.com/xwysyy/picoclaw/pkg/bus"
-	"github.com/xwysyy/picoclaw/pkg/logger"
-	"github.com/xwysyy/picoclaw/pkg/providers"
+	"github.com/xwysyy/X-Claw/cmd/x-claw/internal"
+	"github.com/xwysyy/X-Claw/pkg/agent"
+	"github.com/xwysyy/X-Claw/pkg/bus"
+	"github.com/xwysyy/X-Claw/pkg/logger"
+	"github.com/xwysyy/X-Claw/pkg/providers"
 )
 
 func agentCmd(message, sessionKey, model string, debug bool) error {

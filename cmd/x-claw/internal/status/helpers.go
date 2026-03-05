@@ -7,12 +7,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/xwysyy/picoclaw/cmd/x-claw/internal"
-	"github.com/xwysyy/picoclaw/pkg/auth"
-	"github.com/xwysyy/picoclaw/cmd/x-claw/internal/cliutil"
-	"github.com/xwysyy/picoclaw/pkg/cron"
-	"github.com/xwysyy/picoclaw/pkg/session"
-	"github.com/xwysyy/picoclaw/pkg/state"
+	"github.com/xwysyy/X-Claw/cmd/x-claw/internal"
+	"github.com/xwysyy/X-Claw/cmd/x-claw/internal/cliutil"
+	"github.com/xwysyy/X-Claw/pkg/auth"
+	"github.com/xwysyy/X-Claw/pkg/cron"
+	"github.com/xwysyy/X-Claw/pkg/session"
+	"github.com/xwysyy/X-Claw/pkg/state"
 )
 
 type statusReport struct {

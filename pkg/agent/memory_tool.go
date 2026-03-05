@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/xwysyy/picoclaw/pkg/tools"
-	"github.com/xwysyy/picoclaw/pkg/utils"
+	"github.com/xwysyy/X-Claw/pkg/tools"
+	"github.com/xwysyy/X-Claw/pkg/utils"
 )
 
 // MemorySearchTool performs semantic lookup over persisted memory files.

@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/xwysyy/picoclaw/pkg/bus"
-	"github.com/xwysyy/picoclaw/pkg/media"
+	"github.com/xwysyy/X-Claw/pkg/bus"
+	"github.com/xwysyy/X-Claw/pkg/media"
 )
 
 func TestImportInboundMediaToWorkspace_CopiesFileAndBuildsNote(t *testing.T) {

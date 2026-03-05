@@ -13,15 +13,12 @@ build/
 /ref/*
 !/ref/go.mod
 !/ref/go.sum
-.cache
-
-# x-claw specific
+.cache/
 
 # X-Claw
 .x-claw/
 config.json
 sessions/
-build/
 
 # Coverage
 
@@ -45,7 +42,6 @@ tasks/
 .vscode/
 .idea/
 
-# Added by goreleaser init:
 dist/
 
 # Windows Application Icon/Resource

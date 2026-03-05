@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sipeed/picoclaw/pkg/session"
-	"github.com/sipeed/picoclaw/pkg/state"
-	"github.com/sipeed/picoclaw/pkg/tools"
+	"github.com/xwysyy/X-Claw/pkg/session"
+	"github.com/xwysyy/X-Claw/pkg/state"
+	"github.com/xwysyy/X-Claw/pkg/tools"
 )
 
 func TestRunExport_WritesZipBundle(t *testing.T) {
@@ -24,7 +24,7 @@ func TestRunExport_WritesZipBundle(t *testing.T) {
 	}
 
 	// Minimal config that passes validation + contains secrets to verify redaction.
-	cfgDir := filepath.Join(tmp, ".picoclaw")
+	cfgDir := filepath.Join(tmp, ".x-claw")
 	if err := os.MkdirAll(cfgDir, 0o755); err != nil {
 		t.Fatalf("MkdirAll(cfgDir) error: %v", err)
 	}
@@ -48,7 +48,7 @@ func TestRunExport_WritesZipBundle(t *testing.T) {
 	}
 
 	// Tool trace
-	traceDir := filepath.Join(workspace, ".picoclaw", "audit", "tools", tools.SafePathToken(sessionKey))
+	traceDir := filepath.Join(workspace, ".x-claw", "audit", "tools", tools.SafePathToken(sessionKey))
 	if err := os.MkdirAll(filepath.Join(traceDir, "calls"), 0o755); err != nil {
 		t.Fatalf("MkdirAll(traceDir) error: %v", err)
 	}
@@ -76,13 +76,13 @@ func TestRunExport_WritesZipBundle(t *testing.T) {
 
 	out := filepath.Join(tmp, "bundle.zip")
 	res, err := RunExport(ExportOptions{
-		SessionKey:     sessionKey,
-		OutPath:        out,
-		IncludeTrace:   true,
-		IncludeCron:    true,
-		IncludeState:   true,
-		IncludeConfig:  true,
-		UseLastActive:  false,
+		SessionKey:    sessionKey,
+		OutPath:       out,
+		IncludeTrace:  true,
+		IncludeCron:   true,
+		IncludeState:  true,
+		IncludeConfig: true,
+		UseLastActive: false,
 	})
 	if err != nil {
 		t.Fatalf("RunExport error: %v", err)

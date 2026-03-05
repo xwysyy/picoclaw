@@ -12,8 +12,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/sipeed/picoclaw/cmd/picoclaw/internal"
-	"github.com/sipeed/picoclaw/pkg/auditlog"
+	"github.com/xwysyy/X-Claw/cmd/x-claw/internal"
+	"github.com/xwysyy/X-Claw/pkg/auditlog"
 )
 
 type verifyOptions struct {
@@ -35,7 +35,7 @@ func newVerifyCommand() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&opts.Path, "path", "", "Audit log file path (defaults to <workspace>/.picoclaw/audit/audit.jsonl)")
+	cmd.Flags().StringVar(&opts.Path, "path", "", "Audit log file path (defaults to <workspace>/.x-claw/audit/audit.jsonl)")
 	cmd.Flags().BoolVar(&opts.All, "all", false, "Verify audit.jsonl and rotated backups in the audit directory")
 	cmd.Flags().StringVar(&opts.Key, "key", "", "HMAC key (defaults to config audit_log.hmac_key; prefer env)")
 	cmd.Flags().BoolVar(&opts.AllowUnsigned, "allow-unsigned", false, "Allow unsigned lines (for legacy logs)")
@@ -85,7 +85,7 @@ func verifyCmd(opts verifyOptions) error {
 	} else {
 		dir := strings.TrimSpace(cfg.AuditLog.Dir)
 		if dir == "" {
-			dir = filepath.Join(workspace, ".picoclaw", "audit")
+			dir = filepath.Join(workspace, ".x-claw", "audit")
 		}
 
 		if opts.All {

@@ -5,8 +5,9 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 
-	"github.com/xwysyy/picoclaw/pkg/config"
+	"github.com/xwysyy/X-Claw/pkg/config"
 )
 
 const Logo = "🦞"
@@ -19,7 +20,14 @@ var (
 )
 
 func GetConfigPath() string {
-	if configPath := os.Getenv("PICOCLAW_CONFIG"); configPath != "" {
+	if configPath := strings.TrimSpace(os.Getenv("X_CLAW_CONFIG")); configPath != "" {
+		return configPath
+	}
+	if configPath := strings.TrimSpace(os.Getenv("X_CLAW_CONFIG_PATH")); configPath != "" {
+		return configPath
+	}
+	// Backward-compat with older env var name.
+	if configPath := strings.TrimSpace(os.Getenv("PICOCLAW_CONFIG")); configPath != "" {
 		return configPath
 	}
 	home, _ := os.UserHomeDir()

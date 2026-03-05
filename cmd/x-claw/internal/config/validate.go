@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/sipeed/picoclaw/cmd/picoclaw/internal"
-	"github.com/sipeed/picoclaw/cmd/picoclaw/internal/cliutil"
-	cfgpkg "github.com/sipeed/picoclaw/pkg/config"
+	"github.com/xwysyy/X-Claw/cmd/x-claw/internal"
+	"github.com/xwysyy/X-Claw/cmd/x-claw/internal/cliutil"
+	cfgpkg "github.com/xwysyy/X-Claw/pkg/config"
 )
 
 type validateReport struct {

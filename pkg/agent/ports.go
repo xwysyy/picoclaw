@@ -1,6 +1,6 @@
 package agent
 
-import "github.com/sipeed/picoclaw/internal/core/ports"
+import "github.com/xwysyy/X-Claw/internal/core/ports"
 
 // Type aliases for core ports. This keeps existing agent APIs readable while
 // moving the canonical interface definitions into internal/core.

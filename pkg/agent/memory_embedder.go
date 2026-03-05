@@ -9,7 +9,7 @@ import (
 // MemoryVectorEmbeddingSettings configures how semantic vectors are generated for memory search.
 //
 // Default behavior is a fast local hashing embedder (no network). When Kind is set to
-// "openai_compat", PicoClaw will call an OpenAI-compatible embeddings endpoint.
+// "openai_compat", X-Claw will call an OpenAI-compatible embeddings endpoint.
 type MemoryVectorEmbeddingSettings struct {
 	Kind string
 

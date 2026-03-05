@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sipeed/picoclaw/cmd/picoclaw/internal"
-	"github.com/sipeed/picoclaw/cmd/picoclaw/internal/cliutil"
-	cfgpkg "github.com/sipeed/picoclaw/pkg/config"
+	"github.com/xwysyy/X-Claw/cmd/x-claw/internal"
+	"github.com/xwysyy/X-Claw/cmd/x-claw/internal/cliutil"
+	cfgpkg "github.com/xwysyy/X-Claw/pkg/config"
 )
 
 type doctorSeverity string
@@ -58,7 +58,7 @@ func doctorCmd(opts doctorOptions) error {
 	path = filepath.Clean(path)
 
 	report := doctorReport{
-		Kind:         "picoclaw_doctor",
+		Kind:         "x_claw_doctor",
 		Version:      internal.FormatVersion(),
 		ConfigPath:   path,
 		ConfigExists: cliutil.FileExists(path),
@@ -70,7 +70,7 @@ func doctorCmd(opts doctorOptions) error {
 			OK:       false,
 			Severity: severityWarn,
 			Message:  "config file not found; defaults will be used",
-			Hint:     "run `picoclaw onboard` or set $PICOCLAW_CONFIG to a valid config.json",
+			Hint:     "run `x-claw onboard` or set $X_CLAW_CONFIG to a valid config.json",
 		})
 	} else {
 		report.Checks = append(report.Checks, doctorCheck{
@@ -112,7 +112,7 @@ func doctorCmd(opts doctorOptions) error {
 				Severity: severityError,
 				Path:     path,
 				Message:  msg,
-				Hint:     "run `picoclaw config validate` for a focused report",
+				Hint:     "run `x-claw config validate` for a focused report",
 			})
 		}
 	} else if loadErr == nil {

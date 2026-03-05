@@ -1,4 +1,4 @@
-module github.com/xwysyy/picoclaw
+module github.com/xwysyy/X-Claw
 
 go 1.25.7
 

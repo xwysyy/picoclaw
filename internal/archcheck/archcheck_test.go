@@ -76,9 +76,9 @@ func TestAgentDoesNotImportInfraChannels(t *testing.T) {
 
 	importsByFile := scanImports(t, agentDir)
 	banned := map[string]bool{
-		"github.com/sipeed/picoclaw/pkg/channels": true,
-		"github.com/sipeed/picoclaw/pkg/httpapi":  true,
-		"github.com/sipeed/picoclaw/pkg/media":    true,
+		"github.com/xwysyy/X-Claw/pkg/channels": true,
+		"github.com/xwysyy/X-Claw/pkg/httpapi":  true,
+		"github.com/xwysyy/X-Claw/pkg/media":    true,
 	}
 
 	var violations []string
@@ -107,8 +107,8 @@ func TestInternalCoreDoesNotImportAppOrPkg(t *testing.T) {
 		for _, imp := range imports {
 			// internal/core is our "core boundary": it may only depend on itself
 			// (and stdlib/third-party, though we try to keep it minimal).
-			if strings.HasPrefix(imp, "github.com/sipeed/picoclaw/") &&
-				!strings.HasPrefix(imp, "github.com/sipeed/picoclaw/internal/core/") {
+			if strings.HasPrefix(imp, "github.com/xwysyy/X-Claw/") &&
+				!strings.HasPrefix(imp, "github.com/xwysyy/X-Claw/internal/core/") {
 				rel, _ := filepath.Rel(root, file)
 				violations = append(violations, rel+": "+imp)
 			}

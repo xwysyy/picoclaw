@@ -3,7 +3,7 @@ package channels
 import (
 	"context"
 
-	"github.com/xwysyy/picoclaw/pkg/bus"
+	"github.com/xwysyy/X-Claw/pkg/bus"
 )
 
 // MediaSender is an optional interface for channels that can send

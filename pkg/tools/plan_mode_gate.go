@@ -18,8 +18,8 @@ func newPlanModeGate(enabled bool, restrictedTools []string, restrictedPrefixes 
 		return nil
 	}
 	g := &planModeGate{
-		enabled:        true,
-		restrictedSet:  make(map[string]struct{}),
+		enabled:            true,
+		restrictedSet:      make(map[string]struct{}),
 		restrictedPrefixes: nil,
 	}
 
@@ -80,4 +80,3 @@ func (g *planModeGate) DeniedResult(toolName, reason string) *ToolResult {
 	)
 	return ErrorResult(msg)
 }
-

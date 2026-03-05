@@ -25,7 +25,7 @@ import {
   SquareArrowOutUpRight,
 } from "lucide-react";
 
-const LS_KEY = "picoclaw.console.api_key";
+const LS_KEY = "x-claw.console.api_key";
 
 type ConsoleTraceItem = {
   token: string;
@@ -438,7 +438,7 @@ export default function Home() {
           ...buildHeaders(apiKey),
         },
         body: JSON.stringify({
-          content: `PicoClaw Console: test notify (${new Date().toLocaleString()})`,
+          content: `X-Claw Console: test notify (${new Date().toLocaleString()})`,
         }),
       });
       if (!res.ok) {
@@ -553,7 +553,7 @@ export default function Home() {
         <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div className="flex flex-col gap-1">
             <div className="flex items-center gap-2">
-              <div className="text-xl font-semibold tracking-tight">PicoClaw Console</div>
+              <div className="text-xl font-semibold tracking-tight">X-Claw Console</div>
               <div className="flex flex-wrap items-center gap-2">
                 {authBadge}
                 {healthBadge}
@@ -1101,7 +1101,7 @@ export default function Home() {
               <CardContent>
                 <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                   <div className="text-xs text-muted-foreground">
-                    <code>.picoclaw/audit/*/events.jsonl</code>
+                    <code>.x-claw/audit/*/events.jsonl</code>
                   </div>
                   <div className="relative">
                     <Search className="pointer-events-none absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />

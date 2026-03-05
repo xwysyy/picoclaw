@@ -11,9 +11,9 @@ import (
 	"sync"
 	"time"
 
-	coresession "github.com/xwysyy/picoclaw/internal/core/session"
-	"github.com/xwysyy/picoclaw/pkg/providers"
-	"github.com/xwysyy/picoclaw/pkg/utils"
+	coresession "github.com/xwysyy/X-Claw/internal/core/session"
+	"github.com/xwysyy/X-Claw/pkg/providers"
+	"github.com/xwysyy/X-Claw/pkg/utils"
 )
 
 // Type aliases keep existing imports stable while moving canonical session domain

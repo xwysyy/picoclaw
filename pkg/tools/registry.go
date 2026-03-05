@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/xwysyy/picoclaw/pkg/logger"
-	"github.com/xwysyy/picoclaw/pkg/providers"
+	"github.com/xwysyy/X-Claw/pkg/logger"
+	"github.com/xwysyy/X-Claw/pkg/providers"
 )
 
 type ToolRegistry struct {

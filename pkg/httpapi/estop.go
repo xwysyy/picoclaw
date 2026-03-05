@@ -7,14 +7,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sipeed/picoclaw/pkg/auditlog"
-	"github.com/sipeed/picoclaw/pkg/tools"
+	"github.com/xwysyy/X-Claw/pkg/auditlog"
+	"github.com/xwysyy/X-Claw/pkg/tools"
 )
 
 type EstopHandlerOptions struct {
 	APIKey string
 
-	// Workspace is the PicoClaw workspace root (where .picoclaw/state/estop.json lives).
+	// Workspace is the X-Claw workspace root (where .x-claw/state/estop.json lives).
 	Workspace string
 
 	Enabled    bool

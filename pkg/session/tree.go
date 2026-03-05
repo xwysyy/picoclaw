@@ -6,10 +6,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sipeed/picoclaw/pkg/utils"
+	"github.com/xwysyy/X-Claw/pkg/utils"
 
-	coresession "github.com/sipeed/picoclaw/internal/core/session"
-	"github.com/sipeed/picoclaw/pkg/providers"
+	coresession "github.com/xwysyy/X-Claw/internal/core/session"
+	"github.com/xwysyy/X-Claw/pkg/providers"
 )
 
 // Type aliases keep existing imports stable while moving canonical session domain

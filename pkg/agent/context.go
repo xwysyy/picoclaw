@@ -14,11 +14,11 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/xwysyy/picoclaw/pkg/logger"
-	"github.com/xwysyy/picoclaw/pkg/providers"
-	"github.com/xwysyy/picoclaw/pkg/skills"
-	"github.com/xwysyy/picoclaw/pkg/tools"
-	"github.com/xwysyy/picoclaw/pkg/utils"
+	"github.com/xwysyy/X-Claw/pkg/logger"
+	"github.com/xwysyy/X-Claw/pkg/providers"
+	"github.com/xwysyy/X-Claw/pkg/skills"
+	"github.com/xwysyy/X-Claw/pkg/tools"
+	"github.com/xwysyy/X-Claw/pkg/utils"
 )
 
 type ContextRuntimeSettings struct {
@@ -81,7 +81,11 @@ func getGlobalConfigDir() string {
 func NewContextBuilder(workspace string) *ContextBuilder {
 	// builtin skills: skills directory in current project
 	// Use the skills/ directory under the current working directory
-	builtinSkillsDir := strings.TrimSpace(os.Getenv("PICOCLAW_BUILTIN_SKILLS"))
+	builtinSkillsDir := strings.TrimSpace(os.Getenv("X_CLAW_BUILTIN_SKILLS"))
+	if builtinSkillsDir == "" {
+		// Backward-compat with older env var name.
+		builtinSkillsDir = strings.TrimSpace(os.Getenv("PICOCLAW_BUILTIN_SKILLS"))
+	}
 	if builtinSkillsDir == "" {
 		wd, _ := os.Getwd()
 		builtinSkillsDir = filepath.Join(wd, "skills")
@@ -308,7 +312,7 @@ func (cb *ContextBuilder) getIdentity() string {
 			"\n\n8. **Web evidence mode** — When answering facts or latest information from the web, cite at least %d sources from distinct domains (URLs). "+
 				"Never fabricate citations. If evidence is insufficient, explicitly state uncertainty and suggest verification steps.",
 			minDomains,
-			)
+		)
 	}
 
 	return fmt.Sprintf(`# X-Claw 🦞

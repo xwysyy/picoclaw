@@ -7,15 +7,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sipeed/picoclaw/pkg/auditlog"
-	"github.com/sipeed/picoclaw/pkg/session"
-	"github.com/sipeed/picoclaw/pkg/utils"
+	"github.com/xwysyy/X-Claw/pkg/auditlog"
+	"github.com/xwysyy/X-Claw/pkg/session"
+	"github.com/xwysyy/X-Claw/pkg/utils"
 )
 
 type SessionModelHandlerOptions struct {
 	APIKey string
 
-	// Workspace is the PicoClaw workspace root (used for audit log).
+	// Workspace is the X-Claw workspace root (used for audit log).
 	// When empty, audit logging is skipped.
 	Workspace string
 

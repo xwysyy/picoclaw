@@ -1,6 +1,6 @@
 # Tools Configuration
 
-PicoClaw's tools configuration is located in the `tools` field of `config.json`.
+X-Claw's tools configuration is located in the `tools` field of `config.json`.
 
 ## Directory Structure
 
@@ -59,7 +59,7 @@ The exec tool is used to execute shell commands.
 
 ### Default Blocked Command Patterns
 
-By default, PicoClaw blocks the following dangerous commands:
+By default, X-Claw blocks the following dangerous commands:
 
 - Delete commands: `rm -rf`, `del /f/q`, `rmdir /s`
 - Disk operations: `format`, `mkfs`, `diskpart`, `dd if=`, writing to `/dev/sd*`
@@ -206,4 +206,4 @@ The skills tool configures skill discovery and installation via registries like 
 
 ## Configuration Source
 
-PicoClaw reads tool configuration from `config.json` only. Environment-variable overrides for tool settings are intentionally not supported to keep deployments reproducible.
+X-Claw reads tool configuration from `config.json` only. Environment-variable overrides for tool settings are intentionally not supported to keep deployments reproducible.

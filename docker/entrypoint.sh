@@ -1,7 +1,7 @@
 #!/bin/sh
 set -e
 
-CONFIG_PATH="${X_CLAW_CONFIG_PATH:-${HOME}/.x-claw/config.json}"
+CONFIG_PATH="${X_CLAW_CONFIG:-${X_CLAW_CONFIG_PATH:-${HOME}/.x-claw/config.json}}"
 
 setup_git_from_config() {
     # tools.git in config.json is optional; unknown fields are ignored by x-claw itself.

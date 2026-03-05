@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "PicoClaw Console",
-  description: "Read-only operations console for PicoClaw Gateway",
+  title: "X-Claw Console",
+  description: "Read-only operations console for X-Claw Gateway",
 };
 
 export default function RootLayout({

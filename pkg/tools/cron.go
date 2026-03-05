@@ -6,11 +6,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/xwysyy/picoclaw/pkg/bus"
-	"github.com/xwysyy/picoclaw/pkg/config"
-	"github.com/xwysyy/picoclaw/pkg/constants"
-	"github.com/xwysyy/picoclaw/pkg/cron"
-	"github.com/xwysyy/picoclaw/pkg/utils"
+	"github.com/xwysyy/X-Claw/pkg/bus"
+	"github.com/xwysyy/X-Claw/pkg/config"
+	"github.com/xwysyy/X-Claw/pkg/constants"
+	"github.com/xwysyy/X-Claw/pkg/cron"
+	"github.com/xwysyy/X-Claw/pkg/utils"
 )
 
 // JobExecutor is the interface for executing cron jobs through the agent
@@ -476,10 +476,10 @@ func (t *CronTool) ExecuteJob(ctx context.Context, job *cron.CronJob) (string, e
 			Channel: channel,
 			ChatID:  chatID,
 			Content: fmt.Sprintf("Cron job '%s' completed.\n\n%s", job.Name, response),
-			}); err != nil {
-				return "", err
-			}
+		}); err != nil {
+			return "", err
 		}
+	}
 
 	if strings.TrimSpace(response) == "" {
 		return "ok", nil

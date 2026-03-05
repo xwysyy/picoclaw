@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sipeed/picoclaw/pkg/config"
+	"github.com/xwysyy/X-Claw/pkg/config"
 )
 
 // TestShellTool_Success verifies successful command execution
@@ -556,10 +556,10 @@ func TestShellTool_HostLimits_WrapsCommand(t *testing.T) {
 	cfg := config.DefaultConfig()
 	cfg.Tools.Exec.Backend = "host"
 	cfg.Tools.Exec.HostLimits = config.ExecHostLimitsConfig{
-		MemoryMB:    64,
-		CPUSeconds:  2,
-		FileSizeMB:  8,
-		NProc:       32,
+		MemoryMB:   64,
+		CPUSeconds: 2,
+		FileSizeMB: 8,
+		NProc:      32,
 	}
 
 	tool, err := NewExecToolWithConfig(t.TempDir(), true, cfg)

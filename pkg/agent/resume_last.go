@@ -9,10 +9,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/sipeed/picoclaw/internal/core/events"
-	"github.com/sipeed/picoclaw/pkg/logger"
-	"github.com/sipeed/picoclaw/pkg/routing"
-	"github.com/sipeed/picoclaw/pkg/utils"
+	"github.com/xwysyy/X-Claw/internal/core/events"
+	"github.com/xwysyy/X-Claw/pkg/logger"
+	"github.com/xwysyy/X-Claw/pkg/routing"
+	"github.com/xwysyy/X-Claw/pkg/utils"
 )
 
 type ResumeCandidate struct {
@@ -44,7 +44,7 @@ func findLastUnfinishedRun(workspace string) (*ResumeCandidate, error) {
 		return nil, fmt.Errorf("workspace is empty")
 	}
 
-	root := filepath.Join(workspace, ".picoclaw", "audit", "runs")
+	root := filepath.Join(workspace, ".x-claw", "audit", "runs")
 	entries, err := os.ReadDir(root)
 	if err != nil {
 		return nil, fmt.Errorf("read runs dir: %w", err)

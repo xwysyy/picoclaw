@@ -11,11 +11,11 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/sipeed/picoclaw/internal/core/events"
-	"github.com/sipeed/picoclaw/pkg/logger"
-	"github.com/sipeed/picoclaw/pkg/providers"
-	"github.com/sipeed/picoclaw/pkg/tools"
-	"github.com/sipeed/picoclaw/pkg/utils"
+	"github.com/xwysyy/X-Claw/internal/core/events"
+	"github.com/xwysyy/X-Claw/pkg/logger"
+	"github.com/xwysyy/X-Claw/pkg/providers"
+	"github.com/xwysyy/X-Claw/pkg/tools"
+	"github.com/xwysyy/X-Claw/pkg/utils"
 )
 
 type runTraceWriter struct {
@@ -101,7 +101,7 @@ func newRunTraceWriter(workspace string, enabled bool, opts processOptions, agen
 		dirKey = "unknown"
 	}
 
-	dir := filepath.Join(workspace, ".picoclaw", "audit", "runs", dirKey)
+	dir := filepath.Join(workspace, ".x-claw", "audit", "runs", dirKey)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		logger.WarnCF("agent", "Run trace disabled: failed to create directory", map[string]any{
 			"dir": dir,

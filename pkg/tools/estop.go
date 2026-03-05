@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sipeed/picoclaw/pkg/fileutil"
+	"github.com/xwysyy/X-Claw/pkg/fileutil"
 )
 
 type EstopMode string
@@ -94,7 +94,7 @@ func estopStatePath(workspace string) (string, error) {
 	if workspace == "" {
 		return "", fmt.Errorf("workspace is required")
 	}
-	return filepath.Join(workspace, ".picoclaw", "state", "estop.json"), nil
+	return filepath.Join(workspace, ".x-claw", "state", "estop.json"), nil
 }
 
 func LoadEstopState(workspace string) (EstopState, error) {

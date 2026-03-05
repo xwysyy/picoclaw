@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/sipeed/picoclaw/internal/core/events"
+	"github.com/xwysyy/X-Claw/internal/core/events"
 )
 
 // Event is the minimal core event envelope emitted by long-running processes

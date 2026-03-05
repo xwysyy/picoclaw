@@ -3,7 +3,7 @@ package provider
 import (
 	"context"
 
-	"github.com/sipeed/picoclaw/internal/core/provider/protocoltypes"
+	"github.com/xwysyy/X-Claw/internal/core/provider/protocoltypes"
 )
 
 // LLMProvider is the core port for a model provider.

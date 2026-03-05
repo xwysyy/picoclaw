@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/xwysyy/picoclaw/pkg/bus"
-	"github.com/xwysyy/picoclaw/pkg/config"
-	cronpkg "github.com/xwysyy/picoclaw/pkg/cron"
+	"github.com/xwysyy/X-Claw/pkg/bus"
+	"github.com/xwysyy/X-Claw/pkg/config"
+	cronpkg "github.com/xwysyy/X-Claw/pkg/cron"
 )
 
 type stubCronExecutor struct {

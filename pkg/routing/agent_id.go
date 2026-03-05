@@ -1,6 +1,6 @@
 package routing
 
-import corerouting "github.com/sipeed/picoclaw/internal/core/routing"
+import corerouting "github.com/xwysyy/X-Claw/internal/core/routing"
 
 const (
 	DefaultAgentID   = corerouting.DefaultAgentID

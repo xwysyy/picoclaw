@@ -1,6 +1,6 @@
 package routing
 
-import corerouting "github.com/sipeed/picoclaw/internal/core/routing"
+import corerouting "github.com/xwysyy/X-Claw/internal/core/routing"
 
 // Type aliases keep existing imports stable while moving the canonical
 // definitions into internal/core.

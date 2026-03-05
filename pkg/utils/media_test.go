@@ -92,8 +92,8 @@ func TestDownloadFile_Success_UsesHeadersAndSafeName(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = os.Remove(path) })
 
-	// Should be placed under $TMPDIR/picoclaw_media (os.TempDir()).
-	if dir := filepath.Dir(path); dir != filepath.Join(os.TempDir(), "picoclaw_media") {
+	// Should be placed under the canonical X-Claw media temp directory.
+	if dir := filepath.Dir(path); dir != MediaTempDir() {
 		t.Fatalf("unexpected directory: %s", dir)
 	}
 

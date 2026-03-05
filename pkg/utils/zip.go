@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/xwysyy/picoclaw/pkg/logger"
+	"github.com/xwysyy/X-Claw/pkg/logger"
 )
 
 // ExtractZipFile extracts a ZIP archive from disk to targetDir.

@@ -14,8 +14,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sipeed/picoclaw/pkg/cron"
-	"github.com/sipeed/picoclaw/pkg/utils"
+	"github.com/xwysyy/X-Claw/pkg/cron"
+	"github.com/xwysyy/X-Claw/pkg/utils"
 )
 
 type ConsoleHandlerOptions struct {
@@ -211,9 +211,9 @@ func (h *ConsoleHandler) serveAPI(w http.ResponseWriter, r *http.Request) {
 	case "runs":
 		h.handleTraceList(w, r, traceListOptions{
 			kind:    "runs",
-			baseDir: filepath.Join(h.workspace, ".picoclaw", "audit", "runs"),
+			baseDir: filepath.Join(h.workspace, ".x-claw", "audit", "runs"),
 			eventsRel: func(token string) string {
-				return filepath.ToSlash(filepath.Join(".picoclaw", "audit", "runs", token, "events.jsonl"))
+				return filepath.ToSlash(filepath.Join(".x-claw", "audit", "runs", token, "events.jsonl"))
 			},
 		})
 		return
@@ -221,9 +221,9 @@ func (h *ConsoleHandler) serveAPI(w http.ResponseWriter, r *http.Request) {
 	case "tools":
 		h.handleTraceList(w, r, traceListOptions{
 			kind:    "tools",
-			baseDir: filepath.Join(h.workspace, ".picoclaw", "audit", "tools"),
+			baseDir: filepath.Join(h.workspace, ".x-claw", "audit", "tools"),
 			eventsRel: func(token string) string {
-				return filepath.ToSlash(filepath.Join(".picoclaw", "audit", "tools", token, "events.jsonl"))
+				return filepath.ToSlash(filepath.Join(".x-claw", "audit", "tools", token, "events.jsonl"))
 			},
 		})
 		return
@@ -257,8 +257,8 @@ func (h *ConsoleHandler) handleStatus(w http.ResponseWriter, _ *http.Request) {
 	state, _ := h.loadState()
 	cronSummary := h.summarizeCron()
 
-	runsCount := h.countTraceSessions(filepath.Join(h.workspace, ".picoclaw", "audit", "runs"))
-	toolsCount := h.countTraceSessions(filepath.Join(h.workspace, ".picoclaw", "audit", "tools"))
+	runsCount := h.countTraceSessions(filepath.Join(h.workspace, ".x-claw", "audit", "runs"))
+	toolsCount := h.countTraceSessions(filepath.Join(h.workspace, ".x-claw", "audit", "tools"))
 
 	h.writeJSON(w, http.StatusOK, map[string]any{
 		"ok":        true,
@@ -271,8 +271,8 @@ func (h *ConsoleHandler) handleStatus(w http.ResponseWriter, _ *http.Request) {
 			"state":   state,
 		},
 		"cron":  cronSummary,
-		"runs":  map[string]any{"sessions": runsCount, "base_dir": filepath.ToSlash(filepath.Join(".picoclaw", "audit", "runs"))},
-		"tools": map[string]any{"sessions": toolsCount, "base_dir": filepath.ToSlash(filepath.Join(".picoclaw", "audit", "tools"))},
+		"runs":  map[string]any{"sessions": runsCount, "base_dir": filepath.ToSlash(filepath.Join(".x-claw", "audit", "runs"))},
+		"tools": map[string]any{"sessions": toolsCount, "base_dir": filepath.ToSlash(filepath.Join(".x-claw", "audit", "tools"))},
 		"links": map[string]any{
 			"health": "/health",
 			"ready":  "/ready",
@@ -956,7 +956,7 @@ func (h *ConsoleHandler) resolveConsolePath(raw string) (abs string, relClean st
 	}
 
 	allowedPrefixes := []string{
-		filepath.Join(".picoclaw", "audit"),
+		filepath.Join(".x-claw", "audit"),
 		"cron",
 		"state",
 		"sessions",
@@ -1070,13 +1070,13 @@ func pickConsoleStaticDir() string {
 	candidates := []string{}
 	if home, _ := os.UserHomeDir(); strings.TrimSpace(home) != "" {
 		candidates = append(candidates,
-			filepath.Join(home, ".picoclaw", "console"),
-			filepath.Join(home, ".local", "share", "picoclaw", "console"),
+			filepath.Join(home, ".x-claw", "console"),
+			filepath.Join(home, ".local", "share", "x-claw", "console"),
 		)
 	}
 	candidates = append(candidates,
-		"/usr/local/share/picoclaw/console",
-		filepath.Join("web", "picoclaw-console", "out"),
+		"/usr/local/share/x-claw/console",
+		filepath.Join("web", "x-claw-console", "out"),
 	)
 	for _, p := range candidates {
 		p = strings.TrimSpace(p)
@@ -1160,7 +1160,7 @@ const consoleHTML = `<!doctype html>
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>PicoClaw Console</title>
+  <title>X-Claw Console</title>
   <style>
     :root { color-scheme: light dark; }
     body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji"; margin: 20px; line-height: 1.4; }
@@ -1186,7 +1186,7 @@ const consoleHTML = `<!doctype html>
   </style>
 </head>
 <body>
-  <h1>PicoClaw Console</h1>
+  <h1>X-Claw Console</h1>
   <div class="muted">Read-only. Uses the same auth policy as <code>/api/notify</code> (loopback when no API key; otherwise bearer token).</div>
 
   <div style="margin-top:12px" class="row">
@@ -1210,18 +1210,18 @@ const consoleHTML = `<!doctype html>
   <pre id="cron"></pre>
 
   <h2>Run traces</h2>
-  <div class="row muted">Files under <code>.picoclaw/audit/runs/&lt;session&gt;/events.jsonl</code></div>
+  <div class="row muted">Files under <code>.x-claw/audit/runs/&lt;session&gt;/events.jsonl</code></div>
   <div id="runs"></div>
 
   <h2>Tool traces</h2>
-  <div class="row muted">Files under <code>.picoclaw/audit/tools/&lt;session&gt;/events.jsonl</code></div>
+  <div class="row muted">Files under <code>.x-claw/audit/tools/&lt;session&gt;/events.jsonl</code></div>
   <div id="tools"></div>
 
   <h2>Audit log</h2>
-  <div class="row muted">Append-only events under <code>.picoclaw/audit/audit.jsonl</code></div>
+  <div class="row muted">Append-only events under <code>.x-claw/audit/audit.jsonl</code></div>
   <div class="row">
-    <button onclick="viewTrace('audit','.picoclaw/audit/audit.jsonl','audit')">View</button>
-    <button onclick="downloadPath('.picoclaw/audit/audit.jsonl')">Download</button>
+    <button onclick="viewTrace('audit','.x-claw/audit/audit.jsonl','audit')">View</button>
+    <button onclick="downloadPath('.x-claw/audit/audit.jsonl')">Download</button>
   </div>
 
   <h2>Trace viewer</h2>
@@ -1248,7 +1248,7 @@ const consoleHTML = `<!doctype html>
   </ul>
 
 <script>
-const LS_KEY = "picoclaw.console.api_key";
+const LS_KEY = "x-claw.console.api_key";
 const VIEWER_DEFAULT_LINES = 200;
 
 const viewerState = {

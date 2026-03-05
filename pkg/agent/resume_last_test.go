@@ -9,7 +9,7 @@ import (
 func TestFindLastUnfinishedRun_OnlyHeartbeatIsIgnored(t *testing.T) {
 	workspace := t.TempDir()
 
-	heartbeatDir := filepath.Join(workspace, ".picoclaw", "audit", "runs", "heartbeat")
+	heartbeatDir := filepath.Join(workspace, ".x-claw", "audit", "runs", "heartbeat")
 	if err := os.MkdirAll(heartbeatDir, 0o755); err != nil {
 		t.Fatalf("mkdir heartbeat dir: %v", err)
 	}
@@ -30,7 +30,7 @@ func TestFindLastUnfinishedRun_PrefersNonHeartbeatEvenIfNewer(t *testing.T) {
 	workspace := t.TempDir()
 
 	// Heartbeat run (newer ts_ms): should still be ignored.
-	heartbeatDir := filepath.Join(workspace, ".picoclaw", "audit", "runs", "heartbeat")
+	heartbeatDir := filepath.Join(workspace, ".x-claw", "audit", "runs", "heartbeat")
 	if err := os.MkdirAll(heartbeatDir, 0o755); err != nil {
 		t.Fatalf("mkdir heartbeat dir: %v", err)
 	}
@@ -41,7 +41,7 @@ func TestFindLastUnfinishedRun_PrefersNonHeartbeatEvenIfNewer(t *testing.T) {
 	}
 
 	// Real user-ish session run.
-	userDir := filepath.Join(workspace, ".picoclaw", "audit", "runs", "agent_main_main")
+	userDir := filepath.Join(workspace, ".x-claw", "audit", "runs", "agent_main_main")
 	if err := os.MkdirAll(userDir, 0o755); err != nil {
 		t.Fatalf("mkdir user dir: %v", err)
 	}

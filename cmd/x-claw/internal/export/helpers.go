@@ -14,11 +14,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sipeed/picoclaw/cmd/picoclaw/internal"
-	"github.com/sipeed/picoclaw/cmd/picoclaw/internal/cliutil"
-	"github.com/sipeed/picoclaw/pkg/session"
-	"github.com/sipeed/picoclaw/pkg/state"
-	"github.com/sipeed/picoclaw/pkg/tools"
+	"github.com/xwysyy/X-Claw/cmd/x-claw/internal"
+	"github.com/xwysyy/X-Claw/cmd/x-claw/internal/cliutil"
+	"github.com/xwysyy/X-Claw/pkg/session"
+	"github.com/xwysyy/X-Claw/pkg/state"
+	"github.com/xwysyy/X-Claw/pkg/tools"
 )
 
 type ExportOptions struct {
@@ -43,9 +43,9 @@ type exportManifest struct {
 	Version    int    `json:"version"`
 	ExportedAt string `json:"exported_at"`
 
-	PicoClaw struct {
+	XClaw struct {
 		Version string `json:"version"`
-	} `json:"picoclaw"`
+	} `json:"x_claw"`
 
 	Workspace struct {
 		Path string `json:"path"`
@@ -121,7 +121,7 @@ func RunExport(opts ExportOptions) (*ExportResult, error) {
 	}
 
 	ts := time.Now().UTC().Format("20060102T150405Z")
-	bundleRoot := fmt.Sprintf("picoclaw_export_%s_%s", ts, tools.SafePathToken(sessionKey))
+	bundleRoot := fmt.Sprintf("x_claw_export_%s_%s", ts, tools.SafePathToken(sessionKey))
 
 	outPath := strings.TrimSpace(opts.OutPath)
 	if outPath == "" {
@@ -152,14 +152,14 @@ func RunExport(opts ExportOptions) (*ExportResult, error) {
 	}
 
 	manifest := exportManifest{
-		Kind:       "picoclaw_export",
+		Kind:       "x_claw_export",
 		Version:    1,
 		ExportedAt: time.Now().Format(time.RFC3339Nano),
 		Files:      []exportFileRecord{},
 		Skipped:    []exportFileRecord{},
 		Notes:      []string{},
 	}
-	manifest.PicoClaw.Version = internal.FormatVersion()
+	manifest.XClaw.Version = internal.FormatVersion()
 	manifest.Workspace.Path = workspace
 	manifest.Session.Key = sessionKey
 	manifest.Session.Kind = classifySessionKind(sessionKey)
@@ -189,13 +189,13 @@ func RunExport(opts ExportOptions) (*ExportResult, error) {
 
 	// 3) tool traces
 	if opts.IncludeTrace {
-		traceDir := filepath.Join(workspace, ".picoclaw", "audit", "tools", tools.SafePathToken(sessionKey))
+		traceDir := filepath.Join(workspace, ".x-claw", "audit", "tools", tools.SafePathToken(sessionKey))
 		if err := builder.addDir(&manifest, "tool_trace", traceDir); err != nil {
 			return nil, err
 		}
 
 		// Phase E1: run-level checkpoint trace (append-only events).
-		runDir := filepath.Join(workspace, ".picoclaw", "audit", "runs", tools.SafePathToken(sessionKey))
+		runDir := filepath.Join(workspace, ".x-claw", "audit", "runs", tools.SafePathToken(sessionKey))
 		if err := builder.addDir(&manifest, "run_trace", runDir); err != nil {
 			return nil, err
 		}

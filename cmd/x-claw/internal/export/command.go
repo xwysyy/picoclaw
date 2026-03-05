@@ -8,12 +8,12 @@ import (
 
 func NewExportCommand() *cobra.Command {
 	var (
-		sessionKey  string
-		lastActive  bool
-		outPath     string
-		includeCron bool
-		includeTrace bool
-		includeState bool
+		sessionKey    string
+		lastActive    bool
+		outPath       string
+		includeCron   bool
+		includeTrace  bool
+		includeState  bool
 		includeConfig bool
 	)
 

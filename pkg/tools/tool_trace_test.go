@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/xwysyy/picoclaw/pkg/providers"
+	"github.com/xwysyy/X-Claw/pkg/providers"
 )
 
 func TestExecuteToolCalls_WritesJSONLToolTraceWhenEnabled(t *testing.T) {

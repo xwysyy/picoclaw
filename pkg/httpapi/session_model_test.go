@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sipeed/picoclaw/pkg/session"
+	"github.com/xwysyy/X-Claw/pkg/session"
 )
 
 func TestSessionModelHandler_SetGetClear(t *testing.T) {

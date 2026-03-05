@@ -1,6 +1,6 @@
 package protocoltypes
 
-import coretypes "github.com/sipeed/picoclaw/internal/core/provider/protocoltypes"
+import coretypes "github.com/xwysyy/X-Claw/internal/core/provider/protocoltypes"
 
 // This package is a thin facade for the canonical protocol types, which now
 // live under internal/core. Keeping this facade preserves existing import paths

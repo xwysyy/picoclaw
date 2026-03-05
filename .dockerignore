@@ -14,6 +14,6 @@ coverage.html
 ref/
 
 # Next.js console UI (built in Docker)
-web/picoclaw-console/node_modules/
-web/picoclaw-console/.next/
-web/picoclaw-console/out/
+web/x-claw-console/node_modules/
+web/x-claw-console/.next/
+web/x-claw-console/out/

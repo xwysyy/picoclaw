@@ -162,19 +162,19 @@ pkg/identity/
 package channels
 
 import (
-    "github.com/xwysyy/picoclaw/pkg/bus"
-    "github.com/xwysyy/picoclaw/pkg/config"
+    "github.com/xwysyy/X-Claw/pkg/bus"
+    "github.com/xwysyy/X-Claw/pkg/config"
 )
 
 // 新代码（重构分支）
 package telegram
 
 import (
-    "github.com/xwysyy/picoclaw/pkg/bus"
-    "github.com/xwysyy/picoclaw/pkg/channels"     // 引用父包
-    "github.com/xwysyy/picoclaw/pkg/config"
-    "github.com/xwysyy/picoclaw/pkg/identity"      // 新增
-    "github.com/xwysyy/picoclaw/pkg/media"          // 新增（如需媒体）
+    "github.com/xwysyy/X-Claw/pkg/bus"
+    "github.com/xwysyy/X-Claw/pkg/channels"     // 引用父包
+    "github.com/xwysyy/X-Claw/pkg/config"
+    "github.com/xwysyy/X-Claw/pkg/identity"      // 新增
+    "github.com/xwysyy/X-Claw/pkg/media"          // 新增（如需媒体）
 )
 ```
 
@@ -321,9 +321,9 @@ c.HandleMessage(ctx, peer, messageID, senderID, chatID, content, mediaRefs, meta
 package telegram
 
 import (
-    "github.com/xwysyy/picoclaw/pkg/bus"
-    "github.com/xwysyy/picoclaw/pkg/channels"
-    "github.com/xwysyy/picoclaw/pkg/config"
+    "github.com/xwysyy/X-Claw/pkg/bus"
+    "github.com/xwysyy/X-Claw/pkg/channels"
+    "github.com/xwysyy/X-Claw/pkg/config"
 )
 
 func init() {
@@ -338,9 +338,9 @@ func init() {
 ```go
 // cmd/x-claw/internal/gateway/helpers.go
 import (
-    _ "github.com/xwysyy/picoclaw/pkg/channels/telegram"   // 触发 init() 注册
-    _ "github.com/xwysyy/picoclaw/pkg/channels/discord"
-    _ "github.com/xwysyy/picoclaw/pkg/channels/your_new_channel"  // 新增
+    _ "github.com/xwysyy/X-Claw/pkg/channels/telegram"   // 触发 init() 注册
+    _ "github.com/xwysyy/X-Claw/pkg/channels/discord"
+    _ "github.com/xwysyy/X-Claw/pkg/channels/your_new_channel"  // 新增
 )
 ```
 
@@ -421,9 +421,9 @@ Agent Loop 的主要变化：
 package matrix
 
 import (
-    "github.com/xwysyy/picoclaw/pkg/bus"
-    "github.com/xwysyy/picoclaw/pkg/channels"
-    "github.com/xwysyy/picoclaw/pkg/config"
+    "github.com/xwysyy/X-Claw/pkg/bus"
+    "github.com/xwysyy/X-Claw/pkg/channels"
+    "github.com/xwysyy/X-Claw/pkg/config"
 )
 
 func init() {
@@ -442,11 +442,11 @@ import (
     "context"
     "fmt"
 
-    "github.com/xwysyy/picoclaw/pkg/bus"
-    "github.com/xwysyy/picoclaw/pkg/channels"
-    "github.com/xwysyy/picoclaw/pkg/config"
-    "github.com/xwysyy/picoclaw/pkg/identity"
-    "github.com/xwysyy/picoclaw/pkg/logger"
+    "github.com/xwysyy/X-Claw/pkg/bus"
+    "github.com/xwysyy/X-Claw/pkg/channels"
+    "github.com/xwysyy/X-Claw/pkg/config"
+    "github.com/xwysyy/X-Claw/pkg/identity"
+    "github.com/xwysyy/X-Claw/pkg/logger"
 )
 
 // MatrixChannel implements channels.Channel for the Matrix protocol.
@@ -811,7 +811,7 @@ if m.config.Channels.Matrix.Enabled && m.config.Channels.Matrix.Token != "" {
 ```go
 // cmd/x-claw/internal/gateway/helpers.go
 import (
-    _ "github.com/xwysyy/picoclaw/pkg/channels/matrix"
+    _ "github.com/xwysyy/X-Claw/pkg/channels/matrix"
 )
 ```
 

@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/xwysyy/picoclaw/pkg/providers/protocoltypes"
+	"github.com/xwysyy/X-Claw/pkg/providers/protocoltypes"
 )
 
 type (

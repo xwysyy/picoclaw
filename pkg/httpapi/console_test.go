@@ -143,7 +143,7 @@ func TestConsoleHandler_FileDownloadRejectsOutsideAllowedDirs(t *testing.T) {
 
 func TestConsoleHandler_TraceListIncludesSessionKey(t *testing.T) {
 	ws := t.TempDir()
-	traceDir := filepath.Join(ws, ".picoclaw", "audit", "runs", "feishu_oc_test")
+	traceDir := filepath.Join(ws, ".x-claw", "audit", "runs", "feishu_oc_test")
 	if err := os.MkdirAll(traceDir, 0o755); err != nil {
 		t.Fatalf("mkdir trace dir: %v", err)
 	}
@@ -230,7 +230,7 @@ func TestConsoleHandler_SessionsList(t *testing.T) {
 
 func TestConsoleHandler_Tail(t *testing.T) {
 	ws := t.TempDir()
-	traceDir := filepath.Join(ws, ".picoclaw", "audit", "runs", "feishu_oc_test")
+	traceDir := filepath.Join(ws, ".x-claw", "audit", "runs", "feishu_oc_test")
 	if err := os.MkdirAll(traceDir, 0o755); err != nil {
 		t.Fatalf("mkdir trace: %v", err)
 	}
@@ -241,7 +241,7 @@ func TestConsoleHandler_Tail(t *testing.T) {
 	}
 
 	h := NewConsoleHandler(ConsoleHandlerOptions{Workspace: ws})
-	req := httptest.NewRequest(http.MethodGet, "http://example.com/api/console/tail?path=.picoclaw/audit/runs/feishu_oc_test/events.jsonl&lines=1", nil)
+	req := httptest.NewRequest(http.MethodGet, "http://example.com/api/console/tail?path=.x-claw/audit/runs/feishu_oc_test/events.jsonl&lines=1", nil)
 	req.RemoteAddr = "127.0.0.1:1234"
 	rr := httptest.NewRecorder()
 

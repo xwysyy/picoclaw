@@ -12,8 +12,8 @@ import (
 	lark "github.com/larksuite/oapi-sdk-go/v3"
 	larkcalendar "github.com/larksuite/oapi-sdk-go/v3/service/calendar/v4"
 
-	"github.com/xwysyy/picoclaw/pkg/config"
-	"github.com/xwysyy/picoclaw/pkg/logger"
+	"github.com/xwysyy/X-Claw/pkg/config"
+	"github.com/xwysyy/X-Claw/pkg/logger"
 )
 
 const defaultFeishuCalendarTimezone = "Asia/Shanghai"

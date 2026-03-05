@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sipeed/picoclaw/pkg/config"
-	"github.com/sipeed/picoclaw/pkg/providers"
+	"github.com/xwysyy/X-Claw/pkg/config"
+	"github.com/xwysyy/X-Claw/pkg/providers"
 )
 
 func TestToolPolicy_ConfirmThenExecuteAndReplayIdempotently(t *testing.T) {
@@ -119,7 +119,7 @@ func TestToolPolicy_ConfirmThenExecuteAndReplayIdempotently(t *testing.T) {
 	// Ledger should exist for this run.
 	dirKey := SafePathToken(sessionKey)
 	runKey := SafePathToken(runID)
-	ledgerPath := filepath.Join(workspace, ".picoclaw", "audit", "runs", dirKey, "runs", runKey, "policy.jsonl")
+	ledgerPath := filepath.Join(workspace, ".x-claw", "audit", "runs", dirKey, "runs", runKey, "policy.jsonl")
 	data, err := os.ReadFile(ledgerPath)
 	if err != nil {
 		t.Fatalf("failed to read policy ledger: %v", err)

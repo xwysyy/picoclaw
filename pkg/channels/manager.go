@@ -19,13 +19,13 @@ import (
 
 	"golang.org/x/time/rate"
 
-	"github.com/xwysyy/picoclaw/pkg/auditlog"
-	"github.com/xwysyy/picoclaw/pkg/bus"
-	"github.com/xwysyy/picoclaw/pkg/config"
-	"github.com/xwysyy/picoclaw/pkg/constants"
-	"github.com/xwysyy/picoclaw/pkg/health"
-	"github.com/xwysyy/picoclaw/pkg/logger"
-	"github.com/xwysyy/picoclaw/pkg/media"
+	"github.com/xwysyy/X-Claw/pkg/auditlog"
+	"github.com/xwysyy/X-Claw/pkg/bus"
+	"github.com/xwysyy/X-Claw/pkg/config"
+	"github.com/xwysyy/X-Claw/pkg/constants"
+	"github.com/xwysyy/X-Claw/pkg/health"
+	"github.com/xwysyy/X-Claw/pkg/logger"
+	"github.com/xwysyy/X-Claw/pkg/media"
 )
 
 const (

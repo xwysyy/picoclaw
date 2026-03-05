@@ -162,19 +162,19 @@ Using Telegram as an example, the main changes are:
 package channels
 
 import (
-    "github.com/xwysyy/picoclaw/pkg/bus"
-    "github.com/xwysyy/picoclaw/pkg/config"
+    "github.com/xwysyy/X-Claw/pkg/bus"
+    "github.com/xwysyy/X-Claw/pkg/config"
 )
 
 // New code (refactored branch)
 package telegram
 
 import (
-    "github.com/xwysyy/picoclaw/pkg/bus"
-    "github.com/xwysyy/picoclaw/pkg/channels"     // Reference parent package
-    "github.com/xwysyy/picoclaw/pkg/config"
-    "github.com/xwysyy/picoclaw/pkg/identity"      // New
-    "github.com/xwysyy/picoclaw/pkg/media"          // New (if media support needed)
+    "github.com/xwysyy/X-Claw/pkg/bus"
+    "github.com/xwysyy/X-Claw/pkg/channels"     // Reference parent package
+    "github.com/xwysyy/X-Claw/pkg/config"
+    "github.com/xwysyy/X-Claw/pkg/identity"      // New
+    "github.com/xwysyy/X-Claw/pkg/media"          // New (if media support needed)
 )
 ```
 
@@ -321,9 +321,9 @@ Create `init.go` for your channel:
 package telegram
 
 import (
-    "github.com/xwysyy/picoclaw/pkg/bus"
-    "github.com/xwysyy/picoclaw/pkg/channels"
-    "github.com/xwysyy/picoclaw/pkg/config"
+    "github.com/xwysyy/X-Claw/pkg/bus"
+    "github.com/xwysyy/X-Claw/pkg/channels"
+    "github.com/xwysyy/X-Claw/pkg/config"
 )
 
 func init() {
@@ -338,9 +338,9 @@ func init() {
 ```go
 // cmd/x-claw/internal/gateway/helpers.go
 import (
-    _ "github.com/xwysyy/picoclaw/pkg/channels/telegram"   // Triggers init() registration
-    _ "github.com/xwysyy/picoclaw/pkg/channels/discord"
-    _ "github.com/xwysyy/picoclaw/pkg/channels/your_new_channel"  // New addition
+    _ "github.com/xwysyy/X-Claw/pkg/channels/telegram"   // Triggers init() registration
+    _ "github.com/xwysyy/X-Claw/pkg/channels/discord"
+    _ "github.com/xwysyy/X-Claw/pkg/channels/your_new_channel"  // New addition
 )
 ```
 
@@ -421,9 +421,9 @@ To add a new chat platform (e.g., `matrix`), you need to:
 package matrix
 
 import (
-    "github.com/xwysyy/picoclaw/pkg/bus"
-    "github.com/xwysyy/picoclaw/pkg/channels"
-    "github.com/xwysyy/picoclaw/pkg/config"
+    "github.com/xwysyy/X-Claw/pkg/bus"
+    "github.com/xwysyy/X-Claw/pkg/channels"
+    "github.com/xwysyy/X-Claw/pkg/config"
 )
 
 func init() {
@@ -442,11 +442,11 @@ import (
     "context"
     "fmt"
 
-    "github.com/xwysyy/picoclaw/pkg/bus"
-    "github.com/xwysyy/picoclaw/pkg/channels"
-    "github.com/xwysyy/picoclaw/pkg/config"
-    "github.com/xwysyy/picoclaw/pkg/identity"
-    "github.com/xwysyy/picoclaw/pkg/logger"
+    "github.com/xwysyy/X-Claw/pkg/bus"
+    "github.com/xwysyy/X-Claw/pkg/channels"
+    "github.com/xwysyy/X-Claw/pkg/config"
+    "github.com/xwysyy/X-Claw/pkg/identity"
+    "github.com/xwysyy/X-Claw/pkg/logger"
 )
 
 // MatrixChannel implements channels.Channel for the Matrix protocol.
@@ -812,7 +812,7 @@ if m.config.Channels.Matrix.Enabled && m.config.Channels.Matrix.Token != "" {
 ```go
 // cmd/x-claw/internal/gateway/helpers.go
 import (
-    _ "github.com/xwysyy/picoclaw/pkg/channels/matrix"
+    _ "github.com/xwysyy/X-Claw/pkg/channels/matrix"
 )
 ```
 
