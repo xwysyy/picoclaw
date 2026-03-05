@@ -7,10 +7,10 @@ This file applies to the `x-claw` project root.
 
 Current remote setup:
 - `origin`: `https://github.com/xwysyy/X-Claw.git` (your fork)
-- `upstream`: `https://github.com/sipeed/picoclaw.git` (original project)
+- `upstream`: (original upstream project; URL intentionally not hardcoded here)
 
 If `upstream` is missing, add it:
-- `git remote add upstream https://github.com/sipeed/picoclaw.git`
+- `git remote add upstream <UPSTREAM_GIT_URL>`
 
 ### Periodic sync routine (recommended: merge)
 Run these commands regularly to sync latest upstream changes into your fork branch (keeps history non-linear, avoids force-push):
