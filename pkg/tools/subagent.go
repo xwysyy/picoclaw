@@ -56,7 +56,7 @@ type SubagentHandoffSuggestion struct {
 }
 
 // SubagentResultPayload is the stable JSON contract returned by subagent/spawn results
-// and used for system announcements (Phase F2 in ROADMAP_V2.md).
+// and used for system announcements.
 type SubagentResultPayload struct {
 	Kind   string `json:"kind"`
 	Status string `json:"status"`

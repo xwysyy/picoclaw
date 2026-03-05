@@ -8,14 +8,14 @@
 ## 0. 背景与痛点（来自两份文档的共同结论）
 
 ### 0.1 我们要学 OpenClaw 的“闭环能力”，不是照搬生态
-来自 [openclaw_review.md](/root/code/picoclaw/openclaw_review.md) 的结论：OpenClaw 的核心竞争力是闭环（onboard/doctor/validate/安全默认/可观测），而不是“渠道多、插件多”。  
+来自 [openclaw_review.md](../openclaw_review.md) 的结论：OpenClaw 的核心竞争力是闭环（onboard/doctor/validate/安全默认/可观测），而不是“渠道多、插件多”。  
 因此重构目标必须围绕：
 - **运行时工程化**：会话模型、队列并发、事件流、工具执行、压缩/重试、可回放/可诊断
 - **运维闭环**：validate/doctor/status/health、升级迁移与修复
 - **默认安全**：sandbox/tool policy/elevated 的清晰边界 + SSRF/路径/权限护栏
 
 ### 0.2 当前 PicoClaw 的主要屎山成因
-来自 [refactor_guide1.md](/root/code/picoclaw/refactor_guide1.md) 的诊断（并与代码现状吻合）：
+来自 [refactor_guide1.md](archive/2026-03/refactor_guide1.md) 的诊断（并与代码现状吻合；该文档已归档）：
 - `pkg/agent` 单包职责混杂，核心 loop 反向依赖 channels/media/http 等基础设施概念，测试隔离困难。
 - `pkg/tools` 抽象/治理/实现混在一起，生产治理（policy/trace/timeout）不易收口。
 - 组合根（wiring）分散且容易膨胀，生命周期边界不清。
@@ -108,4 +108,3 @@
 ## 4. 风险与控制
 - 大范围移动目录/包名会引发大量 import 变更与回归风险；因此采用“接口解耦 + facade 迁移”方式，先把依赖方向纠正，再逐步迁移到 `internal/`。
 - 所有改动都以单元测试与关键链路 smoke tests 作为门槛；必要时用 feature flag 保留旧路径。
-

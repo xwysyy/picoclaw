@@ -628,10 +628,6 @@ type AuditSupervisorConfig struct {
 
 // LimitsConfig defines soft resource budgets enforced by the agent/runtime.
 //
-// Phase H1 in ROADMAP_V2.md:
-// - Per-run budgets: tool calls, wall time, output size.
-// - Per-tool guards: file read limits, tool output truncation.
-//
 // These limits are intended to prevent runaway memory growth / OOM kills while
 // keeping behavior predictable. They are "soft" in the sense that exceeding a
 // limit results in a controlled, user-visible stop rather than a hard crash.
@@ -657,9 +653,8 @@ type LimitsConfig struct {
 
 // AuditLogConfig controls the append-only operational audit log (JSONL).
 //
-// Phase H3 in ROADMAP_V2.md:
-// - Record major runtime events (tool executions, config reload, estop changes, etc.)
-// - Support rotation to cap disk usage
+// This log records major runtime events (tool executions, config reload, estop changes, etc.)
+// and supports rotation to cap disk usage.
 //
 // This is intentionally separate from `audit` (task auditing / supervisor checks).
 type AuditLogConfig struct {
@@ -1135,7 +1130,7 @@ type ToolPolicyConfig struct {
 	Audit       ToolPolicyAuditConfig       `json:"audit,omitempty"`
 }
 
-// ToolHooksConfig enables lightweight tool call hooks/extensions (Phase N2 in ROADMAP_V2.md).
+// ToolHooksConfig enables lightweight tool call hooks/extensions.
 //
 // Hooks run inside the tool executor chokepoint (same place as plan mode / tool policy),
 // and can rewrite tool arguments, deny tool calls, or scrub tool results.

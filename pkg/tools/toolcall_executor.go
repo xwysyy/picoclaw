@@ -418,12 +418,12 @@ func ExecuteToolCalls(
 			traceWriter.RecordEnd(start.Add(duration), opts.Iteration, call, redactedArgsJSON, auditResult, duration, policyDecision, policyReason, policyTimeoutMS, idempotencyKey, hookActions)
 		}
 
-		// Phase H3 (ROADMAP_V2.md): append-only operational audit log (best-effort).
-		if strings.TrimSpace(opts.Workspace) != "" {
-			errText := ""
-			if auditResult != nil && auditResult.Err != nil {
-				errText = auditResult.Err.Error()
-			}
+			// Append-only operational audit log (best-effort).
+			if strings.TrimSpace(opts.Workspace) != "" {
+				errText := ""
+				if auditResult != nil && auditResult.Err != nil {
+					errText = auditResult.Err.Error()
+				}
 			resultPreview := ""
 			if auditResult != nil {
 				resultPreview = utils.Truncate(strings.TrimSpace(auditResult.ForLLM), 400)
