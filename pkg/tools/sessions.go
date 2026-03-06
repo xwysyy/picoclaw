@@ -50,7 +50,7 @@ func (t *SessionsListTool) Parameters() map[string]any {
 				"items": map[string]any{
 					"type": "string",
 				},
-				"description": "Optional session kind filter (e.g. main, direct, group, cron, subagent)",
+				"description": "Optional session kind filter (e.g. main, direct, group, cron)",
 			},
 			"limit": map[string]any{
 				"type":        "integer",
@@ -285,8 +285,6 @@ func classifySessionKind(key string) string {
 		return "other"
 	case (strings.HasPrefix(k, "agent:") && strings.HasSuffix(k, ":main")) || k == "conv:main":
 		return "main"
-	case strings.HasPrefix(k, "subagent:") || strings.Contains(k, ":subagent:"):
-		return "subagent"
 	case strings.Contains(k, ":group:"):
 		return "group"
 	case strings.Contains(k, ":channel:"):

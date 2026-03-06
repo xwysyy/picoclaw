@@ -267,9 +267,8 @@ This file contains tasks for the heartbeat service to check periodically.
 
 - Execute ALL tasks listed below. Do NOT skip any task.
 - For simple tasks (e.g., report current time), respond directly.
-- For complex tasks that may take time, use the spawn tool to create a subagent.
-- The spawn tool is async - subagent results will be sent to the user automatically.
-- After spawning a subagent, CONTINUE to process remaining tasks.
+- For complex tasks that may take time, break them into clear steps and use available tools directly.
+- Continue processing remaining tasks until everything in this heartbeat is covered.
 - Only respond with HEARTBEAT_OK when ALL tasks are done AND nothing needs attention.
 
 ---

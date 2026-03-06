@@ -79,12 +79,12 @@ type AsyncCallback func(ctx context.Context, result *ToolResult)
 //
 // This is useful for:
 //   - Long-running operations that shouldn't block the agent loop
-//   - Subagent spawns that complete independently
+//   - Long-running background tasks that complete independently
 //   - Background tasks that need to report results later
 //
 // Example:
 //
-//	func (t *SpawnTool) ExecuteAsync(ctx context.Context, args map[string]any, cb AsyncCallback) *ToolResult {
+//	func (t *BackgroundTool) ExecuteAsync(ctx context.Context, args map[string]any, cb AsyncCallback) *ToolResult {
 //	    go func() {
 //	        result := t.runSubagent(ctx, args)
 //	        if cb != nil { cb(ctx, result) }

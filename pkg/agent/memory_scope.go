@@ -73,7 +73,7 @@ func deriveMemoryScope(sessionKey, channel, chatID string) memoryScope {
 		return memoryScope{Kind: memoryScopeSession, RawID: rawID}
 	}
 
-	// Default to agent-scoped memory for main/cron/heartbeat/subagent/etc.
+	// Default to agent-scoped memory for main/cron/heartbeat and similar runtime tasks.
 	return memoryScope{Kind: memoryScopeAgent, RawID: "agent"}
 }
 

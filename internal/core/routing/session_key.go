@@ -46,8 +46,7 @@ func BuildAgentMainSessionKey(agentID string) string {
 // BuildConversationMainSessionKey returns "conv:main".
 //
 // Conversation-scoped session keys intentionally do NOT embed an agent identifier.
-// This enables Swarm-style agent handoffs while keeping a single shared conversation
-// history across agents.
+// This keeps one shared conversation history regardless of runtime internals.
 func BuildConversationMainSessionKey() string {
 	return fmt.Sprintf("conv:%s", DefaultMainKey)
 }
@@ -114,8 +113,7 @@ func BuildAgentPeerSessionKey(params SessionKeyParams) string {
 }
 
 // BuildConversationPeerSessionKey constructs a session key based on channel, peer, and DM scope,
-// without embedding any agent identifier. This enables Swarm-style agent handoffs while keeping
-// a single shared conversation history across agents.
+// without embedding any agent identifier so one conversation keeps one stable history key.
 //
 // Key format (examples):
 // - Direct + dm_scope=main:         "conv:main"

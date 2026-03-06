@@ -278,15 +278,12 @@ curl -sS -X POST http://127.0.0.1:18790/api/notify \
 
 ### 任务完成提醒（notify.on_task_complete）
 
-当你把 `notify.on_task_complete=true` 时，X-Claw 会在 **内部通道**（`cli/system/subagent`）的一次 run 正常结束后，自动通过 `message` tool 把“任务完成 + 结果摘要”发到 `last_active` 外部会话。
+当你把 `notify.on_task_complete=true` 时，X-Claw 会在 **内部通道**（`cli/system`）的一次 run 正常结束后，自动通过 `message` tool 把“任务完成 + 结果摘要”发到 `last_active` 外部会话。
 
 静默约定（少打扰）：
 - 如果内部任务最终输出为 `NO_UPDATE` 或 `HEARTBEAT_OK`（大小写不敏感），则不会触发完成提醒  
   这适合 cron/后台巡检类任务：无更新不打扰，有更新才提醒。
 
-### E-STOP（/api/estop：全局 kill switch）
-
-X-Claw 提供一个全局 `estop`（Emergency Stop）控制面：用于在你发现异常行为时，**一键冻结工具执行**（或禁网）。
 
 前置条件：
 - 配置中 `tools.estop.enabled=true`（默认开启）

@@ -72,13 +72,13 @@ func SilentResult(forLLM string) *ToolResult {
 // The task will run in the background and complete later.
 //
 // Use this for long-running operations like:
-// - Subagent spawns
+// - Background tasks
 // - Background processing
 // - External API calls with callbacks
 //
 // Example:
 //
-//	result := AsyncResult("Subagent spawned, will report back")
+//	result := AsyncResult("Background task started, will report back")
 func AsyncResult(forLLM string) *ToolResult {
 	return &ToolResult{
 		ForLLM:  forLLM,

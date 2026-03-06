@@ -148,8 +148,7 @@ func NewAgentLoop(cfg *config.Config, msgBus *bus.MessageBus, provider providers
 	}
 	taskLedger := tools.NewTaskLedger(ledgerPath)
 
-	// Phase F: shared sessions for Swarm-style multi-agent handoff.
-	// Conversation history is shared across agents; the session itself stores active_agent_id.
+	// Shared sessions keep conversation history in one place for the slim runtime.
 	sharedSessions := session.NewSessionManager(sessionsPath)
 	for _, agentID := range registry.ListAgentIDs() {
 		agent, ok := registry.GetAgent(agentID)
@@ -542,7 +541,7 @@ func (al *AgentLoop) maybeAutoDowngradeSessionModel(
 	return true
 }
 
-// registerSharedTools registers tools that are shared across all agents (web, message, spawn).
+// registerSharedTools registers tools shared across all runtime agents.
 func (al *AgentLoop) Run(ctx context.Context) error {
 	al.running.Store(true)
 	cfg := al.Config()
@@ -654,7 +653,7 @@ func (al *AgentLoop) Run(ctx context.Context) error {
 			identityLinks = cfg.Session.IdentityLinks
 		}
 
-		// System messages (subagent completion) route back to the originating conversation.
+		// System messages route back to the originating conversation.
 		// ChatID format: "origin_channel:origin_chat_id".
 		if msg.Channel == "system" {
 			originChannel, originChatID := "cli", strings.TrimSpace(msg.ChatID)

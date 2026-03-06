@@ -77,7 +77,7 @@ type ToolExecutionTrace struct {
 }
 
 // RunToolLoop executes the LLM + tool call iteration loop.
-// This is the core agent logic that can be reused by both main agent and subagents.
+// This is the core agent logic reused by the main runtime and other internal tool loops.
 func RunToolLoop(
 	ctx context.Context,
 	config ToolLoopConfig,
