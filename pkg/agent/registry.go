@@ -79,27 +79,6 @@ func (r *AgentRegistry) ListAgentIDs() []string {
 	return ids
 }
 
-// CanSpawnSubagent checks if parentAgentID is allowed to spawn targetAgentID.
-func (r *AgentRegistry) CanSpawnSubagent(parentAgentID, targetAgentID string) bool {
-	parent, ok := r.GetAgent(parentAgentID)
-	if !ok {
-		return false
-	}
-	if parent.Subagents == nil || parent.Subagents.AllowAgents == nil {
-		return false
-	}
-	targetNorm := routing.NormalizeAgentID(targetAgentID)
-	for _, allowed := range parent.Subagents.AllowAgents {
-		if allowed == "*" {
-			return true
-		}
-		if routing.NormalizeAgentID(allowed) == targetNorm {
-			return true
-		}
-	}
-	return false
-}
-
 // GetDefaultAgent returns the default agent instance.
 func (r *AgentRegistry) GetDefaultAgent() *AgentInstance {
 	r.mu.RLock()

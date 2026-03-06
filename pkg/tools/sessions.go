@@ -136,9 +136,6 @@ func (t *SessionsListTool) Execute(_ context.Context, args map[string]any) *Tool
 			UpdatedAt:    s.Updated.Format(time.RFC3339),
 			MessageCount: len(s.Messages),
 		}
-		if strings.TrimSpace(s.ActiveAgentID) != "" {
-			item.ActiveAgentID = strings.TrimSpace(s.ActiveAgentID)
-		}
 		if strings.TrimSpace(s.Summary) != "" {
 			item.Summary = s.Summary
 		}
@@ -245,9 +242,6 @@ func (t *SessionsHistoryTool) Execute(_ context.Context, args map[string]any) *T
 		MessageCount: len(messages),
 		Messages:     messages,
 	}
-	if strings.TrimSpace(snapshot.ActiveAgentID) != "" {
-		payload.ActiveAgentID = strings.TrimSpace(snapshot.ActiveAgentID)
-	}
 	if strings.TrimSpace(snapshot.Summary) != "" {
 		payload.Summary = snapshot.Summary
 	}
@@ -262,7 +256,6 @@ func (t *SessionsHistoryTool) Execute(_ context.Context, args map[string]any) *T
 type sessionListItem struct {
 	Key           string              `json:"key"`
 	Kind          string              `json:"kind"`
-	ActiveAgentID string              `json:"active_agent_id,omitempty"`
 	CreatedAt     string              `json:"created_at"`
 	UpdatedAt     string              `json:"updated_at"`
 	MessageCount  int                 `json:"message_count"`
@@ -278,7 +271,6 @@ type sessionsListOutput struct {
 type sessionHistoryOutput struct {
 	SessionKey    string              `json:"session_key"`
 	Kind          string              `json:"kind"`
-	ActiveAgentID string              `json:"active_agent_id,omitempty"`
 	CreatedAt     string              `json:"created_at"`
 	UpdatedAt     string              `json:"updated_at"`
 	MessageCount  int                 `json:"message_count"`

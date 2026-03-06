@@ -203,22 +203,6 @@ func ParseAgentSessionKey(sessionKey string) *ParsedSessionKey {
 	return &ParsedSessionKey{AgentID: agentID, Rest: rest}
 }
 
-// IsSubagentSessionKey returns true if the session key represents a subagent.
-func IsSubagentSessionKey(sessionKey string) bool {
-	raw := strings.TrimSpace(sessionKey)
-	if raw == "" {
-		return false
-	}
-	if strings.HasPrefix(strings.ToLower(raw), "subagent:") {
-		return true
-	}
-	parsed := ParseAgentSessionKey(raw)
-	if parsed == nil {
-		return false
-	}
-	return strings.HasPrefix(strings.ToLower(parsed.Rest), "subagent:")
-}
-
 func normalizeChannel(channel string) string {
 	c := strings.TrimSpace(strings.ToLower(channel))
 	if c == "" {

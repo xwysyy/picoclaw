@@ -879,12 +879,6 @@ func (al *AgentLoop) ProcessSessionMessage(
 		if agent, ok := al.registry.GetAgent(parsed.AgentID); ok {
 			targetAgent = agent
 		}
-	} else if al.sessions != nil {
-		if active := al.sessions.GetActiveAgentID(key); active != "" {
-			if agent, ok := al.registry.GetAgent(active); ok {
-				targetAgent = agent
-			}
-		}
 	}
 	if targetAgent == nil {
 		return "", fmt.Errorf("no agent available for session %q", key)

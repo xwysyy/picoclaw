@@ -125,7 +125,6 @@ func (h *ConsoleHandler) handleTokens(w http.ResponseWriter, _ *http.Request) {
 type sessionListItem struct {
 	Key           string `json:"key"`
 	Summary       string `json:"summary,omitempty"`
-	ActiveAgentID string `json:"active_agent_id,omitempty"`
 	Created       string `json:"created,omitempty"`
 	Updated       string `json:"updated,omitempty"`
 	File          string `json:"file,omitempty"`
@@ -166,11 +165,10 @@ func (h *ConsoleHandler) handleSessions(w http.ResponseWriter, _ *http.Request) 
 		}
 
 		var meta struct {
-			Key           string    `json:"key"`
-			Summary       string    `json:"summary,omitempty"`
-			ActiveAgentID string    `json:"active_agent_id,omitempty"`
-			Created       time.Time `json:"created"`
-			Updated       time.Time `json:"updated"`
+			Key     string    `json:"key"`
+			Summary string    `json:"summary,omitempty"`
+			Created time.Time `json:"created"`
+			Updated time.Time `json:"updated"`
 		}
 		if json.Unmarshal(data, &meta) != nil {
 			continue
@@ -182,12 +180,11 @@ func (h *ConsoleHandler) handleSessions(w http.ResponseWriter, _ *http.Request) 
 		}
 
 		item := sessionListItem{
-			Key:           strings.TrimSpace(meta.Key),
-			Summary:       strings.TrimSpace(meta.Summary),
-			ActiveAgentID: strings.TrimSpace(meta.ActiveAgentID),
-			Created:       meta.Created.UTC().Format(time.RFC3339Nano),
-			Updated:       meta.Updated.UTC().Format(time.RFC3339Nano),
-			File:          filepath.ToSlash(filepath.Join("sessions", name)),
+			Key:     strings.TrimSpace(meta.Key),
+			Summary: strings.TrimSpace(meta.Summary),
+			Created: meta.Created.UTC().Format(time.RFC3339Nano),
+			Updated: meta.Updated.UTC().Format(time.RFC3339Nano),
+			File:    filepath.ToSlash(filepath.Join("sessions", name)),
 		}
 		if base != "" {
 			eventsName := base + ".jsonl"
@@ -222,23 +219,21 @@ func (h *ConsoleHandler) handleSessions(w http.ResponseWriter, _ *http.Request) 
 		}
 
 		var legacy struct {
-			Key           string    `json:"key"`
-			Summary       string    `json:"summary,omitempty"`
-			ActiveAgentID string    `json:"active_agent_id,omitempty"`
-			Created       time.Time `json:"created"`
-			Updated       time.Time `json:"updated"`
+			Key     string    `json:"key"`
+			Summary string    `json:"summary,omitempty"`
+			Created time.Time `json:"created"`
+			Updated time.Time `json:"updated"`
 		}
 		if json.Unmarshal(data, &legacy) != nil {
 			continue
 		}
 
 		item := sessionListItem{
-			Key:           strings.TrimSpace(legacy.Key),
-			Summary:       strings.TrimSpace(legacy.Summary),
-			ActiveAgentID: strings.TrimSpace(legacy.ActiveAgentID),
-			Created:       legacy.Created.UTC().Format(time.RFC3339Nano),
-			Updated:       legacy.Updated.UTC().Format(time.RFC3339Nano),
-			File:          filepath.ToSlash(filepath.Join("sessions", name)),
+			Key:     strings.TrimSpace(legacy.Key),
+			Summary: strings.TrimSpace(legacy.Summary),
+			Created: legacy.Created.UTC().Format(time.RFC3339Nano),
+			Updated: legacy.Updated.UTC().Format(time.RFC3339Nano),
+			File:    filepath.ToSlash(filepath.Join("sessions", name)),
 		}
 		if _, err := os.Stat(filepath.Join(sessionsDir, base+".jsonl")); err == nil {
 			item.EventsFile = filepath.ToSlash(filepath.Join("sessions", base+".jsonl"))

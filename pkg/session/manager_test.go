@@ -171,28 +171,6 @@ func TestSetHistory_DeepCopiesInput(t *testing.T) {
 	}
 }
 
-func TestSetActiveAgentID_CreatesSessionAndPersistsMeta(t *testing.T) {
-	tmpDir := t.TempDir()
-	sm := NewSessionManager(tmpDir)
-	key := "telegram:123456"
-
-	sm.SetActiveAgentID(key, "writer")
-
-	if got := sm.GetActiveAgentID(key); got != "writer" {
-		t.Fatalf("GetActiveAgentID(%q) = %q, want writer", key, got)
-	}
-
-	metaPath := filepath.Join(tmpDir, "telegram_123456.meta.json")
-	if _, err := os.Stat(metaPath); err != nil {
-		t.Fatalf("expected meta file %s to exist: %v", metaPath, err)
-	}
-
-	sm2 := NewSessionManager(tmpDir)
-	if got := sm2.GetActiveAgentID(key); got != "writer" {
-		t.Fatalf("reloaded GetActiveAgentID(%q) = %q, want writer", key, got)
-	}
-}
-
 func TestSessionTree_SwitchLeafBranchesHistory(t *testing.T) {
 	tmpDir := t.TempDir()
 	sm := NewSessionManager(tmpDir)

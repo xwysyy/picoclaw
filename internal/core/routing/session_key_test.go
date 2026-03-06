@@ -202,24 +202,6 @@ func TestParseAgentSessionKey_Invalid(t *testing.T) {
 	}
 }
 
-func TestIsSubagentSessionKey(t *testing.T) {
-	tests := []struct {
-		input string
-		want  bool
-	}{
-		{"subagent:task-1", true},
-		{"agent:main:subagent:task-1", true},
-		{"agent:main:main", false},
-		{"agent:main:telegram:direct:user123", false},
-		{"", false},
-	}
-	for _, tt := range tests {
-		if got := IsSubagentSessionKey(tt.input); got != tt.want {
-			t.Errorf("IsSubagentSessionKey(%q) = %v, want %v", tt.input, got, tt.want)
-		}
-	}
-}
-
 func TestBuildConversationPeerSessionKey_GroupPeer_WithThread(t *testing.T) {
 	got := BuildConversationPeerSessionKey(SessionKeyParams{
 		Channel:  "telegram",

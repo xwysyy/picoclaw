@@ -121,49 +121,6 @@ func (sm *SessionManager) GetSummary(key string) string {
 	return session.Summary
 }
 
-// GetActiveAgentID returns the active agent id for this session, if any.
-func (sm *SessionManager) GetActiveAgentID(key string) string {
-	key = utils.CanonicalSessionKey(key)
-	if key == "" {
-		return ""
-	}
-
-	sm.mu.RLock()
-	defer sm.mu.RUnlock()
-
-	session, ok := sm.sessions[key]
-	if !ok || session == nil {
-		return ""
-	}
-	return strings.TrimSpace(session.ActiveAgentID)
-}
-
-// SetActiveAgentID updates the active agent id for this session.
-// It creates the session if it does not exist, and persists the change via JSONL/meta when storage is enabled.
-func (sm *SessionManager) SetActiveAgentID(key, agentID string) {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
-
-	key = utils.CanonicalSessionKey(key)
-	if key == "" {
-		return
-	}
-
-	session := sm.ensureSessionLocked(key)
-
-	now := time.Now()
-	session.ActiveAgentID = strings.TrimSpace(agentID)
-	session.Updated = now
-
-	if sm.storage == "" {
-		return
-	}
-
-	ev := sm.newEventLocked(now, key, session, EventSessionActiveAgent)
-	ev.ActiveAgentID = session.ActiveAgentID
-	sm.persistEventAndMetaLocked(key, session, ev)
-}
-
 func (sm *SessionManager) SetSummary(key string, summary string) {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
@@ -354,9 +311,8 @@ func (sm *SessionManager) legacySnapshotPath(key string) string {
 
 func buildSessionMeta(s *Session) SessionMeta {
 	meta := SessionMeta{
-		Key:           s.Key,
-		Summary:       s.Summary,
-		ActiveAgentID: strings.TrimSpace(s.ActiveAgentID),
+		Key:     s.Key,
+		Summary: s.Summary,
 		Created:       s.Created,
 		Updated:       s.Updated,
 		LastEventID:   strings.TrimSpace(s.LastEventID),
@@ -515,7 +471,6 @@ func (sm *SessionManager) loadSessions() error {
 
 		sess.Messages = replayed.Messages
 		sess.Summary = replayed.Summary
-		sess.ActiveAgentID = replayed.ActiveAgentID
 		sess.CompactionCount = replayed.CompactionCount
 		sess.MemoryFlushAt = replayed.MemoryFlushAt
 		sess.MemoryFlushCompactionCount = replayed.MemoryFlushCompactionCount
@@ -572,7 +527,6 @@ func (sm *SessionManager) loadSessions() error {
 			}
 			if meta != nil {
 				sess.Summary = strings.TrimSpace(meta.Summary)
-				sess.ActiveAgentID = strings.TrimSpace(meta.ActiveAgentID)
 				sess.ModelOverride = strings.TrimSpace(meta.ModelOverride)
 				if meta.ModelOverrideExpiresAtMS != nil && *meta.ModelOverrideExpiresAtMS > 0 {
 					expires := *meta.ModelOverrideExpiresAtMS
@@ -729,7 +683,6 @@ func (sm *SessionManager) GetSessionSnapshot(key string) (*Session, bool) {
 	snapshot := Session{
 		Key:                        stored.Key,
 		Summary:                    stored.Summary,
-		ActiveAgentID:              stored.ActiveAgentID,
 		CompactionCount:            stored.CompactionCount,
 		MemoryFlushAt:              stored.MemoryFlushAt,
 		MemoryFlushCompactionCount: stored.MemoryFlushCompactionCount,
@@ -761,8 +714,7 @@ func (sm *SessionManager) ListSessionSnapshots() []Session {
 		snapshot := Session{
 			Key:                        stored.Key,
 			Summary:                    stored.Summary,
-			ActiveAgentID:              stored.ActiveAgentID,
-			CompactionCount:            stored.CompactionCount,
+				CompactionCount:            stored.CompactionCount,
 			MemoryFlushAt:              stored.MemoryFlushAt,
 			MemoryFlushCompactionCount: stored.MemoryFlushCompactionCount,
 			Created:                    stored.Created,

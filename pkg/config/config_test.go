@@ -85,9 +85,6 @@ func TestAgentConfig_FullParse(t *testing.T) {
 					"model": {
 						"primary": "claude-opus",
 						"fallbacks": ["haiku"]
-					},
-					"subagents": {
-						"allow_agents": ["sales"]
 					}
 				}
 			]
@@ -137,9 +134,6 @@ func TestAgentConfig_FullParse(t *testing.T) {
 	}
 	if len(support.Model.Fallbacks) != 1 || support.Model.Fallbacks[0] != "haiku" {
 		t.Errorf("support.Model.Fallbacks = %v", support.Model.Fallbacks)
-	}
-	if support.Subagents == nil || len(support.Subagents.AllowAgents) != 1 {
-		t.Errorf("support.Subagents = %+v", support.Subagents)
 	}
 
 	if len(cfg.Bindings) != 1 {

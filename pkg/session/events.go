@@ -25,7 +25,6 @@ type (
 const (
 	EventSessionMessage       EventType = coresession.EventSessionMessage
 	EventSessionSummary       EventType = coresession.EventSessionSummary
-	EventSessionActiveAgent   EventType = coresession.EventSessionActiveAgent
 	EventSessionCompactionInc EventType = coresession.EventSessionCompactionInc
 	EventSessionMemoryFlush   EventType = coresession.EventSessionMemoryFlush
 	EventSessionHistorySet    EventType = coresession.EventSessionHistorySet

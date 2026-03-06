@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/xwysyy/X-Claw/pkg/providers"
@@ -16,13 +17,15 @@ func TestSessionsListTool_BasicAndKindFilter(t *testing.T) {
 
 	tool := NewSessionsListTool(sm)
 
-	// Basic list
 	result := tool.Execute(context.Background(), map[string]any{"limit": 10})
 	if result.IsError {
 		t.Fatalf("sessions_list returned error: %s", result.ForLLM)
 	}
 	if !result.Silent {
 		t.Fatalf("sessions_list should be silent")
+	}
+	if strings.Contains(compactJSON(result.ForLLM), "active_agent_id") {
+		t.Fatalf("sessions_list should not expose active_agent_id, got: %s", result.ForLLM)
 	}
 
 	var payload struct {
@@ -50,7 +53,6 @@ func TestSessionsListTool_BasicAndKindFilter(t *testing.T) {
 		t.Fatalf("expected cron kind for cron:daily-report, got %q", kindByKey["cron:daily-report"])
 	}
 
-	// Kind filter
 	filtered := tool.Execute(context.Background(), map[string]any{
 		"kinds": []any{"main"},
 		"limit": 10,
@@ -84,6 +86,9 @@ func TestSessionsHistoryTool_IncludeToolsToggle(t *testing.T) {
 	})
 	if withoutTools.IsError {
 		t.Fatalf("sessions_history returned error: %s", withoutTools.ForLLM)
+	}
+	if strings.Contains(compactJSON(withoutTools.ForLLM), "active_agent_id") {
+		t.Fatalf("sessions_history should not expose active_agent_id, got: %s", withoutTools.ForLLM)
 	}
 
 	var payload struct {
@@ -128,4 +133,9 @@ func TestSessionsHistoryTool_NotFound(t *testing.T) {
 	if !result.IsError {
 		t.Fatalf("expected error for missing session")
 	}
+}
+
+func compactJSON(s string) string {
+	replacer := strings.NewReplacer(" ", "", "\n", "", "\t", "")
+	return replacer.Replace(s)
 }

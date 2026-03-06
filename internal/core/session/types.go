@@ -13,8 +13,7 @@ type Session struct {
 	Key      string                  `json:"key"`
 	Messages []protocoltypes.Message `json:"messages"`
 
-	Summary       string `json:"summary,omitempty"`
-	ActiveAgentID string `json:"active_agent_id,omitempty"`
+	Summary string `json:"summary,omitempty"`
 
 	CompactionCount            int       `json:"compaction_count,omitempty"`
 	MemoryFlushAt              time.Time `json:"memory_flush_at,omitempty"`
@@ -37,7 +36,6 @@ type EventType string
 const (
 	EventSessionMessage       EventType = "session.message"
 	EventSessionSummary       EventType = "session.summary"
-	EventSessionActiveAgent   EventType = "session.active_agent"
 	EventSessionCompactionInc EventType = "session.compaction_inc"
 	EventSessionMemoryFlush   EventType = "session.memory_flush"
 	EventSessionHistorySet    EventType = "session.history_set"
@@ -63,8 +61,6 @@ type SessionEvent struct {
 	// Summary payload.
 	Summary string `json:"summary,omitempty"`
 
-	// Active agent payload (Phase F: Swarm-style handoff persistence).
-	ActiveAgentID string `json:"active_agent_id,omitempty"`
 
 	// State payload.
 	CompactionCount            int       `json:"compaction_count,omitempty"`
@@ -78,12 +74,9 @@ type SessionEvent struct {
 
 // SessionMeta is a lightweight snapshot used by ops/console surfaces.
 type SessionMeta struct {
-	Key     string `json:"key"`
-	Summary string `json:"summary,omitempty"`
-	// ActiveAgentID stores the current active agent id for this conversation session.
-	// It is used by Swarm-style `handoff` to persist who should respond next.
-	ActiveAgentID string    `json:"active_agent_id,omitempty"`
-	Created       time.Time `json:"created"`
+	Key     string    `json:"key"`
+	Summary string    `json:"summary,omitempty"`
+	Created time.Time `json:"created"`
 	Updated       time.Time `json:"updated"`
 
 	LastEventID string `json:"last_event_id,omitempty"`

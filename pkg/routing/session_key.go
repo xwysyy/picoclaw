@@ -38,6 +38,3 @@ func ParseAgentSessionKey(sessionKey string) *ParsedSessionKey {
 	return corerouting.ParseAgentSessionKey(sessionKey)
 }
 
-func IsSubagentSessionKey(sessionKey string) bool {
-	return corerouting.IsSubagentSessionKey(sessionKey)
-}

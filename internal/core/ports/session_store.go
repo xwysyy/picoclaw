@@ -24,8 +24,6 @@ type SessionStore interface {
 	GetSummary(key string) string
 	SetSummary(key string, summary string)
 
-	GetActiveAgentID(key string) string
-	SetActiveAgentID(key, agentID string)
 
 	Save(key string) error
 

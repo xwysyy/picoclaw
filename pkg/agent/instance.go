@@ -38,13 +38,12 @@ type AgentInstance struct {
 	SummarizeMessageThreshold int
 	SummarizeTokenPercent     int
 
-	Provider        providers.LLMProvider
-	Sessions        session.Store
-	ContextBuilder  *ContextBuilder
-	Tools        *tools.ToolRegistry
-	Subagents    *config.SubagentsConfig
-	SkillsFilter    []string
-	Candidates      []providers.FallbackCandidate
+	Provider       providers.LLMProvider
+	Sessions       session.Store
+	ContextBuilder *ContextBuilder
+	Tools          *tools.ToolRegistry
+	SkillsFilter   []string
+	Candidates     []providers.FallbackCandidate
 
 	Compaction     CompactionSettings
 	ContextPruning ContextPruningSettings
@@ -111,7 +110,7 @@ func NewAgentInstance(
 
 	contextBuilder := NewContextBuilder(workspace)
 
-	agentID, agentName, subagents, skillsFilter := resolveAgentIdentity(agentCfg)
+	agentID, agentName, skillsFilter := resolveAgentIdentity(agentCfg)
 
 	maxIter := intDefault(defaults.MaxToolIterations, 20)
 	maxTokens := intDefault(defaults.MaxTokens, 8192)
@@ -190,12 +189,10 @@ func NewAgentInstance(
 		SummarizeMessageThreshold: summarizeMessageThreshold,
 		SummarizeTokenPercent:     summarizeTokenPercent,
 		Provider:                  provider,
-		// Sessions are injected by the composition root (AgentLoop) so multi-agent
-		// handoff can share one conversation history across agents.
+		// Sessions are injected by the composition root (AgentLoop).
 		Sessions:       nil,
 		ContextBuilder: contextBuilder,
 		Tools:          toolsRegistry,
-		Subagents:      subagents,
 		SkillsFilter:   skillsFilter,
 		Candidates:     candidates,
 		Compaction:     compaction,
@@ -205,11 +202,11 @@ func NewAgentInstance(
 }
 
 // resolveAgentIdentity extracts identity fields from agent config.
-func resolveAgentIdentity(agentCfg *config.AgentConfig) (id, name string, subagents *config.SubagentsConfig, skills []string) {
+func resolveAgentIdentity(agentCfg *config.AgentConfig) (id, name string, skills []string) {
 	if agentCfg == nil {
-		return routing.DefaultAgentID, "", nil, nil
+		return routing.DefaultAgentID, "", nil
 	}
-	return routing.NormalizeAgentID(agentCfg.ID), agentCfg.Name, agentCfg.Subagents, agentCfg.Skills
+	return routing.NormalizeAgentID(agentCfg.ID), agentCfg.Name, agentCfg.Skills
 }
 
 // resolveFallbackCandidates builds the fallback candidate list from model config.

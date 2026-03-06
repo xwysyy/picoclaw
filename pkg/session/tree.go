@@ -85,8 +85,6 @@ func (sm *SessionManager) GetTree(key string, limit int) (*SessionTree, error) {
 			preview = sanitizePreview(utils.Truncate(strings.TrimSpace(ev.Message.Content), 160))
 		} else if strings.TrimSpace(ev.Summary) != "" {
 			preview = sanitizePreview(utils.Truncate(strings.TrimSpace(ev.Summary), 160))
-		} else if strings.TrimSpace(ev.ActiveAgentID) != "" {
-			preview = strings.TrimSpace(ev.ActiveAgentID)
 		} else if ev.KeepLast != 0 {
 			preview = "keep_last=" + strconv.Itoa(ev.KeepLast)
 		}
@@ -156,7 +154,6 @@ func (sm *SessionManager) SwitchLeaf(key, leafID string) (fromLeaf string, toLea
 
 	sess.Messages = replayed.Messages
 	sess.Summary = replayed.Summary
-	sess.ActiveAgentID = replayed.ActiveAgentID
 	sess.CompactionCount = replayed.CompactionCount
 	sess.MemoryFlushAt = replayed.MemoryFlushAt
 	sess.MemoryFlushCompactionCount = replayed.MemoryFlushCompactionCount
@@ -279,10 +276,6 @@ func replayEvents(events []SessionEvent, leafID string) (Session, string) {
 			}
 		case EventSessionSummary:
 			replayed.Summary = ev.Summary
-		case EventSessionActiveAgent:
-			if strings.TrimSpace(ev.ActiveAgentID) != "" {
-				replayed.ActiveAgentID = strings.TrimSpace(ev.ActiveAgentID)
-			}
 		case EventSessionHistorySet:
 			if ev.History != nil {
 				msgs := make([]providers.Message, len(ev.History))

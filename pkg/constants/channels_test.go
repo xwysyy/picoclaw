@@ -12,7 +12,6 @@ func TestIsInternalChannel(t *testing.T) {
 	}{
 		{name: "cli", channel: "cli", want: true},
 		{name: "system", channel: "system", want: true},
-		{name: "subagent", channel: "subagent", want: true},
 
 		{name: "empty", channel: "", want: false},
 		{name: "unknown", channel: "slack", want: false},
