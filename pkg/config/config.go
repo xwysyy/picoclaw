@@ -566,7 +566,6 @@ type HeartbeatConfig struct {
 
 type OrchestrationConfig struct {
 	Enabled                   bool              `json:"enabled"                      env:"X_CLAW_ORCHESTRATION_ENABLED"`
-	MaxSpawnDepth             int               `json:"max_spawn_depth"              env:"X_CLAW_ORCHESTRATION_MAX_SPAWN_DEPTH"`
 	MaxParallelWorkers        int               `json:"max_parallel_workers"         env:"X_CLAW_ORCHESTRATION_MAX_PARALLEL_WORKERS"`
 	MaxTasksPerAgent          int               `json:"max_tasks_per_agent"          env:"X_CLAW_ORCHESTRATION_MAX_TASKS_PER_AGENT"`
 	DefaultTaskTimeoutSeconds int               `json:"default_task_timeout_seconds" env:"X_CLAW_ORCHESTRATION_DEFAULT_TASK_TIMEOUT_SECONDS"`
@@ -591,9 +590,6 @@ type AuditConfig struct {
 	// RemediationCooldownMinutes prevents re-triggering remediation for the same
 	// task too frequently.
 	RemediationCooldownMinutes int `json:"remediation_cooldown_minutes"     env:"X_CLAW_AUDIT_REMEDIATION_COOLDOWN_MINUTES"`
-	// RemediationAgentID optionally delegates remediation retries to a specific
-	// agent id (requires subagent allowlist when targeting a different agent).
-	RemediationAgentID string `json:"remediation_agent_id"               env:"X_CLAW_AUDIT_REMEDIATION_AGENT_ID"`
 	NotifyChannel      string `json:"notify_channel"        env:"X_CLAW_AUDIT_NOTIFY_CHANNEL"`
 }
 
@@ -1077,15 +1073,11 @@ type ToolsConfig struct {
 	// Tool-level toggles (coarse enable/disable per tool name).
 	AppendFile   ToolConfig `json:"append_file,omitempty"   envPrefix:"X_CLAW_TOOLS_APPEND_FILE_"`
 	EditFile     ToolConfig `json:"edit_file,omitempty"     envPrefix:"X_CLAW_TOOLS_EDIT_FILE_"`
-	FindSkills   ToolConfig `json:"find_skills,omitempty"   envPrefix:"X_CLAW_TOOLS_FIND_SKILLS_"`
 	I2C          ToolConfig `json:"i2c,omitempty"           envPrefix:"X_CLAW_TOOLS_I2C_"`
-	InstallSkill ToolConfig `json:"install_skill,omitempty" envPrefix:"X_CLAW_TOOLS_INSTALL_SKILL_"`
 	ListDir      ToolConfig `json:"list_dir,omitempty"      envPrefix:"X_CLAW_TOOLS_LIST_DIR_"`
 	Message      ToolConfig `json:"message,omitempty"       envPrefix:"X_CLAW_TOOLS_MESSAGE_"`
 	ReadFile     ToolConfig `json:"read_file,omitempty"     envPrefix:"X_CLAW_TOOLS_READ_FILE_"`
-	Spawn        ToolConfig `json:"spawn,omitempty"         envPrefix:"X_CLAW_TOOLS_SPAWN_"`
 	SPI          ToolConfig `json:"spi,omitempty"           envPrefix:"X_CLAW_TOOLS_SPI_"`
-	Subagent     ToolConfig `json:"subagent,omitempty"      envPrefix:"X_CLAW_TOOLS_SUBAGENT_"`
 	WebFetch     ToolConfig `json:"web_fetch,omitempty"     envPrefix:"X_CLAW_TOOLS_WEB_FETCH_"`
 	WriteFile    ToolConfig `json:"write_file,omitempty"    envPrefix:"X_CLAW_TOOLS_WRITE_FILE_"`
 }

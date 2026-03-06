@@ -353,3 +353,11 @@ func marshalNoEscape(v any) ([]byte, error) {
 	}
 	return bytes.TrimRight(buf.Bytes(), "\n"), nil
 }
+
+func shouldSkipErrorTemplate(content string) bool {
+	content = strings.TrimSpace(content)
+	if content == "" {
+		return false
+	}
+	return strings.Contains(content, `"kind":"tool_error"`)
+}

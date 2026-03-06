@@ -106,24 +106,18 @@ func (t *ToolsConfig) IsToolEnabled(name string) bool {
 		return t.AppendFile.Enabled
 	case "edit_file":
 		return t.EditFile.Enabled
-	case "find_skills":
-		return t.FindSkills.Enabled
+	case "find_skills", "install_skill", "spawn", "subagent":
+		return false
 	case "i2c":
 		return t.I2C.Enabled
-	case "install_skill":
-		return t.InstallSkill.Enabled
 	case "list_dir":
 		return t.ListDir.Enabled
 	case "message":
 		return t.Message.Enabled
 	case "read_file":
 		return t.ReadFile.Enabled
-	case "spawn":
-		return t.Spawn.Enabled
 	case "spi":
 		return t.SPI.Enabled
-	case "subagent":
-		return t.Subagent.Enabled
 	case "web_fetch":
 		return t.WebFetch.Enabled
 	case "write_file":

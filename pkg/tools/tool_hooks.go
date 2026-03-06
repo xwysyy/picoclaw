@@ -66,8 +66,6 @@ func BuildDefaultToolHooks(cfg *config.Config) []ToolHook {
 
 	hooks := make([]ToolHook, 0, 2)
 
-	// Phase F2: prevent implicit handoffs executed by background subagents.
-	hooks = append(hooks, NewSubagentHandoffBlockHook())
 	if cfg.Tools.Hooks.Redact.Enabled {
 		if hook := NewToolResultRedactHook(cfg.Tools.Hooks.Redact); hook != nil {
 			hooks = append(hooks, hook)
@@ -236,4 +234,23 @@ func (h *ToolResultRedactHook) AfterToolCall(_ context.Context, call providers.T
 		return result, nil
 	}
 	return redacted, &ToolHookAction{Decision: "scrub", Reason: "tool output redacted"}
+}
+
+func compileRedactionRegexes(patterns []string) []*regexp.Regexp {
+	if len(patterns) == 0 {
+		return nil
+	}
+	out := make([]*regexp.Regexp, 0, len(patterns))
+	for _, raw := range patterns {
+		raw = strings.TrimSpace(raw)
+		if raw == "" {
+			continue
+		}
+		re, err := regexp.Compile(raw)
+		if err != nil {
+			continue
+		}
+		out = append(out, re)
+	}
+	return out
 }

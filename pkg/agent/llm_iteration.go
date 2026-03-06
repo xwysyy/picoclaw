@@ -690,33 +690,14 @@ func (r *llmIterationRunner) executeToolCalls(toolCalls []providers.ToolCall) []
 		errorTemplateOpts.IncludeAvailableTools = true
 	}
 
-	policyCfg := config.ToolPolicyConfig{}
-	policyTags := map[string]string(nil)
-	estopCfg := config.EstopConfig{}
-	planRestrictedTools := []string(nil)
-	planRestrictedPrefixes := []string(nil)
-	if cfg != nil {
-		policyCfg = cfg.Tools.Policy
-		policyTags = cfg.Tools.Policy.Audit.Tags
-		estopCfg = cfg.Tools.Estop
-		planRestrictedTools = cfg.Tools.PlanMode.RestrictedTools
-		planRestrictedPrefixes = cfg.Tools.PlanMode.RestrictedPrefixes
-	}
-
 	toolExecutions := tools.ExecuteToolCalls(r.ctx, r.agent.Tools, toolCalls, tools.ToolCallExecutionOptions{
 		Channel:                r.opts.Channel,
 		ChatID:                 r.opts.ChatID,
 		SenderID:               r.opts.SenderID,
-		PlanMode:               r.opts.PlanMode,
-		PlanRestrictedTools:    planRestrictedTools,
-		PlanRestrictedPrefixes: planRestrictedPrefixes,
 		Workspace:              r.agent.Workspace,
 		SessionKey:             r.opts.SessionKey,
 		RunID:                  r.runID(),
 		IsResume:               r.opts.Resume,
-		Policy:                 policyCfg,
-		PolicyTags:             policyTags,
-		Estop:                  estopCfg,
 		Iteration:              r.iteration,
 		LogScope:               "agent",
 		Parallel:               parallelCfg,
@@ -744,8 +725,6 @@ func (r *llmIterationRunner) executeToolCalls(toolCalls []providers.ToolCall) []
 }
 
 func (r *llmIterationRunner) applyToolExecutionResults(toolExecutions []tools.ToolCallExecution) {
-	handoffTargetID := ""
-	handoffTakeover := false
 	for _, executed := range toolExecutions {
 		toolResult := executed.Result
 		tc := executed.ToolCall
@@ -788,74 +767,10 @@ func (r *llmIterationRunner) applyToolExecutionResults(toolExecutions []tools.To
 		if contentForLLM == "" && toolResult.Err != nil {
 			contentForLLM = toolResult.Err.Error()
 		}
-		if strings.EqualFold(strings.TrimSpace(tc.Name), "handoff") && !toolResult.IsError {
-			if raw, ok := tc.Arguments["agent_id"].(string); ok {
-				handoffTargetID = strings.TrimSpace(raw)
-			}
-			if handoffTargetID == "" {
-				if raw, ok := tc.Arguments["agent_name"].(string); ok {
-					handoffTargetID = strings.TrimSpace(raw)
-				}
-			}
-			takeover := true
-			if v, ok := tc.Arguments["takeover"].(bool); ok {
-				takeover = v
-			}
-			handoffTakeover = takeover
-		}
-
 		toolResultMsg := providers.Message{Role: "tool", Content: contentForLLM, ToolCallID: tc.ID}
 		r.messages = append(r.messages, toolResultMsg)
 		addSessionFullMessage(r.agent.Sessions, r.opts.SessionKey, toolResultMsg)
 	}
-	r.applyHandoff(handoffTargetID, handoffTakeover)
-}
-
-func (r *llmIterationRunner) applyHandoff(targetID string, takeover bool) {
-	if strings.TrimSpace(targetID) == "" || !takeover {
-		return
-	}
-	target, ok := r.loop.registry.GetAgent(targetID)
-	if !ok || target == nil {
-		logger.WarnCF("agent", "Handoff target agent not found", map[string]any{
-			"target_agent_id": targetID,
-			"session_key":     r.opts.SessionKey,
-			"iteration":       r.iteration,
-		})
-		return
-	}
-
-	logger.InfoCF("agent", "Handoff: switching active agent", map[string]any{
-		"from_agent_id": r.agent.ID,
-		"to_agent_id":   target.ID,
-		"session_key":   r.opts.SessionKey,
-		"iteration":     r.iteration,
-	})
-
-	r.agent = target
-	r.modelForRun = strings.TrimSpace(r.agent.Model)
-	if r.agent.Sessions != nil {
-		if override, ok := r.agent.Sessions.EffectiveModelOverride(r.opts.SessionKey); ok {
-			r.modelForRun = override
-		}
-	}
-	if r.trace != nil {
-		r.trace.agentID = strings.TrimSpace(r.agent.ID)
-		r.trace.model = strings.TrimSpace(r.modelForRun)
-	}
-
-	history := r.agent.Sessions.GetHistory(r.opts.SessionKey)
-	summary := r.agent.Sessions.GetSummary(r.opts.SessionKey)
-	r.messages = r.agent.ContextBuilder.BuildMessagesForSession(
-		r.opts.SessionKey,
-		history,
-		summary,
-		"",
-		nil,
-		r.opts.Channel,
-		r.opts.ChatID,
-		r.opts.WorkingState,
-	)
 }
 
 func (r *llmIterationRunner) logTokenSummary() {

@@ -3,89 +3,77 @@ package gateway
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"time"
 
-	"github.com/xwysyy/X-Claw/pkg/httpapi"
+	coregateway "github.com/xwysyy/X-Claw/internal/gateway"
+	pkghttpapi "github.com/xwysyy/X-Claw/pkg/httpapi"
 	"github.com/xwysyy/X-Claw/pkg/session"
 )
 
-func registerGatewayHTTPAPI(svc *gatewayServices) error {
-	if svc == nil || svc.channelManager == nil {
-		return nil
+type gatewayHTTPRegistration struct {
+	pattern string
+	handler http.Handler
+}
+
+func buildGatewayHTTPRegistrations(svc *gatewayServices) ([]gatewayHTTPRegistration, error) {
+	if svc == nil || svc.cfg == nil {
+		return nil, nil
 	}
 
 	apiKey, err := resolveGatewayAPIKey(svc.cfg)
 	if err != nil {
-		return fmt.Errorf("gateway.api_key: %w", err)
+		return nil, fmt.Errorf("gateway.api_key: %w", err)
 	}
 
-	notify := httpapi.NewNotifyHandler(httpapi.NotifyHandlerOptions{
-		Sender: svc.channelManager,
-		APIKey: apiKey,
-		LastActive: func() (string, string) {
-			if svc.agentLoop == nil {
-				return "", ""
-			}
-			return svc.agentLoop.LastActive()
-		},
+	regs := []gatewayHTTPRegistration{}
+
+	regs = append(regs, gatewayHTTPRegistration{
+		pattern: "/api/notify",
+		handler: coregateway.NewNotifyHandler(coregateway.NotifyHandlerOptions{
+			Sender: svc.channelManager,
+			APIKey: apiKey,
+			LastActive: func() (string, string) {
+				if svc.agentLoop == nil {
+					return "", ""
+				}
+				return svc.agentLoop.LastActive()
+			},
+		}),
 	})
 
-	if err := svc.channelManager.RegisterHTTPHandler("/api/notify", notify); err != nil {
-		fmt.Printf("⚠ Warning: failed to register /api/notify: %v\n", err)
-	}
-
-	resume := httpapi.NewResumeLastTaskHandler(httpapi.ResumeLastTaskHandlerOptions{
-		APIKey:  apiKey,
-		Timeout: 2 * time.Minute,
-		Resume: func(ctx context.Context) (any, string, error) {
-			if svc.agentLoop == nil {
-				return nil, "", fmt.Errorf("agent loop not available")
-			}
-			candidate, response, err := svc.agentLoop.ResumeLastTask(ctx)
-			return candidate, response, err
-		},
+	regs = append(regs, gatewayHTTPRegistration{
+		pattern: "/api/resume_last_task",
+		handler: coregateway.NewResumeLastTaskHandler(coregateway.ResumeLastTaskHandlerOptions{
+			APIKey:  apiKey,
+			Timeout: 2 * time.Minute,
+			Resume: func(ctx context.Context) (any, string, error) {
+				if svc.agentLoop == nil {
+					return nil, "", fmt.Errorf("agent loop not available")
+				}
+				candidate, response, err := svc.agentLoop.ResumeLastTask(ctx)
+				return candidate, response, err
+			},
+		}),
 	})
-	if err := svc.channelManager.RegisterHTTPHandler("/api/resume_last_task", resume); err != nil {
-		fmt.Printf("⚠ Warning: failed to register /api/resume_last_task: %v\n", err)
-	}
 
-	estop := httpapi.NewEstopHandler(httpapi.EstopHandlerOptions{
-		APIKey:       apiKey,
-		Workspace:    svc.cfg.WorkspacePath(),
-		Enabled:      svc.cfg.Tools.Estop.Enabled,
-		FailClosed:   svc.cfg.Tools.Estop.FailClosed,
-		MaxBodyBytes: 8 << 10,
+	regs = append(regs, gatewayHTTPRegistration{
+		pattern: "/api/session_model",
+		handler: pkghttpapi.NewSessionModelHandler(pkghttpapi.SessionModelHandlerOptions{
+			APIKey:    apiKey,
+			Workspace: svc.cfg.WorkspacePath(),
+			Sessions: func() session.Store {
+				if svc.agentLoop == nil {
+					return nil
+				}
+				return svc.agentLoop.SessionStore()
+			}(),
+			Enabled:      true,
+			MaxBodyBytes: 8 << 10,
+		}),
 	})
-	if err := svc.channelManager.RegisterHTTPHandler("/api/estop", estop); err != nil {
-		fmt.Printf("⚠ Warning: failed to register /api/estop: %v\n", err)
-	}
 
-	sessionModel := httpapi.NewSessionModelHandler(httpapi.SessionModelHandlerOptions{
-		APIKey:    apiKey,
-		Workspace: svc.cfg.WorkspacePath(),
-		Sessions: func() session.Store {
-			if svc.agentLoop == nil {
-				return nil
-			}
-			return svc.agentLoop.SessionStore()
-		}(),
-		Enabled:      true,
-		MaxBodyBytes: 8 << 10,
-	})
-	if err := svc.channelManager.RegisterHTTPHandler("/api/session_model", sessionModel); err != nil {
-		fmt.Printf("⚠ Warning: failed to register /api/session_model: %v\n", err)
-	}
-
-	security := httpapi.NewSecurityHandler(httpapi.SecurityHandlerOptions{
-		APIKey:    apiKey,
-		Workspace: svc.cfg.WorkspacePath(),
-		Config:    svc.cfg,
-	})
-	if err := svc.channelManager.RegisterHTTPHandler("/api/security", security); err != nil {
-		fmt.Printf("⚠ Warning: failed to register /api/security: %v\n", err)
-	}
-
-	console := httpapi.NewConsoleHandler(httpapi.ConsoleHandlerOptions{
+	console := coregateway.NewConsoleHandler(coregateway.ConsoleHandlerOptions{
 		Workspace: svc.cfg.WorkspacePath(),
 		APIKey:    apiKey,
 		LastActive: func() (string, string) {
@@ -94,7 +82,7 @@ func registerGatewayHTTPAPI(svc *gatewayServices) error {
 			}
 			return svc.agentLoop.LastActive()
 		},
-		Info: httpapi.ConsoleInfo{
+		Info: coregateway.ConsoleInfo{
 			Model:                      svc.cfg.Agents.Defaults.ModelName,
 			NotifyOnTaskComplete:       svc.cfg.Notify.OnTaskComplete,
 			ToolTraceEnabled:           svc.cfg.Tools.Trace.Enabled,
@@ -104,12 +92,27 @@ func registerGatewayHTTPAPI(svc *gatewayServices) error {
 			InboundQueueMaxConcurrency: svc.cfg.Gateway.InboundQueue.MaxConcurrency,
 		},
 	})
-	if err := svc.channelManager.RegisterHTTPHandler("/console/", console); err != nil {
-		fmt.Printf("⚠ Warning: failed to register /console/: %v\n", err)
-	}
-	if err := svc.channelManager.RegisterHTTPHandler("/api/console/", console); err != nil {
-		fmt.Printf("⚠ Warning: failed to register /api/console/: %v\n", err)
+	regs = append(regs,
+		gatewayHTTPRegistration{pattern: "/console/", handler: console},
+		gatewayHTTPRegistration{pattern: "/api/console/", handler: console},
+	)
+
+	return regs, nil
+}
+
+func registerGatewayHTTPAPI(svc *gatewayServices) error {
+	if svc == nil || svc.channelManager == nil {
+		return nil
 	}
 
+	regs, err := buildGatewayHTTPRegistrations(svc)
+	if err != nil {
+		return err
+	}
+	for _, reg := range regs {
+		if err := svc.channelManager.RegisterHTTPHandler(reg.pattern, reg.handler); err != nil {
+			fmt.Printf("⚠ Warning: failed to register %s: %v\n", reg.pattern, err)
+		}
+	}
 	return nil
 }

@@ -227,12 +227,6 @@ func (al *AgentLoop) resolveAgentForSession(
 		if a, ok := al.registry.GetAgent(parsed.AgentID); ok {
 			agent = a
 		}
-	} else if al.sessions != nil {
-		if active := al.sessions.GetActiveAgentID(sessionKey); active != "" {
-			if a, ok := al.registry.GetAgent(active); ok {
-				agent = a
-			}
-		}
 	}
 	if agent == nil {
 		if a, ok := al.registry.GetAgent(route.AgentID); ok {
@@ -248,12 +242,8 @@ func (al *AgentLoop) resolveAgentForSession(
 }
 
 func (al *AgentLoop) ensureActiveAgentForSession(sessionKey string, agent *AgentInstance) {
-	if al.sessions == nil || routing.ParseAgentSessionKey(sessionKey) != nil {
-		return
-	}
-	if al.sessions.GetActiveAgentID(sessionKey) == "" {
-		al.sessions.SetActiveAgentID(sessionKey, agent.ID)
-	}
+	_ = sessionKey
+	_ = agent
 }
 
 func resetMessageToolState(agent *AgentInstance) {
@@ -365,12 +355,6 @@ func (al *AgentLoop) resolveSystemMessageAgent(sessionKey string) (*AgentInstanc
 	if parsed := routing.ParseAgentSessionKey(sessionKey); parsed != nil {
 		if a, ok := al.registry.GetAgent(parsed.AgentID); ok && a != nil {
 			agent = a
-		}
-	} else if al.sessions != nil {
-		if active := al.sessions.GetActiveAgentID(sessionKey); active != "" {
-			if a, ok := al.registry.GetAgent(active); ok && a != nil {
-				agent = a
-			}
 		}
 	}
 	if agent == nil {

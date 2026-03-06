@@ -179,7 +179,7 @@ func NewAgentLoop(cfg *config.Config, msgBus *bus.MessageBus, provider providers
 	}
 
 	// Register shared tools to all agents.
-	registerSharedTools(cfg, msgBus, registry, provider, al, taskLedger)
+	registerSharedTools(cfg, msgBus, registry)
 
 	// Phase H3: append-only operational audit log.
 	al.configureAuditLog(cfg)

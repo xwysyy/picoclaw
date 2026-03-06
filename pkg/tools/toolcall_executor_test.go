@@ -240,11 +240,8 @@ func TestExecuteToolCalls_ErrorTemplate_IncludesSchemaSummary(t *testing.T) {
 	}
 }
 
-func TestExecuteToolCalls_EstopKillAllDeniesTools(t *testing.T) {
+func TestExecuteToolCalls_EstopDoesNotBlockToolsInSlimRuntime(t *testing.T) {
 	workspace := t.TempDir()
-	if _, err := SaveEstopState(workspace, EstopState{Mode: EstopModeKillAll}); err != nil {
-		t.Fatalf("failed to save estop state: %v", err)
-	}
 
 	registry := NewToolRegistry()
 	executed := atomic.Int32{}
@@ -273,17 +270,17 @@ func TestExecuteToolCalls_EstopKillAllDeniesTools(t *testing.T) {
 		LogScope:  "test",
 	})
 
-	if executed.Load() != 0 {
-		t.Fatalf("expected tool not to execute under estop kill_all, executed=%d", executed.Load())
+	if executed.Load() != 1 {
+		t.Fatalf("expected tool to execute even when estop config is set, executed=%d", executed.Load())
 	}
 	if len(results) != 1 || results[0].Result == nil {
 		t.Fatalf("unexpected results: %+v", results)
 	}
-	if !results[0].Result.IsError {
-		t.Fatalf("expected IsError=true, got %+v", results[0].Result)
+	if results[0].Result.IsError {
+		t.Fatalf("expected IsError=false, got %+v", results[0].Result)
 	}
-	if !strings.Contains(results[0].Result.ForLLM, "ESTOP_DENY") {
-		t.Fatalf("expected ESTOP_DENY message, got: %q", results[0].Result.ForLLM)
+	if results[0].Result.ForLLM != "ok" {
+		t.Fatalf("expected ok result, got: %q", results[0].Result.ForLLM)
 	}
 }
 
@@ -543,7 +540,7 @@ func TestExecuteToolCalls_OverrideCannotBypassInstanceSafety(t *testing.T) {
 	}
 }
 
-func TestExecuteToolCalls_PlanModeDeniesRestrictedTools(t *testing.T) {
+func TestExecuteToolCalls_PlanModeDoesNotDenyToolsInSlimRuntime(t *testing.T) {
 	registry := NewToolRegistry()
 	registry.Register(&executorMockTool{
 		name:   "exec",
@@ -569,11 +566,11 @@ func TestExecuteToolCalls_PlanModeDeniesRestrictedTools(t *testing.T) {
 	if results[0].Result == nil {
 		t.Fatalf("nil ToolResult")
 	}
-	if !results[0].Result.IsError {
-		t.Fatalf("expected IsError=true, got false (%q)", results[0].Result.ForLLM)
+	if results[0].Result.IsError {
+		t.Fatalf("expected IsError=false, got %q", results[0].Result.ForLLM)
 	}
-	if !strings.Contains(results[0].Result.ForLLM, "PLAN_MODE_DENY") {
-		t.Fatalf("expected PLAN_MODE_DENY, got %q", results[0].Result.ForLLM)
+	if results[0].Result.ForLLM != "should-not-run" {
+		t.Fatalf("expected tool to run in slim runtime, got %q", results[0].Result.ForLLM)
 	}
 }
 

@@ -6,25 +6,33 @@
 
 [English](README.en.md) | [Roadmap](ROADMAP.md)
 
-X-Claw 是一个使用 Go 编写的轻量级个人 AI 助手。
+X-Claw 是一个使用 Go 编写的轻量级个人 AI 助手，目前主线产品形态是 **Gateway-first 的双渠道助手**。
 
-本仓库包含核心 CLI、Gateway 服务、工具系统和多种渠道集成。
+本仓库当前重点聚焦：
+- `Feishu` 主部署
+- `Telegram` 保留支持
+- `gateway` 常驻服务
+- `agent` 本地调试入口
 
 ## 项目范围
 
-当前支持：
-- CLI 对话（`agent` 模式）
-- 常驻网关服务（`gateway` 模式）
-- 基于 `model_list` 的多模型配置
-- 工具调用（文件、命令、Web、定时、记忆、技能）
-- 会话与工作区持久化
+当前主线支持：
+- Gateway 服务（`gateway` 模式）
+- 本地调试 CLI（`agent` 模式）
+- Feishu / Telegram 渠道接入
+- 基础会话与工作区持久化
+- 工具调用（文件、命令、Web、文档解析）
+
+当前命令面已收敛为：
+- `x-claw gateway`
+- `x-claw agent`
+- `x-claw version`
 
 ## 项目状态
 
-项目仍在持续迭代中。
-
-- 版本升级时可能存在行为变化
-- 建议升级后检查配置兼容性
+项目正在进行 **Gateway-first 瘦身重构**：
+- 不再以“多命令、多渠道、全平台兼容”作为优先目标
+- 重点是减少文件数、降低结构复杂度、突出主链能力
 - 未加防护前，不建议直接暴露到公网
 
 ## 环境要求
@@ -40,18 +48,6 @@ git clone https://github.com/xwysyy/X-Claw.git x-claw
 cd x-claw
 make deps
 make build
-```
-
-也可以用脚本一键安装到本机（默认安装到 `~/.local/bin/x-claw`，并初始化 `~/.x-claw/`）：
-
-```bash
-./scripts/install.sh --from-source
-```
-
-初始化工作区与配置：
-
-```bash
-./build/x-claw onboard
 ```
 
 编辑配置：
@@ -85,15 +81,10 @@ vim ~/.x-claw/config.json
 }
 ```
 
-单轮问答：
+本地调试：
 
 ```bash
 ./build/x-claw agent -m "hello"
-```
-
-交互模式：
-
-```bash
 ./build/x-claw agent
 ```
 
@@ -111,12 +102,7 @@ vim ~/.x-claw/config.json
 curl -sS http://127.0.0.1:18790/health
 ```
 
-查看运行状态（包含 `last_active` / cron / trace 等）：
-
-```bash
-./build/x-claw status
-./build/x-claw status --json
-```
+当前推荐把 Gateway 作为主入口，Feishu / Telegram 由 Gateway 统一接入与分发。
 
 ### Gateway inbound 队列（gateway.inbound_queue）
 

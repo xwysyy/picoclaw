@@ -179,6 +179,10 @@ func findLastUnfinishedRun(workspace string) (*ResumeCandidate, error) {
 	}, nil
 }
 
+func resumeLastTaskPrompt() string {
+	return "[resume_last_task] Continue the unfinished task from its last known state."
+}
+
 func (al *AgentLoop) ResumeLastTask(ctx context.Context) (*ResumeCandidate, string, error) {
 	if al == nil || al.registry == nil {
 		return nil, "", fmt.Errorf("agent loop not initialized")
@@ -207,8 +211,7 @@ func (al *AgentLoop) ResumeLastTask(ctx context.Context) (*ResumeCandidate, stri
 
 	// A synthetic user message acts as a deterministic "resume trigger".
 	// It is stored in session WAL and the run trace records "run.resume".
-	resumePrompt := "[resume_last_task] Continue the unfinished task. " +
-		"If a side-effect tool requires confirmation, ask the user and use tool_confirm with confirm_key."
+	resumePrompt := resumeLastTaskPrompt()
 
 	logger.InfoCF("agent", "Resuming last unfinished run", map[string]any{
 		"run_id":      candidate.RunID,

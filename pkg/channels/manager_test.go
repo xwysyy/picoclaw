@@ -84,10 +84,11 @@ func TestSelectedChannelInitializers(t *testing.T) {
 	cfg := config.DefaultConfig()
 	cfg.Channels.Telegram.Enabled = true
 	cfg.Channels.Telegram.Token = config.SecretRef{Inline: "token"}
-	cfg.Channels.WhatsApp.Enabled = true
-	cfg.Channels.WhatsApp.UseNative = true
+	cfg.Channels.Feishu.Enabled = true
 	cfg.Channels.Slack.Enabled = true
 	cfg.Channels.Slack.BotToken = config.SecretRef{Inline: "bot"}
+	cfg.Channels.WhatsApp.Enabled = true
+	cfg.Channels.WhatsApp.UseNative = true
 
 	specs := selectedChannelInitializers(cfg)
 	got := map[string]bool{}
@@ -97,13 +98,15 @@ func TestSelectedChannelInitializers(t *testing.T) {
 		}
 	}
 
-	for _, name := range []string{"telegram", "whatsapp_native", "slack"} {
+	for _, name := range []string{"telegram", "feishu"} {
 		if !got[name] {
 			t.Fatalf("expected initializer %q to be selected; got=%v", name, got)
 		}
 	}
-	if got["whatsapp"] {
-		t.Fatalf("expected bridge whatsapp initializer to be disabled when native mode is on")
+	for _, removed := range []string{"whatsapp_native", "whatsapp", "slack", "discord", "line", "onebot", "wecom", "wecom_aibot", "wecom_app", "qq", "dingtalk", "pico"} {
+		if got[removed] {
+			t.Fatalf("expected initializer %q to be disabled in slim runtime; got=%v", removed, got)
+		}
 	}
 }
 

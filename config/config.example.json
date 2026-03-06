@@ -543,14 +543,8 @@
     "edit_file": {
       "enabled": true
     },
-    "find_skills": {
-      "enabled": true
-    },
     "i2c": {
       "enabled": false
-    },
-    "install_skill": {
-      "enabled": true
     },
     "list_dir": {
       "enabled": true
@@ -561,14 +555,8 @@
     "read_file": {
       "enabled": true
     },
-    "spawn": {
-      "enabled": true
-    },
     "spi": {
       "enabled": false
-    },
-    "subagent": {
-      "enabled": true
     },
     "web_fetch": {
       "enabled": true
@@ -583,7 +571,6 @@
   },
   "orchestration": {
     "enabled": false,
-    "max_spawn_depth": 3,
     "max_parallel_workers": 8,
     "max_tasks_per_agent": 20,
     "default_task_timeout_seconds": 180,
@@ -602,7 +589,6 @@
     "auto_remediation": "safe_only",
     "max_auto_remediations_per_cycle": 3,
     "remediation_cooldown_minutes": 10,
-    "remediation_agent_id": "",
     "notify_channel": "last_active",
     "supervisor": {
       "enabled": false,
@@ -620,7 +606,7 @@
     "on_task_complete": false
   },
   "gateway": {
-    "_comment": "gateway.api_key secures /api/notify, /api/estop and /api/console/* (loopback-only when empty; bearer token when set). /console/ UI stays browser-friendly and uses the key to call /api/console/*.",
+    "_comment": "gateway.api_key secures /api/notify and /api/console/* (loopback-only when empty; bearer token when set). /console/ UI stays browser-friendly and uses the key to call /api/console/*.",
     "host": "127.0.0.1",
     "port": 18790,
     "api_key": "",

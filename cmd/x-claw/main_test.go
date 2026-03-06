@@ -34,19 +34,7 @@ func TestNewXClawCommand(t *testing.T) {
 
 	allowedCommands := []string{
 		"agent",
-		"auditlog",
-		"auth",
-		"config",
-		"cron",
-		"doctor",
-		"estop",
-		"export",
 		"gateway",
-		"migrate",
-		"onboard",
-		"security",
-		"skills",
-		"status",
 		"version",
 	}
 

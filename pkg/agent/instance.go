@@ -41,9 +41,8 @@ type AgentInstance struct {
 	Provider        providers.LLMProvider
 	Sessions        session.Store
 	ContextBuilder  *ContextBuilder
-	Tools           *tools.ToolRegistry
-	SubagentManager *tools.SubagentManager
-	Subagents       *config.SubagentsConfig
+	Tools        *tools.ToolRegistry
+	Subagents    *config.SubagentsConfig
 	SkillsFilter    []string
 	Candidates      []providers.FallbackCandidate
 

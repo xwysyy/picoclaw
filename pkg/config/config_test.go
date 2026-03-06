@@ -378,6 +378,16 @@ func TestConfig_Complete(t *testing.T) {
 	}
 }
 
+
+func TestToolsConfig_RemovedToolTogglesAreDisabled(t *testing.T) {
+	cfg := DefaultConfig()
+	for _, name := range []string{"find_skills", "install_skill", "spawn", "subagent"} {
+		if cfg.Tools.IsToolEnabled(name) {
+			t.Fatalf("expected removed tool toggle %q to be disabled in slim config", name)
+		}
+	}
+}
+
 func TestDefaultConfig_OpenAIWebSearchEnabled(t *testing.T) {
 	cfg := DefaultConfig()
 	if !cfg.Providers.OpenAI.WebSearch {
@@ -388,9 +398,6 @@ func TestDefaultConfig_OpenAIWebSearchEnabled(t *testing.T) {
 func TestDefaultConfig_OrchestrationAndAuditDefaults(t *testing.T) {
 	cfg := DefaultConfig()
 
-	if cfg.Orchestration.MaxSpawnDepth != 3 {
-		t.Fatalf("MaxSpawnDepth = %d, want 3", cfg.Orchestration.MaxSpawnDepth)
-	}
 	if cfg.Orchestration.MaxParallelWorkers != 8 {
 		t.Fatalf("MaxParallelWorkers = %d, want 8", cfg.Orchestration.MaxParallelWorkers)
 	}
@@ -483,9 +490,6 @@ func TestConfig_UnmarshalAuditAndOrchestration(t *testing.T) {
 
 	if !cfg.Orchestration.Enabled {
 		t.Fatal("orchestration.enabled should be true")
-	}
-	if cfg.Orchestration.MaxSpawnDepth != 4 {
-		t.Fatalf("max_spawn_depth = %d, want 4", cfg.Orchestration.MaxSpawnDepth)
 	}
 	if cfg.Orchestration.MaxParallelWorkers != 2 {
 		t.Fatalf("max_parallel_workers = %d, want 2", cfg.Orchestration.MaxParallelWorkers)

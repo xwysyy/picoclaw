@@ -633,14 +633,8 @@ func DefaultConfig() *Config {
 			EditFile: ToolConfig{
 				Enabled: true,
 			},
-			FindSkills: ToolConfig{
-				Enabled: true,
-			},
 			I2C: ToolConfig{
 				Enabled: false, // Hardware tool - Linux only
-			},
-			InstallSkill: ToolConfig{
-				Enabled: true,
 			},
 			ListDir: ToolConfig{
 				Enabled: true,
@@ -651,14 +645,8 @@ func DefaultConfig() *Config {
 			ReadFile: ToolConfig{
 				Enabled: true,
 			},
-			Spawn: ToolConfig{
-				Enabled: true,
-			},
 			SPI: ToolConfig{
 				Enabled: false, // Hardware tool - Linux only
-			},
-			Subagent: ToolConfig{
-				Enabled: true,
 			},
 			WebFetch: ToolConfig{
 				Enabled: true,
@@ -673,7 +661,6 @@ func DefaultConfig() *Config {
 		},
 		Orchestration: OrchestrationConfig{
 			Enabled:                   false,
-			MaxSpawnDepth:             3,
 			MaxParallelWorkers:        8,
 			MaxTasksPerAgent:          20,
 			DefaultTaskTimeoutSeconds: 180,
@@ -705,7 +692,6 @@ func DefaultConfig() *Config {
 			AutoRemediation:             "safe_only",
 			MaxAutoRemediationsPerCycle: 3,
 			RemediationCooldownMinutes:  10,
-			RemediationAgentID:          "",
 			NotifyChannel:               "last_active",
 			Supervisor: AuditSupervisorConfig{
 				Enabled: false,
