@@ -272,15 +272,13 @@ func replayEvents(events []SessionEvent, leafID string) (Session, string) {
 		switch ev.Type {
 		case EventSessionMessage:
 			if ev.Message != nil {
-				replayed.Messages = append(replayed.Messages, *ev.Message)
+				replayed.Messages = append(replayed.Messages, cloneMessage(*ev.Message))
 			}
 		case EventSessionSummary:
 			replayed.Summary = ev.Summary
 		case EventSessionHistorySet:
 			if ev.History != nil {
-				msgs := make([]providers.Message, len(ev.History))
-				copy(msgs, ev.History)
-				replayed.Messages = msgs
+				replayed.Messages = cloneMessages(ev.History)
 			}
 		case EventSessionHistoryTrunc:
 			if ev.KeepLast <= 0 {

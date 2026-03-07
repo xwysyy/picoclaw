@@ -162,6 +162,20 @@ func TestNewAgentInstance_ResolveCandidatesFromModelListAlias(t *testing.T) {
 	}
 }
 
+func TestResolveFallbackCandidates_DefaultsBareModelsToOpenAI(t *testing.T) {
+	candidates := resolveFallbackCandidates("gpt-4o-mini", []string{"anthropic/claude-3-5-haiku"}, "", &config.Config{})
+
+	if len(candidates) != 2 {
+		t.Fatalf("len(candidates) = %d, want 2", len(candidates))
+	}
+	if candidates[0].Provider != "openai" || candidates[0].Model != "gpt-4o-mini" {
+		t.Fatalf("primary candidate = %+v, want provider=openai model=gpt-4o-mini", candidates[0])
+	}
+	if candidates[1].Provider != "anthropic" || candidates[1].Model != "claude-3-5-haiku" {
+		t.Fatalf("fallback candidate = %+v, want provider=anthropic model=claude-3-5-haiku", candidates[1])
+	}
+}
+
 func TestDefaultSharedToolInstallers_SlimToolSurface(t *testing.T) {
 	cfg := config.DefaultConfig()
 	cfg.Channels.Feishu.AppID = "app-id"

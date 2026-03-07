@@ -72,7 +72,8 @@ func (sm *SessionManager) AddFullMessage(sessionKey string, msg providers.Messag
 	if session.Created.IsZero() {
 		session.Created = now
 	}
-	session.Messages = append(session.Messages, msg)
+	storedMsg := cloneMessage(msg)
+	session.Messages = append(session.Messages, storedMsg)
 	session.Updated = now
 
 	if sm.storage == "" {
@@ -80,7 +81,7 @@ func (sm *SessionManager) AddFullMessage(sessionKey string, msg providers.Messag
 	}
 
 	// Append durable JSONL event (session tree).
-	msgCopy := msg
+	msgCopy := cloneMessage(msg)
 	ev := sm.newEventLocked(now, sessionKey, session, EventSessionMessage)
 	ev.Message = &msgCopy
 	sm.persistEventAndMetaLocked(sessionKey, session, ev)
@@ -100,9 +101,7 @@ func (sm *SessionManager) GetHistory(key string) []providers.Message {
 		return []providers.Message{}
 	}
 
-	history := make([]providers.Message, len(session.Messages))
-	copy(history, session.Messages)
-	return history
+	return cloneMessages(session.Messages)
 }
 
 func (sm *SessionManager) GetSummary(key string) string {
@@ -311,8 +310,8 @@ func (sm *SessionManager) legacySnapshotPath(key string) string {
 
 func buildSessionMeta(s *Session) SessionMeta {
 	meta := SessionMeta{
-		Key:     s.Key,
-		Summary: s.Summary,
+		Key:           s.Key,
+		Summary:       s.Summary,
 		Created:       s.Created,
 		Updated:       s.Updated,
 		LastEventID:   strings.TrimSpace(s.LastEventID),
@@ -695,8 +694,7 @@ func (sm *SessionManager) GetSessionSnapshot(key string) (*Session, bool) {
 		snapshot.ModelOverrideExpiresAtMS = &expires
 	}
 	if len(stored.Messages) > 0 {
-		snapshot.Messages = make([]providers.Message, len(stored.Messages))
-		copy(snapshot.Messages, stored.Messages)
+		snapshot.Messages = cloneMessages(stored.Messages)
 	} else {
 		snapshot.Messages = []providers.Message{}
 	}
@@ -714,7 +712,7 @@ func (sm *SessionManager) ListSessionSnapshots() []Session {
 		snapshot := Session{
 			Key:                        stored.Key,
 			Summary:                    stored.Summary,
-				CompactionCount:            stored.CompactionCount,
+			CompactionCount:            stored.CompactionCount,
 			MemoryFlushAt:              stored.MemoryFlushAt,
 			MemoryFlushCompactionCount: stored.MemoryFlushCompactionCount,
 			Created:                    stored.Created,
@@ -726,8 +724,7 @@ func (sm *SessionManager) ListSessionSnapshots() []Session {
 			snapshot.ModelOverrideExpiresAtMS = &expires
 		}
 		if len(stored.Messages) > 0 {
-			snapshot.Messages = make([]providers.Message, len(stored.Messages))
-			copy(snapshot.Messages, stored.Messages)
+			snapshot.Messages = cloneMessages(stored.Messages)
 		} else {
 			snapshot.Messages = []providers.Message{}
 		}

@@ -1019,6 +1019,128 @@ func TestFindLastUnfinishedRun_PrefersNonHeartbeatEvenIfNewer(t *testing.T) {
 	}
 }
 
+func TestFindLastUnfinishedRun_SkipsErrorTerminatedRuns(t *testing.T) {
+	workspace := t.TempDir()
+
+	failedDir := filepath.Join(workspace, ".x-claw", "audit", "runs", "agent_main_failed")
+	if err := os.MkdirAll(failedDir, 0o755); err != nil {
+		t.Fatalf("mkdir failed dir: %v", err)
+	}
+	failedEvents := strings.Join([]string{
+		`{"type":"run.start","ts_ms":3000,"run_id":"run-failed","session_key":"agent:main:failed","channel":"feishu","chat_id":"oc_failed","sender_id":"u2"}`,
+		`{"type":"run.error","ts_ms":3100,"run_id":"run-failed","session_key":"agent:main:failed","channel":"feishu","chat_id":"oc_failed","sender_id":"u2","error":"provider timeout"}`,
+	}, "\n") + "\n"
+	if err := os.WriteFile(filepath.Join(failedDir, "events.jsonl"), []byte(failedEvents), 0o600); err != nil {
+		t.Fatalf("write failed events: %v", err)
+	}
+
+	resumableDir := filepath.Join(workspace, ".x-claw", "audit", "runs", "agent_main_resumable")
+	if err := os.MkdirAll(resumableDir, 0o755); err != nil {
+		t.Fatalf("mkdir resumable dir: %v", err)
+	}
+	resumableEvents := `{"type":"run.start","ts_ms":2000,"run_id":"run-ok","session_key":"agent:main:ok","channel":"feishu","chat_id":"oc_ok","sender_id":"u1"}` + "\n"
+	if err := os.WriteFile(filepath.Join(resumableDir, "events.jsonl"), []byte(resumableEvents), 0o600); err != nil {
+		t.Fatalf("write resumable events: %v", err)
+	}
+
+	cand, err := findLastUnfinishedRun(workspace)
+	if err != nil {
+		t.Fatalf("expected candidate, got error: %v", err)
+	}
+	if cand.RunID != "run-ok" {
+		t.Fatalf("run_id = %q, want %q", cand.RunID, "run-ok")
+	}
+	if cand.LastEventType != "run.start" {
+		t.Fatalf("last_event_type = %q, want %q", cand.LastEventType, "run.start")
+	}
+}
+
+func TestFindLastUnfinishedRunAcrossWorkspaces_PrefersLatestCandidate(t *testing.T) {
+	workspaceA := t.TempDir()
+	workspaceB := t.TempDir()
+
+	runsA := filepath.Join(workspaceA, ".x-claw", "audit", "runs", "agent_main_a")
+	if err := os.MkdirAll(runsA, 0o755); err != nil {
+		t.Fatalf("mkdir runsA: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(runsA, "events.jsonl"), []byte(
+		`{"type":"run.start","ts_ms":1000,"run_id":"run-a","session_key":"agent:main:a","channel":"feishu","chat_id":"oc_a","sender_id":"u1","agent_id":"main"}`+"\n",
+	), 0o600); err != nil {
+		t.Fatalf("write workspaceA events: %v", err)
+	}
+
+	runsB := filepath.Join(workspaceB, ".x-claw", "audit", "runs", "agent_worker_b")
+	if err := os.MkdirAll(runsB, 0o755); err != nil {
+		t.Fatalf("mkdir runsB: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(runsB, "events.jsonl"), []byte(
+		`{"type":"run.start","ts_ms":2000,"run_id":"run-b","session_key":"agent:worker:b","channel":"telegram","chat_id":"oc_b","sender_id":"u2","agent_id":"worker"}`+"\n",
+	), 0o600); err != nil {
+		t.Fatalf("write workspaceB events: %v", err)
+	}
+
+	cand, err := findLastUnfinishedRunAcrossWorkspaces([]string{workspaceA, workspaceB, workspaceA})
+	if err != nil {
+		t.Fatalf("expected candidate, got error: %v", err)
+	}
+	if cand.RunID != "run-b" {
+		t.Fatalf("run_id = %q, want %q", cand.RunID, "run-b")
+	}
+	if cand.AgentID != "worker" {
+		t.Fatalf("agent_id = %q, want %q", cand.AgentID, "worker")
+	}
+	if cand.Channel != "telegram" || cand.ChatID != "oc_b" {
+		t.Fatalf("unexpected route: channel=%q chat_id=%q", cand.Channel, cand.ChatID)
+	}
+}
+
+func TestResumeLastTask_ScansSecondaryAgentWorkspace(t *testing.T) {
+	mainWS := t.TempDir()
+	workerWS := t.TempDir()
+
+	cfg := &config.Config{
+		Agents: config.AgentsConfig{
+			Defaults: config.AgentDefaults{
+				Workspace:         mainWS,
+				Model:             "test-model",
+				MaxTokens:         512,
+				MaxToolIterations: 1,
+			},
+			List: []config.AgentConfig{
+				{ID: "main", Default: true, Workspace: mainWS},
+				{ID: "worker", Workspace: workerWS},
+			},
+		},
+	}
+
+	runsDir := filepath.Join(workerWS, ".x-claw", "audit", "runs", "agent_worker_resume")
+	if err := os.MkdirAll(runsDir, 0o755); err != nil {
+		t.Fatalf("mkdir runs dir: %v", err)
+	}
+	eventsJSONL := `{"type":"run.start","ts_ms":4000,"run_id":"run-worker","session_key":"agent:worker:resume","channel":"cli","chat_id":"direct","sender_id":"cron","agent_id":"worker"}` + "\n"
+	if err := os.WriteFile(filepath.Join(runsDir, "events.jsonl"), []byte(eventsJSONL), 0o600); err != nil {
+		t.Fatalf("write worker events: %v", err)
+	}
+
+	loop := NewAgentLoop(cfg, bus.NewMessageBus(), &mockProvider{})
+	candidate, response, err := loop.ResumeLastTask(context.Background())
+	if err != nil {
+		t.Fatalf("ResumeLastTask error = %v", err)
+	}
+	if candidate == nil {
+		t.Fatal("expected candidate")
+	}
+	if candidate.RunID != "run-worker" {
+		t.Fatalf("run_id = %q, want %q", candidate.RunID, "run-worker")
+	}
+	if candidate.AgentID != "worker" {
+		t.Fatalf("agent_id = %q, want %q", candidate.AgentID, "worker")
+	}
+	if response != "Mock response" {
+		t.Fatalf("response = %q, want %q", response, "Mock response")
+	}
+}
+
 func TestResumeLastTaskPrompt_SlimPrompt(t *testing.T) {
 	prompt := resumeLastTaskPrompt()
 	if strings.Contains(strings.ToLower(prompt), "tool_confirm") {
@@ -1331,6 +1453,101 @@ func (p *failPrimaryProvider) Models() []string {
 	return out
 }
 
+type fallbackSwitchProvider struct {
+	mu         sync.Mutex
+	name       string
+	failModels map[string]error
+	calls      []string
+	response   string
+}
+
+func (p *fallbackSwitchProvider) Chat(
+	_ context.Context,
+	_ []providers.Message,
+	_ []providers.ToolDefinition,
+	model string,
+	_ map[string]any,
+) (*providers.LLMResponse, error) {
+	p.mu.Lock()
+	p.calls = append(p.calls, model)
+	err := p.failModels[model]
+	resp := p.response
+	p.mu.Unlock()
+
+	if err != nil {
+		return nil, err
+	}
+	if resp == "" {
+		resp = "ok"
+	}
+	return &providers.LLMResponse{Content: resp, ToolCalls: []providers.ToolCall{}}, nil
+}
+
+func (p *fallbackSwitchProvider) GetDefaultModel() string { return "test-model" }
+
+func (p *fallbackSwitchProvider) Models() []string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	out := make([]string, 0, len(p.calls))
+	out = append(out, p.calls...)
+	return out
+}
+
+func TestAgentLoop_FallbackAcrossProviders_UsesFallbackProviderInstance(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := &config.Config{
+		Agents: config.AgentsConfig{
+			Defaults: config.AgentDefaults{
+				Workspace:         tmpDir,
+				Model:             "primary-model",
+				ModelFallbacks:    []string{"anthropic/fallback-model"},
+				MaxTokens:         4096,
+				MaxToolIterations: 3,
+			},
+		},
+	}
+
+	primary := &fallbackSwitchProvider{
+		name: "primary",
+		failModels: map[string]error{
+			"primary-model":  &providers.FailoverError{Reason: providers.FailoverTimeout, Wrapped: fmt.Errorf("primary provider failed on primary model")},
+			"fallback-model": fmt.Errorf("primary provider must not be reused for fallback model"),
+		},
+	}
+	fallback := &fallbackSwitchProvider{name: "fallback", response: "fallback ok"}
+
+	originalFactory := fallbackProviderFactory
+	t.Cleanup(func() {
+		fallbackProviderFactory = originalFactory
+	})
+	fallbackProviderFactory = func(_ *AgentLoop, candidate providers.FallbackCandidate) (providers.LLMProvider, string, error) {
+		switch {
+		case candidate.Provider == "openai" && candidate.Model == "primary-model":
+			return primary, candidate.Model, nil
+		case candidate.Provider == "anthropic" && candidate.Model == "fallback-model":
+			return fallback, candidate.Model, nil
+		default:
+			return nil, "", fmt.Errorf("unexpected candidate %s/%s", candidate.Provider, candidate.Model)
+		}
+	}
+
+	al := NewAgentLoop(cfg, bus.NewMessageBus(), primary)
+	resp, err := al.ProcessDirectWithChannel(context.Background(), "hello", "fallback-provider-session", "cli", "direct")
+	if err != nil {
+		t.Fatalf("ProcessDirectWithChannel error = %v", err)
+	}
+	if resp != "fallback ok" {
+		t.Fatalf("response = %q, want %q", resp, "fallback ok")
+	}
+
+	if got := primary.Models(); len(got) != 1 || got[0] != "primary-model" {
+		t.Fatalf("primary calls = %v, want [primary-model]", got)
+	}
+	if got := fallback.Models(); len(got) != 1 || got[0] != "fallback-model" {
+		t.Fatalf("fallback calls = %v, want [fallback-model]", got)
+	}
+}
+
 func TestAgentLoop_SessionModelAutoDowngrade_AppliesAfterConsecutiveFallbacks(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "agent-test-autodowngrade-*")
 	if err != nil {
@@ -1354,6 +1571,16 @@ func TestAgentLoop_SessionModelAutoDowngrade_AppliesAfterConsecutiveFallbacks(t 
 	msgBus := bus.NewMessageBus()
 	provider := &failPrimaryProvider{}
 	al := NewAgentLoop(cfg, msgBus, provider)
+	originalFactory := fallbackProviderFactory
+	t.Cleanup(func() {
+		fallbackProviderFactory = originalFactory
+	})
+	fallbackProviderFactory = func(_ *AgentLoop, candidate providers.FallbackCandidate) (providers.LLMProvider, string, error) {
+		if candidate.Provider == "anthropic" && candidate.Model == "fallback-model" {
+			return provider, candidate.Model, nil
+		}
+		return nil, "", fmt.Errorf("unexpected candidate %s/%s", candidate.Provider, candidate.Model)
+	}
 
 	defaultAgent := al.registry.GetDefaultAgent()
 	if defaultAgent == nil {
@@ -1450,6 +1677,19 @@ func TestDetectToolCallLoop_DifferentArgsDoNotCount(t *testing.T) {
 	}
 }
 
+func TestDetectToolCallLoop_NonConsecutiveMatchesDoNotCount(t *testing.T) {
+	recent := []toolCallSignature{
+		mustSig(t, "read_file", map[string]any{"path": "a.txt"}),
+		mustSig(t, "list_dir", map[string]any{"path": "."}),
+		mustSig(t, "read_file", map[string]any{"path": "a.txt"}),
+	}
+	current := []providers.ToolCall{{Name: "read_file", Arguments: map[string]any{"path": "a.txt"}}}
+
+	if got := detectToolCallLoop(recent, current, 2); got != "" {
+		t.Fatalf("detectToolCallLoop = %q, want empty (non-consecutive repeats should not loop)", got)
+	}
+}
+
 func TestDetectToolCallLoop_MultipleCurrent_ReturnsFirstMatch(t *testing.T) {
 	recent := []toolCallSignature{
 		mustSig(t, "tool_a", map[string]any{"x": 1}),
@@ -1469,15 +1709,33 @@ func TestDetectToolCallLoop_MultipleCurrent_ReturnsFirstMatch(t *testing.T) {
 	}
 }
 
+func TestDetectToolCallLoop_ChangedResultsDoNotCountAsLoop(t *testing.T) {
+	recent := []toolCallSignature{
+		mustSigWithResult(t, "wait_job", map[string]any{"id": "job-1"}, "status=pending"),
+		mustSigWithResult(t, "wait_job", map[string]any{"id": "job-1"}, "status=pending"),
+		mustSigWithResult(t, "wait_job", map[string]any{"id": "job-1"}, "status=running"),
+	}
+	current := []providers.ToolCall{{Name: "wait_job", Arguments: map[string]any{"id": "job-1"}}}
+
+	if got := detectToolCallLoop(recent, current, 2); got != "" {
+		t.Fatalf("detectToolCallLoop = %q, want empty (result progress should reset loop detection)", got)
+	}
+}
+
 func mustSig(t *testing.T, name string, args map[string]any) toolCallSignature {
+	return mustSigWithResult(t, name, args, "steady")
+}
+
+func mustSigWithResult(t *testing.T, name string, args map[string]any, result string) toolCallSignature {
 	t.Helper()
 	b, err := json.Marshal(args)
 	if err != nil {
 		t.Fatalf("json.Marshal args: %v", err)
 	}
 	return toolCallSignature{
-		Name: name,
-		Args: string(b),
+		Name:              name,
+		Args:              string(b),
+		ResultFingerprint: result,
 	}
 }
 

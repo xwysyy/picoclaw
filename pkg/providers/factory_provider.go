@@ -78,7 +78,7 @@ func CreateProviderFromConfig(cfg *config.ModelConfig) (LLMProvider, string, err
 	switch protocol {
 	case "openai":
 		// OpenAI with OAuth/token auth (Codex-style)
-		if cfg.AuthMethod == "oauth" || cfg.AuthMethod == "token" {
+		if cfg.AuthMethod == "oauth" || cfg.AuthMethod == "token" || cfg.AuthMethod == "codex-cli" {
 			provider, err := createCodexAuthProvider()
 			if err != nil {
 				return nil, "", err

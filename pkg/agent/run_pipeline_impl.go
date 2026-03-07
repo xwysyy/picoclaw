@@ -1044,6 +1044,9 @@ func findLastUnfinishedRun(workspace string) (*ResumeCandidate, error) {
 		if st.endedNormally {
 			continue
 		}
+		if st.lastType == string(events.RunError) {
+			continue
+		}
 		if isInternalSessionKey(st.sessionKey) {
 			continue
 		}
@@ -1073,6 +1076,35 @@ func findLastUnfinishedRun(workspace string) (*ResumeCandidate, error) {
 	}, nil
 }
 
+func findLastUnfinishedRunAcrossWorkspaces(workspaces []string) (*ResumeCandidate, error) {
+	seen := make(map[string]struct{}, len(workspaces))
+	var best *ResumeCandidate
+
+	for _, workspace := range workspaces {
+		workspace = strings.TrimSpace(workspace)
+		if workspace == "" {
+			continue
+		}
+		if _, ok := seen[workspace]; ok {
+			continue
+		}
+		seen[workspace] = struct{}{}
+
+		candidate, err := findLastUnfinishedRun(workspace)
+		if err != nil {
+			continue
+		}
+		if best == nil || candidate.LastEventTSMS > best.LastEventTSMS {
+			best = candidate
+		}
+	}
+
+	if best == nil {
+		return nil, fmt.Errorf("no unfinished runs found")
+	}
+	return best, nil
+}
+
 func resumeLastTaskPrompt() string {
 	return "[resume_last_task] Continue the unfinished task from its last known state."
 }
@@ -1082,14 +1114,19 @@ func (al *AgentLoop) ResumeLastTask(ctx context.Context) (*ResumeCandidate, stri
 		return nil, "", fmt.Errorf("agent loop not initialized")
 	}
 
-	defaultAgent := al.registry.GetDefaultAgent()
-	if defaultAgent == nil {
+	workspaces := al.resumeCandidateWorkspaces()
+	if len(workspaces) == 0 {
 		return nil, "", fmt.Errorf("no agent available")
 	}
 
-	candidate, err := findLastUnfinishedRun(defaultAgent.Workspace)
+	candidate, err := findLastUnfinishedRunAcrossWorkspaces(workspaces)
 	if err != nil {
 		return nil, "", err
+	}
+
+	defaultAgent := al.registry.GetDefaultAgent()
+	if defaultAgent == nil {
+		return nil, "", fmt.Errorf("no agent available")
 	}
 
 	agent := defaultAgent
@@ -1132,6 +1169,31 @@ func (al *AgentLoop) ResumeLastTask(ctx context.Context) (*ResumeCandidate, stri
 	}
 
 	return candidate, resp, nil
+}
+
+func (al *AgentLoop) resumeCandidateWorkspaces() []string {
+	if al == nil || al.registry == nil {
+		return nil
+	}
+
+	seen := make(map[string]struct{})
+	workspaces := make([]string, 0, len(al.registry.ListAgentIDs())+1)
+	for _, agentID := range al.registry.ListAgentIDs() {
+		agent, ok := al.registry.GetAgent(agentID)
+		if !ok || agent == nil {
+			continue
+		}
+		workspace := strings.TrimSpace(agent.Workspace)
+		if workspace == "" {
+			continue
+		}
+		if _, ok := seen[workspace]; ok {
+			continue
+		}
+		seen[workspace] = struct{}{}
+		workspaces = append(workspaces, workspace)
+	}
+	return workspaces
 }
 
 type importedInboundMedia struct {

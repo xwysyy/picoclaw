@@ -247,8 +247,15 @@ func TestExecuteToolCalls_ErrorTemplate_IncludesSchemaSummary(t *testing.T) {
 	}
 }
 
-func TestExecuteToolCalls_EstopDoesNotBlockToolsInSlimRuntime(t *testing.T) {
+func TestExecuteToolCalls_EstopKillAllBlocksTools(t *testing.T) {
 	workspace := t.TempDir()
+	stateDir := filepath.Join(workspace, ".x-claw", "state")
+	if err := os.MkdirAll(stateDir, 0o755); err != nil {
+		t.Fatalf("mkdir estop state dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(stateDir, "estop.json"), []byte(`{"kill_all":true}`), 0o600); err != nil {
+		t.Fatalf("write estop state: %v", err)
+	}
 
 	registry := NewToolRegistry()
 	executed := atomic.Int32{}
@@ -277,17 +284,17 @@ func TestExecuteToolCalls_EstopDoesNotBlockToolsInSlimRuntime(t *testing.T) {
 		LogScope:  "test",
 	})
 
-	if executed.Load() != 1 {
-		t.Fatalf("expected tool to execute even when estop config is set, executed=%d", executed.Load())
+	if executed.Load() != 0 {
+		t.Fatalf("expected estop to block execution, executed=%d", executed.Load())
 	}
 	if len(results) != 1 || results[0].Result == nil {
 		t.Fatalf("unexpected results: %+v", results)
 	}
-	if results[0].Result.IsError {
-		t.Fatalf("expected IsError=false, got %+v", results[0].Result)
+	if !results[0].Result.IsError {
+		t.Fatalf("expected IsError=true, got %+v", results[0].Result)
 	}
-	if results[0].Result.ForLLM != "ok" {
-		t.Fatalf("expected ok result, got: %q", results[0].Result.ForLLM)
+	if !strings.Contains(results[0].Result.ForLLM, "TOOL_EXECUTION_DENIED") {
+		t.Fatalf("expected deny message, got: %q", results[0].Result.ForLLM)
 	}
 }
 
@@ -547,11 +554,15 @@ func TestExecuteToolCalls_OverrideCannotBypassInstanceSafety(t *testing.T) {
 	}
 }
 
-func TestExecuteToolCalls_PlanModeDoesNotDenyToolsInSlimRuntime(t *testing.T) {
+func TestExecuteToolCalls_PlanModeBlocksRestrictedTools(t *testing.T) {
 	registry := NewToolRegistry()
+	executed := atomic.Int32{}
 	registry.Register(&executorMockTool{
 		name:   "exec",
 		result: SilentResult("should-not-run"),
+		onExecute: func() {
+			executed.Add(1)
+		},
 	})
 
 	calls := []providers.ToolCall{
@@ -573,11 +584,157 @@ func TestExecuteToolCalls_PlanModeDoesNotDenyToolsInSlimRuntime(t *testing.T) {
 	if results[0].Result == nil {
 		t.Fatalf("nil ToolResult")
 	}
-	if results[0].Result.IsError {
-		t.Fatalf("expected IsError=false, got %q", results[0].Result.ForLLM)
+	if !results[0].Result.IsError {
+		t.Fatalf("expected IsError=true, got %q", results[0].Result.ForLLM)
 	}
-	if results[0].Result.ForLLM != "should-not-run" {
-		t.Fatalf("expected tool to run in slim runtime, got %q", results[0].Result.ForLLM)
+	if executed.Load() != 0 {
+		t.Fatalf("expected plan mode to block execution, executed=%d", executed.Load())
+	}
+	if !strings.Contains(results[0].Result.ForLLM, "TOOL_EXECUTION_DENIED") {
+		t.Fatalf("expected deny message, got %q", results[0].Result.ForLLM)
+	}
+}
+
+func TestExecuteToolCalls_ToolPolicyDenyBlocksTool(t *testing.T) {
+	registry := NewToolRegistry()
+	executed := atomic.Int32{}
+	registry.Register(&executorMockTool{
+		name:   "exec",
+		result: SilentResult("should-not-run"),
+		onExecute: func() {
+			executed.Add(1)
+		},
+	})
+
+	results := ExecuteToolCalls(context.Background(), registry, []providers.ToolCall{{ID: "tc-1", Name: "exec", Arguments: map[string]any{}}}, ToolCallExecutionOptions{
+		Iteration: 1,
+		LogScope:  "test",
+		Policy: config.ToolPolicyConfig{
+			Enabled: true,
+			Deny:    []string{"exec"},
+		},
+	})
+
+	if len(results) != 1 || results[0].Result == nil {
+		t.Fatalf("unexpected results: %+v", results)
+	}
+	if !results[0].Result.IsError {
+		t.Fatalf("expected IsError=true, got %+v", results[0].Result)
+	}
+	if executed.Load() != 0 {
+		t.Fatalf("expected tool policy to block execution, executed=%d", executed.Load())
+	}
+	if !strings.Contains(results[0].Result.ForLLM, "TOOL_EXECUTION_DENIED") {
+		t.Fatalf("expected deny message, got %q", results[0].Result.ForLLM)
+	}
+}
+
+func TestExecuteToolCalls_ToolPolicyAllowlistRejectsUnlistedTool(t *testing.T) {
+	registry := NewToolRegistry()
+	executed := atomic.Int32{}
+	registry.Register(&executorMockTool{
+		name:   "exec",
+		result: SilentResult("should-not-run"),
+		onExecute: func() {
+			executed.Add(1)
+		},
+	})
+
+	results := ExecuteToolCalls(context.Background(), registry, []providers.ToolCall{{ID: "tc-1", Name: "exec", Arguments: map[string]any{}}}, ToolCallExecutionOptions{
+		Iteration: 1,
+		LogScope:  "test",
+		Policy: config.ToolPolicyConfig{
+			Enabled: true,
+			Allow:   []string{"read_file"},
+		},
+	})
+
+	if len(results) != 1 || results[0].Result == nil {
+		t.Fatalf("unexpected results: %+v", results)
+	}
+	if !results[0].Result.IsError {
+		t.Fatalf("expected IsError=true, got %+v", results[0].Result)
+	}
+	if executed.Load() != 0 {
+		t.Fatalf("expected allowlist rejection to block execution, executed=%d", executed.Load())
+	}
+	if !strings.Contains(results[0].Result.ForLLM, "allowlist") {
+		t.Fatalf("expected allowlist reason, got %q", results[0].Result.ForLLM)
+	}
+}
+
+func TestExecuteToolCalls_ToolPolicyConfirmResumeOnlyBlocksResume(t *testing.T) {
+	registry := NewToolRegistry()
+	executed := atomic.Int32{}
+	registry.Register(&executorMockTool{
+		name:   "write_file",
+		result: SilentResult("should-not-run"),
+		onExecute: func() {
+			executed.Add(1)
+		},
+	})
+
+	results := ExecuteToolCalls(context.Background(), registry, []providers.ToolCall{{ID: "tc-1", Name: "write_file", Arguments: map[string]any{}}}, ToolCallExecutionOptions{
+		Iteration: 1,
+		LogScope:  "test",
+		IsResume:  true,
+		Policy: config.ToolPolicyConfig{
+			Enabled: true,
+			Confirm: config.ToolPolicyConfirmConfig{
+				Enabled: true,
+				Mode:    "resume_only",
+				Tools:   []string{"write_file"},
+			},
+		},
+	})
+
+	if len(results) != 1 || results[0].Result == nil {
+		t.Fatalf("unexpected results: %+v", results)
+	}
+	if !results[0].Result.IsError {
+		t.Fatalf("expected IsError=true, got %+v", results[0].Result)
+	}
+	if executed.Load() != 0 {
+		t.Fatalf("expected confirmation gate to block execution, executed=%d", executed.Load())
+	}
+	if !strings.Contains(results[0].Result.ForLLM, "confirmation required") {
+		t.Fatalf("expected confirmation reason, got %q", results[0].Result.ForLLM)
+	}
+}
+
+func TestExecuteToolCalls_ToolPolicyConfirmResumeOnlyAllowsNormalRun(t *testing.T) {
+	registry := NewToolRegistry()
+	executed := atomic.Int32{}
+	registry.Register(&executorMockTool{
+		name:   "write_file",
+		result: SilentResult("ok"),
+		onExecute: func() {
+			executed.Add(1)
+		},
+	})
+
+	results := ExecuteToolCalls(context.Background(), registry, []providers.ToolCall{{ID: "tc-1", Name: "write_file", Arguments: map[string]any{}}}, ToolCallExecutionOptions{
+		Iteration: 1,
+		LogScope:  "test",
+		IsResume:  false,
+		Policy: config.ToolPolicyConfig{
+			Enabled: true,
+			Confirm: config.ToolPolicyConfirmConfig{
+				Enabled: true,
+				Mode:    "resume_only",
+				Tools:   []string{"write_file"},
+			},
+		},
+	})
+
+	if len(results) != 1 || results[0].Result == nil {
+		t.Fatalf("unexpected results: %+v", results)
+	}
+	if results[0].Result.IsError {
+		t.Fatalf("expected normal run to pass, got %+v", results[0].Result)
+	}
+	if executed.Load() != 1 {
+		t.Fatalf("expected tool to execute on non-resume run, executed=%d", executed.Load())
 	}
 }
 

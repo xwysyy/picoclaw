@@ -100,6 +100,13 @@ type processOptions struct {
 
 const defaultResponse = "I've completed processing but have no response to give. Increase `max_tool_iterations` in config.json."
 
+var fallbackProviderFactory = func(al *AgentLoop, candidate providers.FallbackCandidate) (providers.LLMProvider, string, error) {
+	if al == nil {
+		return nil, "", fmt.Errorf("agent loop is nil")
+	}
+	return al.createProviderForFallbackCandidate(candidate)
+}
+
 // isLLMTimeoutError checks if an error is a network/HTTP timeout (not a context window error).
 func isLLMTimeoutError(err error) bool {
 	if errors.Is(err, context.DeadlineExceeded) {
@@ -3422,9 +3429,181 @@ func (al *AgentLoop) createProviderForModelAlias(modelAlias string) (providers.L
 	return providers.CreateProviderFromConfig(&cfgCopy)
 }
 
+func (al *AgentLoop) createProviderForFallbackCandidate(candidate providers.FallbackCandidate) (providers.LLMProvider, string, error) {
+	cfg := al.Config()
+	if cfg == nil {
+		return nil, "", fmt.Errorf("config is nil")
+	}
+
+	if modelCfg := findFallbackModelConfig(cfg, candidate); modelCfg != nil {
+		cfgCopy := *modelCfg
+		if cfgCopy.Workspace == "" {
+			cfgCopy.Workspace = cfg.WorkspacePath()
+		}
+		return providers.CreateProviderFromConfig(&cfgCopy)
+	}
+
+	modelCfg, err := synthesizeFallbackModelConfig(cfg, candidate)
+	if err != nil {
+		return nil, "", err
+	}
+	return providers.CreateProviderFromConfig(modelCfg)
+}
+
+func findFallbackModelConfig(cfg *config.Config, candidate providers.FallbackCandidate) *config.ModelConfig {
+	if cfg == nil {
+		return nil
+	}
+
+	alias := strings.TrimSpace(candidate.Model)
+	if alias != "" {
+		if modelCfg, err := cfg.GetModelConfig(alias); err == nil && modelCfg != nil {
+			return modelCfg
+		}
+	}
+
+	wantProvider := providerProtocolForFallbackCandidate(candidate.Provider)
+	wantModel := strings.TrimSpace(candidate.Model)
+	for i := range cfg.ModelList {
+		protocol, modelID := providers.ExtractProtocol(cfg.ModelList[i].Model)
+		if providers.NormalizeProvider(protocol) != providers.NormalizeProvider(wantProvider) {
+			continue
+		}
+		if strings.EqualFold(strings.TrimSpace(modelID), wantModel) {
+			return &cfg.ModelList[i]
+		}
+	}
+
+	return nil
+}
+
+func synthesizeFallbackModelConfig(cfg *config.Config, candidate providers.FallbackCandidate) (*config.ModelConfig, error) {
+	protocol := providerProtocolForFallbackCandidate(candidate.Provider)
+	modelID := strings.TrimSpace(candidate.Model)
+	if modelID == "" {
+		return nil, fmt.Errorf("fallback model is empty")
+	}
+
+	modelCfg := &config.ModelConfig{
+		ModelName: modelID,
+		Model:     protocol + "/" + modelID,
+		Workspace: cfg.WorkspacePath(),
+	}
+
+	copyProviderConfig := func(pc config.ProviderConfig) {
+		modelCfg.APIKey = pc.APIKey
+		modelCfg.APIBase = pc.APIBase
+		modelCfg.Proxy = pc.Proxy
+		modelCfg.RequestTimeout = pc.RequestTimeout
+		modelCfg.AuthMethod = pc.AuthMethod
+		modelCfg.ConnectMode = pc.ConnectMode
+	}
+
+	switch protocol {
+	case "openai":
+		copyProviderConfig(cfg.Providers.OpenAI.ProviderConfig)
+	case "anthropic":
+		copyProviderConfig(cfg.Providers.Anthropic)
+	case "litellm":
+		copyProviderConfig(cfg.Providers.LiteLLM)
+	case "openrouter":
+		copyProviderConfig(cfg.Providers.OpenRouter)
+	case "groq":
+		copyProviderConfig(cfg.Providers.Groq)
+	case "zhipu":
+		copyProviderConfig(cfg.Providers.Zhipu)
+	case "vllm":
+		copyProviderConfig(cfg.Providers.VLLM)
+	case "gemini":
+		copyProviderConfig(cfg.Providers.Gemini)
+	case "nvidia":
+		copyProviderConfig(cfg.Providers.Nvidia)
+	case "ollama":
+		copyProviderConfig(cfg.Providers.Ollama)
+	case "moonshot":
+		copyProviderConfig(cfg.Providers.Moonshot)
+	case "shengsuanyun":
+		copyProviderConfig(cfg.Providers.ShengSuanYun)
+	case "deepseek":
+		copyProviderConfig(cfg.Providers.DeepSeek)
+	case "cerebras":
+		copyProviderConfig(cfg.Providers.Cerebras)
+	case "volcengine":
+		copyProviderConfig(cfg.Providers.VolcEngine)
+	case "github-copilot":
+		copyProviderConfig(cfg.Providers.GitHubCopilot)
+	case "antigravity":
+		copyProviderConfig(cfg.Providers.Antigravity)
+	case "qwen":
+		copyProviderConfig(cfg.Providers.Qwen)
+	case "mistral":
+		copyProviderConfig(cfg.Providers.Mistral)
+	case "avian":
+		copyProviderConfig(cfg.Providers.Avian)
+	case "claude-cli", "codex-cli":
+		// Workspace-only providers need no extra config.
+	default:
+		return nil, fmt.Errorf("unsupported fallback provider %q", candidate.Provider)
+	}
+
+	return modelCfg, nil
+}
+
+func providerProtocolForFallbackCandidate(provider string) string {
+	switch providers.NormalizeProvider(provider) {
+	case "", "openai":
+		return "openai"
+	case "anthropic":
+		return "anthropic"
+	case "litellm":
+		return "litellm"
+	case "openrouter":
+		return "openrouter"
+	case "groq":
+		return "groq"
+	case "zhipu", "zai":
+		return "zhipu"
+	case "vllm":
+		return "vllm"
+	case "gemini":
+		return "gemini"
+	case "nvidia":
+		return "nvidia"
+	case "ollama":
+		return "ollama"
+	case "moonshot":
+		return "moonshot"
+	case "shengsuanyun":
+		return "shengsuanyun"
+	case "deepseek":
+		return "deepseek"
+	case "cerebras":
+		return "cerebras"
+	case "volcengine":
+		return "volcengine"
+	case "github-copilot", "github_copilot", "copilot":
+		return "github-copilot"
+	case "antigravity":
+		return "antigravity"
+	case "qwen-portal", "qwen":
+		return "qwen"
+	case "mistral":
+		return "mistral"
+	case "avian":
+		return "avian"
+	case "claude-cli", "claudecli":
+		return "claude-cli"
+	case "codex-cli", "codexcli":
+		return "codex-cli"
+	default:
+		return strings.TrimSpace(provider)
+	}
+}
+
 type toolCallSignature struct {
-	Name string
-	Args string
+	Name              string
+	Args              string
+	ResultFingerprint string
 }
 
 type llmCallResult struct {
@@ -3463,10 +3642,19 @@ func detectToolCallLoop(recent []toolCallSignature, current []providers.ToolCall
 		argsJSON, _ := json.Marshal(tc.Arguments)
 		sig := string(argsJSON)
 		count := 0
-		for _, prev := range recent {
-			if prev.Name == tc.Name && prev.Args == sig {
-				count++
+		lastResult := ""
+		for i := len(recent) - 1; i >= 0; i-- {
+			prev := recent[i]
+			if prev.Name != tc.Name || prev.Args != sig {
+				break
 			}
+			if lastResult == "" {
+				lastResult = prev.ResultFingerprint
+			}
+			if prev.ResultFingerprint != lastResult {
+				break
+			}
+			count++
 		}
 		if count >= threshold {
 			return tc.Name
@@ -3641,11 +3829,31 @@ func (r *llmIterationRunner) performLLMCall(providerToolDefs []providers.ToolDef
 			return resp, r.modelForRun, err
 		}
 		if len(r.agent.Candidates) > 1 && r.loop.fallback != nil {
+			primaryCandidate := providers.FallbackCandidate{}
+			if len(r.agent.Candidates) > 0 {
+				primaryCandidate = r.agent.Candidates[0]
+			}
 			fbResult, fbErr := r.loop.fallback.Execute(
 				r.ctx,
 				r.agent.Candidates,
 				func(ctx context.Context, provider, model string) (*providers.LLMResponse, error) {
-					return r.agent.Provider.Chat(ctx, r.messages, providerToolDefs, model, llmOpts)
+					if providers.ModelKey(provider, model) == providers.ModelKey(primaryCandidate.Provider, primaryCandidate.Model) {
+						return r.agent.Provider.Chat(ctx, r.messages, providerToolDefs, model, llmOpts)
+					}
+					providerInstance, resolvedModel, err := fallbackProviderFactory(r.loop, providers.FallbackCandidate{
+						Provider: provider,
+						Model:    model,
+					})
+					if err != nil {
+						return nil, err
+					}
+					if providerInstance == nil {
+						return nil, fmt.Errorf("fallback provider is nil for %s/%s", provider, model)
+					}
+					if closable, ok := providerInstance.(providers.StatefulProvider); ok && providerInstance != r.agent.Provider {
+						defer closable.Close()
+					}
+					return providerInstance.Chat(ctx, r.messages, providerToolDefs, resolvedModel, llmOpts)
 				},
 			)
 			if fbErr != nil {
@@ -3943,9 +4151,9 @@ func (r *llmIterationRunner) handleLLMResponse(response *providers.LLMResponse) 
 	if r.handleToolLoop(response, normalizedToolCalls) {
 		return false
 	}
-	r.recordRecentToolCalls(normalizedToolCalls)
 	r.appendAssistantToolCallMessage(response, normalizedToolCalls)
 	toolExecutions := r.executeToolCalls(normalizedToolCalls)
+	r.recordRecentToolCalls(toolExecutions)
 	r.applyToolExecutionResults(toolExecutions)
 	return false
 }
@@ -4037,10 +4245,37 @@ func (r *llmIterationRunner) handleToolLoop(response *providers.LLMResponse, too
 	return true
 }
 
-func (r *llmIterationRunner) recordRecentToolCalls(toolCalls []providers.ToolCall) {
-	for _, tc := range toolCalls {
-		argsJSON, _ := json.Marshal(tc.Arguments)
-		r.recentToolCalls = append(r.recentToolCalls, toolCallSignature{Name: tc.Name, Args: string(argsJSON)})
+func toolResultFingerprint(result *tools.ToolResult) string {
+	if result == nil {
+		return "<nil>"
+	}
+	errText := ""
+	if result.Err != nil {
+		errText = utils.TruncateHeadTail(strings.TrimSpace(result.Err.Error()), 120, 40)
+	}
+	return fmt.Sprintf(
+		"is_error=%t|async=%t|llm=%s|user=%s|err=%s|media=%s",
+		result.IsError,
+		result.Async,
+		utils.TruncateHeadTail(strings.TrimSpace(result.ForLLM), 160, 50),
+		utils.TruncateHeadTail(strings.TrimSpace(result.ForUser), 120, 40),
+		errText,
+		strings.Join(result.Media, ","),
+	)
+}
+
+func (r *llmIterationRunner) recordRecentToolCalls(toolExecutions []tools.ToolCallExecution) {
+	for _, execution := range toolExecutions {
+		argsJSON, _ := json.Marshal(execution.ToolCall.Arguments)
+		r.recentToolCalls = append(r.recentToolCalls, toolCallSignature{
+			Name:              execution.ToolCall.Name,
+			Args:              string(argsJSON),
+			ResultFingerprint: toolResultFingerprint(execution.Result),
+		})
+	}
+	const maxRecentToolCalls = 24
+	if len(r.recentToolCalls) > maxRecentToolCalls {
+		r.recentToolCalls = append([]toolCallSignature(nil), r.recentToolCalls[len(r.recentToolCalls)-maxRecentToolCalls:]...)
 	}
 }
 

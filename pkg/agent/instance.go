@@ -225,6 +225,10 @@ func resolveAgentIdentity(agentCfg *config.AgentConfig) (id, name string, skills
 
 // resolveFallbackCandidates builds the fallback candidate list from model config.
 func resolveFallbackCandidates(model string, fallbacks []string, defaultProvider string, cfg *config.Config) []providers.FallbackCandidate {
+	defaultProvider = strings.TrimSpace(defaultProvider)
+	if defaultProvider == "" {
+		defaultProvider = "openai"
+	}
 	modelCfg := providers.ModelConfig{
 		Primary:   model,
 		Fallbacks: fallbacks,

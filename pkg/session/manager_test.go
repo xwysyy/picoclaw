@@ -9,6 +9,35 @@ import (
 	"github.com/xwysyy/X-Claw/pkg/providers"
 )
 
+func nestedSessionMessage() providers.Message {
+	return providers.Message{
+		Role:    "assistant",
+		Content: "hello",
+		Media:   []string{"media://one"},
+		SystemParts: []providers.ContentBlock{{
+			Type:         "text",
+			Text:         "system",
+			CacheControl: &providers.CacheControl{Type: "ephemeral"},
+		}},
+		ToolCalls: []providers.ToolCall{{
+			ID:   "tc-1",
+			Name: "read_file",
+			Arguments: map[string]any{
+				"path": "README.md",
+				"nested": map[string]any{
+					"count": 2,
+				},
+				"list": []any{"a", map[string]any{"id": "b"}},
+			},
+			Function: &providers.FunctionCall{Name: "read_file", Arguments: `{"path":"README.md"}`},
+			ExtraContent: &providers.ExtraContent{Google: &providers.GoogleExtra{
+				ThoughtSignature: "sig-original",
+			}},
+		}},
+		ToolCallID: "tc-1",
+	}
+}
+
 func TestSanitizeFilename(t *testing.T) {
 	tests := []struct {
 		input    string
@@ -85,7 +114,7 @@ func TestSave_RejectsPathTraversal(t *testing.T) {
 func TestGetSessionSnapshot_IsDeepCopy(t *testing.T) {
 	sm := NewSessionManager(t.TempDir())
 	key := "agent:main:main"
-	sm.AddMessage(key, "user", "hello")
+	sm.AddFullMessage(key, nestedSessionMessage())
 
 	snapshot, ok := sm.GetSessionSnapshot(key)
 	if !ok {
@@ -97,9 +126,94 @@ func TestGetSessionSnapshot_IsDeepCopy(t *testing.T) {
 
 	// Mutate returned snapshot; internal state should remain unchanged.
 	snapshot.Messages[0].Content = "mutated"
+	snapshot.Messages[0].Media[0] = "media://mutated"
+	snapshot.Messages[0].SystemParts[0].Text = "changed"
+	snapshot.Messages[0].SystemParts[0].CacheControl.Type = "persist"
+	snapshot.Messages[0].ToolCalls[0].Function.Name = "write_file"
+	snapshot.Messages[0].ToolCalls[0].Arguments["path"] = "mutated.txt"
+	snapshot.Messages[0].ToolCalls[0].Arguments["nested"].(map[string]any)["count"] = 99
+	snapshot.Messages[0].ToolCalls[0].Arguments["list"].([]any)[1].(map[string]any)["id"] = "changed"
+	snapshot.Messages[0].ToolCalls[0].ExtraContent.Google.ThoughtSignature = "sig-mutated"
 	history := sm.GetHistory(key)
 	if history[0].Content != "hello" {
 		t.Fatalf("snapshot mutation leaked into manager state, got %q", history[0].Content)
+	}
+	if history[0].Media[0] != "media://one" {
+		t.Fatalf("media mutation leaked into manager state, got %q", history[0].Media[0])
+	}
+	if history[0].SystemParts[0].Text != "system" || history[0].SystemParts[0].CacheControl.Type != "ephemeral" {
+		t.Fatalf("system part mutation leaked into manager state, got %+v", history[0].SystemParts[0])
+	}
+	if history[0].ToolCalls[0].Function.Name != "read_file" {
+		t.Fatalf("function mutation leaked into manager state, got %q", history[0].ToolCalls[0].Function.Name)
+	}
+	if got := history[0].ToolCalls[0].Arguments["path"]; got != "README.md" {
+		t.Fatalf("arguments mutation leaked into manager state, got %v", got)
+	}
+	if got := history[0].ToolCalls[0].Arguments["nested"].(map[string]any)["count"]; got != 2 {
+		t.Fatalf("nested arguments mutation leaked into manager state, got %v", got)
+	}
+	if got := history[0].ToolCalls[0].Arguments["list"].([]any)[1].(map[string]any)["id"]; got != "b" {
+		t.Fatalf("list arguments mutation leaked into manager state, got %v", got)
+	}
+	if got := history[0].ToolCalls[0].ExtraContent.Google.ThoughtSignature; got != "sig-original" {
+		t.Fatalf("extra content mutation leaked into manager state, got %q", got)
+	}
+}
+
+func TestGetHistory_DeepCopiesNestedFields(t *testing.T) {
+	sm := NewSessionManager(t.TempDir())
+	key := "agent:main:main"
+	sm.AddFullMessage(key, nestedSessionMessage())
+
+	history := sm.GetHistory(key)
+	history[0].Media[0] = "media://history-mutated"
+	history[0].ToolCalls[0].Arguments["path"] = "history-mutated.txt"
+	history[0].ToolCalls[0].Arguments["nested"].(map[string]any)["count"] = 42
+
+	refetched := sm.GetHistory(key)
+	if got := refetched[0].Media[0]; got != "media://one" {
+		t.Fatalf("media mutation leaked into manager state, got %q", got)
+	}
+	if got := refetched[0].ToolCalls[0].Arguments["path"]; got != "README.md" {
+		t.Fatalf("arguments mutation leaked into manager state, got %v", got)
+	}
+	if got := refetched[0].ToolCalls[0].Arguments["nested"].(map[string]any)["count"]; got != 2 {
+		t.Fatalf("nested arguments mutation leaked into manager state, got %v", got)
+	}
+}
+
+func TestAddFullMessage_DeepCopiesInputNestedFields(t *testing.T) {
+	sm := NewSessionManager(t.TempDir())
+	key := "agent:main:main"
+	msg := nestedSessionMessage()
+
+	sm.AddFullMessage(key, msg)
+	msg.Content = "mutated-input"
+	msg.Media[0] = "media://input-mutated"
+	msg.SystemParts[0].CacheControl.Type = "persist"
+	msg.ToolCalls[0].Function.Name = "write_file"
+	msg.ToolCalls[0].Arguments["path"] = "mutated-input.txt"
+	msg.ToolCalls[0].Arguments["nested"].(map[string]any)["count"] = 77
+
+	got := sm.GetHistory(key)
+	if got[0].Content != "hello" {
+		t.Fatalf("input content mutation leaked into manager state, got %q", got[0].Content)
+	}
+	if got[0].Media[0] != "media://one" {
+		t.Fatalf("input media mutation leaked into manager state, got %q", got[0].Media[0])
+	}
+	if got[0].SystemParts[0].CacheControl.Type != "ephemeral" {
+		t.Fatalf("input system part mutation leaked into manager state, got %q", got[0].SystemParts[0].CacheControl.Type)
+	}
+	if got[0].ToolCalls[0].Function.Name != "read_file" {
+		t.Fatalf("input function mutation leaked into manager state, got %q", got[0].ToolCalls[0].Function.Name)
+	}
+	if got[0].ToolCalls[0].Arguments["path"] != "README.md" {
+		t.Fatalf("input argument mutation leaked into manager state, got %v", got[0].ToolCalls[0].Arguments["path"])
+	}
+	if got[0].ToolCalls[0].Arguments["nested"].(map[string]any)["count"] != 2 {
+		t.Fatalf("input nested mutation leaked into manager state, got %v", got[0].ToolCalls[0].Arguments["nested"].(map[string]any)["count"])
 	}
 }
 
@@ -158,9 +272,12 @@ func TestSetHistory_DeepCopiesInput(t *testing.T) {
 	key := "agent:main:main"
 	sm.AddMessage(key, "user", "seed")
 
-	history := []providers.Message{{Role: "user", Content: "hello"}}
+	history := []providers.Message{nestedSessionMessage()}
 	sm.SetHistory(key, history)
 	history[0].Content = "mutated"
+	history[0].Media[0] = "media://sethistory-mutated"
+	history[0].ToolCalls[0].Arguments["path"] = "sethistory-mutated.txt"
+	history[0].ToolCalls[0].Arguments["nested"].(map[string]any)["count"] = -1
 
 	got := sm.GetHistory(key)
 	if len(got) != 1 {
@@ -168,6 +285,15 @@ func TestSetHistory_DeepCopiesInput(t *testing.T) {
 	}
 	if got[0].Content != "hello" {
 		t.Fatalf("history was not deep-copied, got %q", got[0].Content)
+	}
+	if got[0].Media[0] != "media://one" {
+		t.Fatalf("media was not deep-copied, got %q", got[0].Media[0])
+	}
+	if got[0].ToolCalls[0].Arguments["path"] != "README.md" {
+		t.Fatalf("arguments were not deep-copied, got %v", got[0].ToolCalls[0].Arguments["path"])
+	}
+	if got[0].ToolCalls[0].Arguments["nested"].(map[string]any)["count"] != 2 {
+		t.Fatalf("nested arguments were not deep-copied, got %v", got[0].ToolCalls[0].Arguments["nested"].(map[string]any)["count"])
 	}
 }
 
