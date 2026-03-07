@@ -401,3 +401,34 @@ func TestCronToolExecuteJob_MissingDestinationErrors(t *testing.T) {
 		t.Fatalf("expected error, got nil")
 	}
 }
+
+func TestCronToolExecuteJob_DeliverFalsePublishesSessionKeyForReplyBinding(t *testing.T) {
+	mb := bus.NewMessageBus()
+	exec := &stubCronExecutor{
+		lastCh:         "feishu",
+		lastID:         "oc_test",
+		lastSessionKey: "conv:feishu:direct:oc_test",
+		response:       "hello from cron",
+	}
+	tool := newCronToolWithExecutorForTest(t, exec, mb)
+
+	job := &cronpkg.CronJob{
+		ID:      "job_bind",
+		Name:    "bindable",
+		Payload: cronpkg.CronPayload{Message: "do work", Deliver: false},
+	}
+
+	if _, err := tool.ExecuteJob(context.Background(), job); err != nil {
+		t.Fatalf("ExecuteJob() error = %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	msg, ok := mb.SubscribeOutbound(ctx)
+	if !ok {
+		t.Fatal("expected outbound message")
+	}
+	if msg.SessionKey != "conv:feishu:direct:oc_test" {
+		t.Fatalf("outbound session_key = %q, want %q", msg.SessionKey, "conv:feishu:direct:oc_test")
+	}
+}

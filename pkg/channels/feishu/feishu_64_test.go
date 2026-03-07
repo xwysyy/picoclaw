@@ -254,3 +254,22 @@ func TestExtractFeishuSenderID(t *testing.T) {
 		})
 	}
 }
+
+func TestBuildFeishuInboundMetadata_IncludesReplyFields(t *testing.T) {
+	strPtr := func(v string) *string { return &v }
+
+	meta := buildFeishuInboundMetadata(&larkim.EventMessage{
+		ParentId: strPtr("om_parent"),
+		RootId:   strPtr("om_root"),
+	}, nil)
+
+	if got := meta["reply_to_message_id"]; got != "om_parent" {
+		t.Fatalf("reply_to_message_id = %q, want %q", got, "om_parent")
+	}
+	if got := meta["parent_message_id"]; got != "om_parent" {
+		t.Fatalf("parent_message_id = %q, want %q", got, "om_parent")
+	}
+	if got := meta["root_message_id"]; got != "om_root" {
+		t.Fatalf("root_message_id = %q, want %q", got, "om_root")
+	}
+}

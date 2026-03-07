@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"math"
+	"strings"
 	"time"
 
 	"golang.org/x/time/rate"
@@ -57,6 +58,18 @@ func enqueueOutboundMessage(ctx context.Context, channel string, w *channelWorke
 	case <-ctx.Done():
 		return false, true
 	}
+}
+
+func (m *Manager) bindReplyContext(channel, chatID, messageID, sessionKey string) {
+	if m == nil || m.bus == nil {
+		return
+	}
+	messageID = strings.TrimSpace(messageID)
+	sessionKey = strings.TrimSpace(sessionKey)
+	if messageID == "" || sessionKey == "" {
+		return
+	}
+	m.bus.BindReplyContext(channel, chatID, messageID, bus.ReplyContext{SessionKey: sessionKey})
 }
 
 func enqueueOutboundMediaMessage(ctx context.Context, channel string, w *channelWorker, msg bus.OutboundMediaMessage) (sent bool, stopped bool) {
@@ -157,10 +170,23 @@ func (m *Manager) sendWithRetry(ctx context.Context, name string, w *channelWork
 		return
 	}
 
+	sentMessageID := ""
 	err := m.retryWithBackoff(ctx, w, func() error {
+		if sender, ok := w.ch.(MessageIDSender); ok {
+			messageID, err := sender.SendWithMessageID(ctx, msg)
+			if err != nil {
+				return err
+			}
+			sentMessageID = strings.TrimSpace(messageID)
+			return nil
+		}
 		return w.ch.Send(ctx, msg)
 	})
-	if err != nil && ctx.Err() == nil {
+	if err == nil {
+		m.bindReplyContext(name, msg.ChatID, sentMessageID, msg.SessionKey)
+		return
+	}
+	if ctx.Err() == nil {
 		logger.ErrorCF("channels", "Send failed", map[string]any{
 			"channel": name,
 			"chat_id": msg.ChatID,

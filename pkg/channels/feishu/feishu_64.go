@@ -143,12 +143,17 @@ func (c *FeishuChannel) Stop(ctx context.Context) error {
 
 // Send sends a message using Interactive Card format for markdown rendering.
 func (c *FeishuChannel) Send(ctx context.Context, msg bus.OutboundMessage) error {
+	_, err := c.SendWithMessageID(ctx, msg)
+	return err
+}
+
+func (c *FeishuChannel) SendWithMessageID(ctx context.Context, msg bus.OutboundMessage) (string, error) {
 	if !c.IsRunning() {
-		return channels.ErrNotRunning
+		return "", channels.ErrNotRunning
 	}
 
 	if msg.ChatID == "" {
-		return fmt.Errorf("chat ID is empty: %w", channels.ErrSendFailed)
+		return "", fmt.Errorf("chat ID is empty: %w", channels.ErrSendFailed)
 	}
 
 	content := normalizeFeishuMarkdownLinks(msg.Content)
@@ -156,7 +161,7 @@ func (c *FeishuChannel) Send(ctx context.Context, msg bus.OutboundMessage) error
 	// Build interactive card with markdown content
 	cardContent, err := buildMarkdownCard(content)
 	if err != nil {
-		return fmt.Errorf("feishu send: card build failed: %w", err)
+		return "", fmt.Errorf("feishu send: card build failed: %w", err)
 	}
 	return c.sendCard(ctx, msg.ChatID, cardContent)
 }
@@ -349,20 +354,8 @@ func (c *FeishuChannel) handleMessageReceive(ctx context.Context, event *larkim.
 		content = "[empty message]"
 	}
 
-	metadata := map[string]string{}
-	if messageID != "" {
-		metadata["message_id"] = messageID
-	}
-	if messageType != "" {
-		metadata["message_type"] = messageType
-	}
-	chatType := stringValue(message.ChatType)
-	if chatType != "" {
-		metadata["chat_type"] = chatType
-	}
-	if sender != nil && sender.TenantKey != nil {
-		metadata["tenant_key"] = *sender.TenantKey
-	}
+	metadata := buildFeishuInboundMetadata(message, sender)
+	chatType := metadata["chat_type"]
 
 	var peer bus.Peer
 	// Lark may report private chats as chat_type="private" instead of "p2p".
@@ -408,6 +401,36 @@ func (c *FeishuChannel) handleMessageReceive(ctx context.Context, event *larkim.
 }
 
 // --- Internal helpers ---
+
+func buildFeishuInboundMetadata(message *larkim.EventMessage, sender *larkim.EventSender) map[string]string {
+	metadata := map[string]string{}
+	if message == nil {
+		return metadata
+	}
+	if messageID := stringValue(message.MessageId); messageID != "" {
+		metadata["message_id"] = messageID
+	}
+	if messageType := stringValue(message.MessageType); messageType != "" {
+		metadata["message_type"] = messageType
+	}
+	if chatType := stringValue(message.ChatType); chatType != "" {
+		metadata["chat_type"] = chatType
+	}
+	if threadID := stringValue(message.ThreadId); threadID != "" {
+		metadata["thread_id"] = threadID
+	}
+	if parentID := stringValue(message.ParentId); parentID != "" {
+		metadata["parent_message_id"] = parentID
+		metadata["reply_to_message_id"] = parentID
+	}
+	if rootID := stringValue(message.RootId); rootID != "" {
+		metadata["root_message_id"] = rootID
+	}
+	if sender != nil && sender.TenantKey != nil {
+		metadata["tenant_key"] = *sender.TenantKey
+	}
+	return metadata
+}
 
 // fetchBotOpenID calls the Feishu bot info API to retrieve and store the bot's open_id.
 func (c *FeishuChannel) fetchBotOpenID(ctx context.Context) error {

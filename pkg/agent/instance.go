@@ -461,13 +461,14 @@ func (r toolRegistrar) registerMessageTool(agent *AgentInstance) {
 		return
 	}
 	messageTool := tools.NewMessageTool()
-	messageTool.SetSendCallback(func(channel, chatID, content string) error {
+	messageTool.SetSendCallback(func(ctx context.Context, channel, chatID, content string) error {
 		pubCtx, pubCancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer pubCancel()
 		return r.msgBus.PublishOutbound(pubCtx, bus.OutboundMessage{
-			Channel: channel,
-			ChatID:  chatID,
-			Content: content,
+			Channel:    channel,
+			ChatID:     chatID,
+			Content:    content,
+			SessionKey: tools.ExecutionSessionKey(ctx),
 		})
 	})
 	agent.Tools.Register(messageTool)

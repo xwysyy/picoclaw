@@ -498,9 +498,10 @@ func (t *CronTool) ExecuteJob(ctx context.Context, job *cron.CronJob) (string, e
 		pubCtx, pubCancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer pubCancel()
 		if pubErr := t.msgBus.PublishOutbound(pubCtx, bus.OutboundMessage{
-			Channel: channel,
-			ChatID:  chatID,
-			Content: fmt.Sprintf("Cron job '%s' failed: %v", job.Name, err),
+			Channel:    channel,
+			ChatID:     chatID,
+			Content:    fmt.Sprintf("Cron job '%s' failed: %v", job.Name, err),
+			SessionKey: sessionKey,
 		}); pubErr != nil {
 			logger.DebugCF("cron", "publish outbound failed", map[string]any{"channel": channel, "chat_id": chatID, "error": pubErr.Error()})
 		}
@@ -512,9 +513,10 @@ func (t *CronTool) ExecuteJob(ctx context.Context, job *cron.CronJob) (string, e
 		pubCtx, pubCancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer pubCancel()
 		if pubErr := t.msgBus.PublishOutbound(pubCtx, bus.OutboundMessage{
-			Channel: channel,
-			ChatID:  chatID,
-			Content: fmt.Sprintf("Cron job '%s' failed:\n\n%s", job.Name, response),
+			Channel:    channel,
+			ChatID:     chatID,
+			Content:    fmt.Sprintf("Cron job '%s' failed:\n\n%s", job.Name, response),
+			SessionKey: sessionKey,
 		}); pubErr != nil {
 			logger.DebugCF("cron", "publish outbound failed", map[string]any{"channel": channel, "chat_id": chatID, "error": pubErr.Error()})
 		}
@@ -527,9 +529,10 @@ func (t *CronTool) ExecuteJob(ctx context.Context, job *cron.CronJob) (string, e
 		pubCtx, pubCancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer pubCancel()
 		if err := t.msgBus.PublishOutbound(pubCtx, bus.OutboundMessage{
-			Channel: channel,
-			ChatID:  chatID,
-			Content: fmt.Sprintf("Cron job '%s' completed.\n\n%s", job.Name, response),
+			Channel:    channel,
+			ChatID:     chatID,
+			Content:    fmt.Sprintf("Cron job '%s' completed.\n\n%s", job.Name, response),
+			SessionKey: sessionKey,
 		}); err != nil {
 			return "", err
 		}

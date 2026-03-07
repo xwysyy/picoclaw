@@ -39,6 +39,13 @@ type MessageEditor interface {
 	EditMessage(ctx context.Context, chatID string, messageID string, content string) error
 }
 
+// MessageIDSender is an optional extension for channels that can return the
+// platform message ID of a newly sent message. Managers can use this to bind
+// future user replies back to the originating conversation session.
+type MessageIDSender interface {
+	SendWithMessageID(ctx context.Context, msg bus.OutboundMessage) (messageID string, err error)
+}
+
 // ReactionCapable — channels that can add a reaction (e.g. 👀) to an inbound message.
 // ReactToMessage adds a reaction and returns an undo function to remove it.
 // The undo function MUST be idempotent and safe to call multiple times.

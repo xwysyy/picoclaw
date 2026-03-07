@@ -136,6 +136,7 @@ func (m *Manager) preSend(ctx context.Context, name string, msg bus.OutboundMess
 		if entry, ok := v.(placeholderEntry); ok && entry.id != "" {
 			if editor, ok := ch.(MessageEditor); ok {
 				if err := editor.EditMessage(ctx, msg.ChatID, entry.id, msg.Content); err == nil {
+					m.bindReplyContext(name, msg.ChatID, entry.id, msg.SessionKey)
 					m.recordChannelAudit("channel.placeholder.edited", name, msg.ChatID, fmt.Sprintf("id=%q", entry.id))
 					return true // edited successfully, skip Send
 				} else {

@@ -30,9 +30,15 @@ type InboundMessage struct {
 }
 
 type OutboundMessage struct {
-	Channel string `json:"channel"`
-	ChatID  string `json:"chat_id"`
-	Content string `json:"content"`
+	Channel    string `json:"channel"`
+	ChatID     string `json:"chat_id"`
+	Content    string `json:"content"`
+	SessionKey string `json:"session_key,omitempty"`
+}
+
+// ReplyContext is the conversation state associated with an outbound platform message.
+type ReplyContext struct {
+	SessionKey string `json:"session_key,omitempty"`
 }
 
 // MediaPart describes a single media attachment to send.

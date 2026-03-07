@@ -204,15 +204,32 @@ func (al *AgentLoop) buildConversationSessionKey(msg bus.InboundMessage, cfg *co
 }
 
 func (al *AgentLoop) resolveInboundSessionKey(msg bus.InboundMessage, conversationSessionKey string) string {
-	sessionKey := conversationSessionKey
 	if explicit := utils.CanonicalSessionKey(msg.SessionKey); explicit != "" {
 		if strings.HasPrefix(explicit, "agent:") ||
 			strings.HasPrefix(explicit, "conv:") ||
 			constants.IsInternalChannel(msg.Channel) {
-			sessionKey = explicit
+			return explicit
 		}
 	}
-	return sessionKey
+	if al != nil && al.bus != nil {
+		for _, candidate := range []string{
+			strings.TrimSpace(msg.Metadata["reply_to_message_id"]),
+			strings.TrimSpace(msg.Metadata["parent_message_id"]),
+			strings.TrimSpace(msg.Metadata["root_message_id"]),
+			strings.TrimSpace(msg.Metadata["parent_id"]),
+			strings.TrimSpace(msg.Metadata["root_id"]),
+		} {
+			if candidate == "" {
+				continue
+			}
+			if replyCtx, ok := al.bus.LookupReplyContext(msg.Channel, msg.ChatID, candidate); ok {
+				if sessionKey := utils.CanonicalSessionKey(replyCtx.SessionKey); sessionKey != "" {
+					return sessionKey
+				}
+			}
+		}
+	}
+	return conversationSessionKey
 }
 
 func (al *AgentLoop) resolveAgentForSession(

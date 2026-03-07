@@ -80,8 +80,8 @@ func appendMediaTags(content, messageType string, mediaRefs []string) string {
 	return content + " " + tag
 }
 
-// sendCard sends an interactive card message to a chat.
-func (c *FeishuChannel) sendCard(ctx context.Context, chatID, cardContent string) error {
+// sendCard sends an interactive card message to a chat and returns the platform message ID.
+func (c *FeishuChannel) sendCard(ctx context.Context, chatID, cardContent string) (string, error) {
 	req := larkim.NewCreateMessageReqBuilder().
 		ReceiveIdType(larkim.ReceiveIdTypeChatId).
 		Body(larkim.NewCreateMessageReqBodyBuilder().
@@ -93,18 +93,24 @@ func (c *FeishuChannel) sendCard(ctx context.Context, chatID, cardContent string
 
 	resp, err := c.client.Im.V1.Message.Create(ctx, req)
 	if err != nil {
-		return fmt.Errorf("feishu send card: %w", channels.ErrTemporary)
+		return "", fmt.Errorf("feishu send card: %w", channels.ErrTemporary)
 	}
 
 	if !resp.Success() {
-		return fmt.Errorf("feishu api error (code=%d msg=%s): %w", resp.Code, resp.Msg, channels.ErrTemporary)
+		return "", fmt.Errorf("feishu api error (code=%d msg=%s): %w", resp.Code, resp.Msg, channels.ErrTemporary)
+	}
+
+	messageID := ""
+	if resp.Data != nil && resp.Data.MessageId != nil {
+		messageID = *resp.Data.MessageId
 	}
 
 	logger.DebugCF("feishu", "Feishu card message sent", map[string]any{
-		"chat_id": chatID,
+		"chat_id":    chatID,
+		"message_id": messageID,
 	})
 
-	return nil
+	return messageID, nil
 }
 
 // sendImage uploads an image and sends it as a message.

@@ -3,6 +3,8 @@ package telegram
 import (
 	"strings"
 	"testing"
+
+	"github.com/mymmrac/telego"
 )
 
 func TestParseChatID(t *testing.T) {
@@ -113,5 +115,18 @@ func TestMarkdownToTelegramHTML_Basic(t *testing.T) {
 	}
 	if strings.Contains(out, "<b>notbold</b>") {
 		t.Fatalf("code block markdown should not be rendered; out=%q", out)
+	}
+}
+
+func TestBuildTelegramInboundMetadata_IncludesReplyToMessageID(t *testing.T) {
+	t.Parallel()
+
+	meta := buildTelegramInboundMetadata(&telego.Message{
+		Chat:           telego.Chat{Type: "private"},
+		ReplyToMessage: &telego.Message{MessageID: 42},
+	}, &telego.User{ID: 7})
+
+	if got := meta["reply_to_message_id"]; got != "42" {
+		t.Fatalf("reply_to_message_id = %q, want %q", got, "42")
 	}
 }

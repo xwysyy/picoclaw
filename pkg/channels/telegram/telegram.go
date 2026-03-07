@@ -244,13 +244,29 @@ func (c *TelegramChannel) initBotCommands(ctx context.Context) error {
 }
 
 func (c *TelegramChannel) Send(ctx context.Context, msg bus.OutboundMessage) error {
+	_, err := c.SendWithMessageID(ctx, msg)
+	return err
+}
+
+func (c *TelegramChannel) SendWithMessageID(ctx context.Context, msg bus.OutboundMessage) (string, error) {
+	sent, err := c.sendMessage(ctx, msg)
+	if err != nil {
+		return "", err
+	}
+	if sent == nil {
+		return "", nil
+	}
+	return fmt.Sprintf("%d", sent.MessageID), nil
+}
+
+func (c *TelegramChannel) sendMessage(ctx context.Context, msg bus.OutboundMessage) (*telego.Message, error) {
 	if !c.IsRunning() {
-		return channels.ErrNotRunning
+		return nil, channels.ErrNotRunning
 	}
 
 	chatID, err := parseChatID(msg.ChatID)
 	if err != nil {
-		return fmt.Errorf("invalid chat ID %s: %w", msg.ChatID, channels.ErrSendFailed)
+		return nil, fmt.Errorf("invalid chat ID %s: %w", msg.ChatID, channels.ErrSendFailed)
 	}
 
 	htmlContent := markdownToTelegramHTML(msg.Content)
@@ -259,17 +275,19 @@ func (c *TelegramChannel) Send(ctx context.Context, msg bus.OutboundMessage) err
 	tgMsg := tu.Message(tu.ID(chatID), htmlContent)
 	tgMsg.ParseMode = telego.ModeHTML
 
-	if _, err = c.bot.SendMessage(ctx, tgMsg); err != nil {
+	sent, err := c.bot.SendMessage(ctx, tgMsg)
+	if err != nil {
 		logger.ErrorCF("telegram", "HTML parse failed, falling back to plain text", map[string]any{
 			"error": err.Error(),
 		})
 		tgMsg.ParseMode = ""
-		if _, err = c.bot.SendMessage(ctx, tgMsg); err != nil {
-			return fmt.Errorf("telegram send: %w", channels.ErrTemporary)
+		sent, err = c.bot.SendMessage(ctx, tgMsg)
+		if err != nil {
+			return nil, fmt.Errorf("telegram send: %w", channels.ErrTemporary)
 		}
 	}
 
-	return nil
+	return sent, nil
 }
 
 // StartTyping implements channels.TypingCapable.
@@ -573,15 +591,7 @@ func (c *TelegramChannel) handleMessage(ctx context.Context, message *telego.Mes
 	peer := bus.Peer{Kind: peerKind, ID: peerID}
 	messageID := fmt.Sprintf("%d", message.MessageID)
 
-	metadata := map[string]string{
-		"user_id":    fmt.Sprintf("%d", user.ID),
-		"username":   user.Username,
-		"first_name": user.FirstName,
-		"is_group":   fmt.Sprintf("%t", message.Chat.Type != "private"),
-	}
-	if message.MessageThreadID != 0 {
-		metadata["thread_id"] = fmt.Sprintf("%d", message.MessageThreadID)
-	}
+	metadata := buildTelegramInboundMetadata(message, user)
 
 	c.HandleMessage(c.ctx,
 		peer,
@@ -594,6 +604,26 @@ func (c *TelegramChannel) handleMessage(ctx context.Context, message *telego.Mes
 		sender,
 	)
 	return nil
+}
+
+func buildTelegramInboundMetadata(message *telego.Message, user *telego.User) map[string]string {
+	metadata := map[string]string{}
+	if user != nil {
+		metadata["user_id"] = fmt.Sprintf("%d", user.ID)
+		metadata["username"] = user.Username
+		metadata["first_name"] = user.FirstName
+	}
+	if message == nil {
+		return metadata
+	}
+	metadata["is_group"] = fmt.Sprintf("%t", message.Chat.Type != "private")
+	if message.MessageThreadID != 0 {
+		metadata["thread_id"] = fmt.Sprintf("%d", message.MessageThreadID)
+	}
+	if message.ReplyToMessage != nil {
+		metadata["reply_to_message_id"] = fmt.Sprintf("%d", message.ReplyToMessage.MessageID)
+	}
+	return metadata
 }
 
 func (c *TelegramChannel) downloadPhoto(ctx context.Context, fileID string) string {

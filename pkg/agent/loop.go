@@ -334,6 +334,7 @@ func (al *AgentLoop) Run(ctx context.Context) error {
 		roundTracker := &tools.MessageRoundTracker{}
 		msgCtx := tools.WithMessageRoundTracker(ctx, roundTracker)
 		msgCtx = withSteeringInbox(msgCtx, steering)
+		sessionKey := al.resolveInboundSessionKey(msg, al.buildConversationSessionKey(msg, al.Config()))
 
 		response, err := al.processMessage(msgCtx, msg)
 		if err != nil {
@@ -352,9 +353,10 @@ func (al *AgentLoop) Run(ctx context.Context) error {
 		}
 
 		if err := al.bus.PublishOutbound(msgCtx, bus.OutboundMessage{
-			Channel: msg.Channel,
-			ChatID:  msg.ChatID,
-			Content: response,
+			Channel:    msg.Channel,
+			ChatID:     msg.ChatID,
+			Content:    response,
+			SessionKey: sessionKey,
 		}); err != nil {
 			logger.DebugCF("agent", "failed to publish outbound response", map[string]any{"channel": msg.Channel, "chat_id": msg.ChatID, "error": err.Error()})
 			return
