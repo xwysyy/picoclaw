@@ -13,7 +13,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -26,7 +25,6 @@ import (
 	"github.com/xwysyy/X-Claw/pkg/auditlog"
 	"github.com/xwysyy/X-Claw/pkg/bus"
 	"github.com/xwysyy/X-Claw/pkg/config"
-	"github.com/xwysyy/X-Claw/pkg/constants"
 	"github.com/xwysyy/X-Claw/pkg/health"
 	"github.com/xwysyy/X-Claw/pkg/identity"
 	"github.com/xwysyy/X-Claw/pkg/logger"
@@ -41,6 +39,8 @@ const (
 	janitorInterval = 10 * time.Second
 	typingStopTTL   = 5 * time.Minute
 	placeholderTTL  = 10 * time.Minute
+
+	defaultPlaceholderDelay = 2500 * time.Millisecond
 )
 
 // Retry timing defaults. These are variables (not const) so tests can override
@@ -50,39 +50,6 @@ var (
 	baseBackoff    = 500 * time.Millisecond
 	maxBackoff     = 8 * time.Second
 )
-
-// typingEntry wraps a typing stop function with a creation timestamp for TTL eviction.
-type typingEntry struct {
-	stop      func()
-	createdAt time.Time
-}
-
-// reactionEntry wraps a reaction undo function with a creation timestamp for TTL eviction.
-type reactionEntry struct {
-	undo      func()
-	createdAt time.Time
-}
-
-// placeholderEntry wraps a placeholder ID with a creation timestamp for TTL eviction.
-type placeholderEntry struct {
-	id        string
-	createdAt time.Time
-}
-
-type scheduledPlaceholderEntry struct {
-	token     int64
-	timer     *time.Timer
-	cancel    context.CancelFunc
-	createdAt time.Time
-}
-
-// channelRateConfig maps channel name to per-second rate limit.
-var channelRateConfig = map[string]float64{
-	"telegram": 20,
-	"discord":  1,
-	"slack":    1,
-	"line":     10,
-}
 
 type channelWorker struct {
 	ch         Channel
@@ -116,27 +83,6 @@ type asyncTask struct {
 	cancel context.CancelFunc
 }
 
-// RecordPlaceholder registers a placeholder message for later editing.
-// Implements PlaceholderRecorder.
-func (m *Manager) RecordPlaceholder(channel, chatID, placeholderID string) {
-	key := channel + ":" + chatID
-	m.placeholders.Store(key, placeholderEntry{id: placeholderID, createdAt: time.Now()})
-}
-
-// RecordTypingStop registers a typing stop function for later invocation.
-// Implements PlaceholderRecorder.
-func (m *Manager) RecordTypingStop(channel, chatID string, stop func()) {
-	key := channel + ":" + chatID
-	m.typingStops.Store(key, typingEntry{stop: stop, createdAt: time.Now()})
-}
-
-// RecordReactionUndo registers a reaction undo function for later invocation.
-// Implements PlaceholderRecorder.
-func (m *Manager) RecordReactionUndo(channel, chatID string, undo func()) {
-	key := channel + ":" + chatID
-	m.reactionUndos.Store(key, reactionEntry{undo: undo, createdAt: time.Now()})
-}
-
 func (m *Manager) recordChannelAudit(evType string, channel string, chatID string, note string) {
 	if m == nil || m.config == nil {
 		return
@@ -161,119 +107,6 @@ func (m *Manager) recordChannelAudit(evType string, channel string, chatID strin
 		ChatID:     chatID,
 		Note:       strings.TrimSpace(note),
 	})
-}
-
-func (m *Manager) SchedulePlaceholder(
-	ctx context.Context,
-	channel string,
-	chatID string,
-	send func(context.Context) (string, error),
-	delay time.Duration,
-) {
-	if m == nil {
-		return
-	}
-	channel = strings.TrimSpace(channel)
-	chatID = strings.TrimSpace(chatID)
-	if channel == "" || chatID == "" || send == nil {
-		return
-	}
-
-	if delay < 0 {
-		delay = 0
-	}
-
-	key := channel + ":" + chatID
-	m.CancelPlaceholder(channel, chatID)
-
-	if delay == 0 {
-		sendCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		if id, err := send(sendCtx); err == nil && strings.TrimSpace(id) != "" {
-			id = strings.TrimSpace(id)
-			m.RecordPlaceholder(channel, chatID, id)
-			m.recordChannelAudit("channel.placeholder.sent", channel, chatID, fmt.Sprintf("id=%q delay_ms=0", id))
-		}
-		return
-	}
-
-	token := m.scheduledSeq.Add(1)
-	timer := time.NewTimer(delay)
-	scheduleCtx, cancel := context.WithCancel(context.Background())
-	m.scheduled.Store(key, scheduledPlaceholderEntry{
-		token:     token,
-		timer:     timer,
-		cancel:    cancel,
-		createdAt: time.Now(),
-	})
-
-	go func() {
-		defer func() {
-			// Ensure timer resources are released even if CancelPlaceholder was never called.
-			if !timer.Stop() {
-				select {
-				case <-timer.C:
-				default:
-				}
-			}
-			cancel()
-			if v, ok := m.scheduled.Load(key); ok {
-				if entry, ok := v.(scheduledPlaceholderEntry); ok && entry.token == token {
-					m.scheduled.Delete(key)
-				}
-			}
-		}()
-
-		select {
-		case <-timer.C:
-			// ok
-		case <-scheduleCtx.Done():
-			return
-		case <-ctx.Done():
-			return
-		}
-
-		if scheduleCtx.Err() != nil {
-			return
-		}
-
-		sendCtx, sendCancel := context.WithTimeout(scheduleCtx, 10*time.Second)
-		defer sendCancel()
-		id, err := send(sendCtx)
-		if err != nil || sendCtx.Err() != nil {
-			return
-		}
-		if strings.TrimSpace(id) != "" {
-			id = strings.TrimSpace(id)
-			m.RecordPlaceholder(channel, chatID, id)
-			m.recordChannelAudit("channel.placeholder.sent", channel, chatID, fmt.Sprintf("id=%q delay_ms=%d", id, delay.Milliseconds()))
-		}
-	}()
-}
-
-func (m *Manager) CancelPlaceholder(channel, chatID string) {
-	if m == nil {
-		return
-	}
-	channel = strings.TrimSpace(channel)
-	chatID = strings.TrimSpace(chatID)
-	if channel == "" || chatID == "" {
-		return
-	}
-
-	key := channel + ":" + chatID
-	if v, loaded := m.scheduled.LoadAndDelete(key); loaded {
-		if entry, ok := v.(scheduledPlaceholderEntry); ok {
-			if entry.cancel != nil {
-				entry.cancel()
-			}
-			if entry.timer != nil {
-				entry.timer.Stop()
-			}
-			age := time.Since(entry.createdAt).Milliseconds()
-			m.recordChannelAudit("channel.placeholder.cancelled", channel, chatID, fmt.Sprintf("age_ms=%d", age))
-		}
-	}
 }
 
 // preSend handles typing stop, reaction undo, and placeholder editing before sending a message.
@@ -580,324 +413,6 @@ func (m *Manager) StopAll(ctx context.Context) error {
 	return nil
 }
 
-// newChannelWorker creates a channelWorker with a rate limiter configured
-// for the given channel name.
-func newChannelWorker(name string, ch Channel) *channelWorker {
-	rateVal := float64(defaultRateLimit)
-	if r, ok := channelRateConfig[name]; ok {
-		rateVal = r
-	}
-	burst := int(math.Max(1, math.Ceil(rateVal/2)))
-
-	return &channelWorker{
-		ch:         ch,
-		queue:      make(chan bus.OutboundMessage, defaultChannelQueueSize),
-		mediaQueue: make(chan bus.OutboundMediaMessage, defaultChannelQueueSize),
-		done:       make(chan struct{}),
-		mediaDone:  make(chan struct{}),
-		limiter:    rate.NewLimiter(rate.Limit(rateVal), burst),
-	}
-}
-
-// runWorker processes outbound messages for a single channel, splitting
-// messages that exceed the channel's maximum message length.
-func (m *Manager) runWorker(ctx context.Context, name string, w *channelWorker) {
-	defer close(w.done)
-	for {
-		select {
-		case msg, ok := <-w.queue:
-			if !ok {
-				return
-			}
-			maxLen := 0
-			if mlp, ok := w.ch.(MessageLengthProvider); ok {
-				maxLen = mlp.MaxMessageLength()
-			}
-			if maxLen > 0 && len([]rune(msg.Content)) > maxLen {
-				chunks := SplitMessage(msg.Content, maxLen)
-				for _, chunk := range chunks {
-					chunkMsg := msg
-					chunkMsg.Content = chunk
-					m.sendWithRetry(ctx, name, w, chunkMsg)
-				}
-			} else {
-				m.sendWithRetry(ctx, name, w, msg)
-			}
-		case <-ctx.Done():
-			return
-		}
-	}
-}
-
-// retryWithBackoff executes sendFn with retry logic.
-// Callers are responsible for rate limiting before calling this function.
-// Error classification determines the retry strategy:
-//   - ErrNotRunning / ErrSendFailed: permanent, no retry
-//   - ErrRateLimit: fixed delay retry
-//   - ErrTemporary / unknown: exponential backoff retry
-func (m *Manager) retryWithBackoff(ctx context.Context, w *channelWorker, sendFn func() error) error {
-	var lastErr error
-	for attempt := 0; attempt <= maxRetries; attempt++ {
-		lastErr = sendFn()
-		if lastErr == nil {
-			return nil
-		}
-
-		// Permanent failures — don't retry
-		if errors.Is(lastErr, ErrNotRunning) || errors.Is(lastErr, ErrSendFailed) {
-			break
-		}
-
-		// Last attempt exhausted — don't sleep
-		if attempt == maxRetries {
-			break
-		}
-
-		// Rate limit error — fixed delay
-		if errors.Is(lastErr, ErrRateLimit) {
-			select {
-			case <-time.After(rateLimitDelay):
-				continue
-			case <-ctx.Done():
-				return ctx.Err()
-			}
-		}
-
-		// ErrTemporary or unknown error — exponential backoff
-		backoff := min(time.Duration(float64(baseBackoff)*math.Pow(2, float64(attempt))), maxBackoff)
-		select {
-		case <-time.After(backoff):
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-	}
-
-	return lastErr
-}
-
-// sendWithRetry sends a message through the channel with rate limiting and retry logic.
-func (m *Manager) sendWithRetry(ctx context.Context, name string, w *channelWorker, msg bus.OutboundMessage) {
-	// Rate limit: wait for token before preSend (preserves original ordering)
-	if err := w.limiter.Wait(ctx); err != nil {
-		return
-	}
-
-	// Pre-send: stop typing and try to edit placeholder
-	if m.preSend(ctx, name, msg, w.ch) {
-		return // placeholder was edited successfully, skip Send
-	}
-
-	err := m.retryWithBackoff(ctx, w, func() error {
-		return w.ch.Send(ctx, msg)
-	})
-	if err != nil && ctx.Err() == nil {
-		logger.ErrorCF("channels", "Send failed", map[string]any{
-			"channel": name,
-			"chat_id": msg.ChatID,
-			"error":   err.Error(),
-			"retries": maxRetries,
-		})
-	}
-}
-
-// sendMediaWithRetry sends a media message through the channel with rate limiting and retry logic.
-func (m *Manager) sendMediaWithRetry(ctx context.Context, name string, w *channelWorker, msg bus.OutboundMediaMessage) {
-	ms, ok := w.ch.(MediaSender)
-	if !ok {
-		logger.DebugCF("channels", "Channel does not support MediaSender, skipping media", map[string]any{
-			"channel": name,
-		})
-		return
-	}
-
-	// Rate limit: wait for token
-	if err := w.limiter.Wait(ctx); err != nil {
-		return
-	}
-
-	err := m.retryWithBackoff(ctx, w, func() error {
-		return ms.SendMedia(ctx, msg)
-	})
-	if err != nil && ctx.Err() == nil {
-		logger.ErrorCF("channels", "SendMedia failed", map[string]any{
-			"channel": name,
-			"chat_id": msg.ChatID,
-			"error":   err.Error(),
-			"retries": maxRetries,
-		})
-	}
-}
-
-func dispatchLoop[M any](
-	ctx context.Context,
-	m *Manager,
-	subscribe func(context.Context) (M, bool),
-	getChannel func(M) string,
-	enqueue func(context.Context, *channelWorker, M) bool,
-	startMsg, stopMsg, unknownMsg, noWorkerMsg string,
-) {
-	logger.InfoC("channels", startMsg)
-
-	for {
-		msg, ok := subscribe(ctx)
-		if !ok {
-			logger.InfoC("channels", stopMsg)
-			return
-		}
-
-		channel := getChannel(msg)
-
-		// Silently skip internal channels
-		if constants.IsInternalChannel(channel) {
-			continue
-		}
-
-		m.mu.RLock()
-		_, exists := m.channels[channel]
-		w, wExists := m.workers[channel]
-		m.mu.RUnlock()
-
-		if !exists {
-			logger.WarnCF("channels", unknownMsg, map[string]any{"channel": channel})
-			continue
-		}
-
-		if wExists && w != nil {
-			if !enqueue(ctx, w, msg) {
-				return
-			}
-		} else if exists {
-			logger.WarnCF("channels", noWorkerMsg, map[string]any{"channel": channel})
-		}
-	}
-}
-
-func (m *Manager) dispatchOutbound(ctx context.Context) {
-	dispatchLoop(
-		ctx, m,
-		m.bus.SubscribeOutbound,
-		func(msg bus.OutboundMessage) string { return msg.Channel },
-		func(ctx context.Context, w *channelWorker, msg bus.OutboundMessage) bool {
-			select {
-			case w.queue <- msg:
-				return true
-			case <-ctx.Done():
-				return false
-			}
-		},
-		"Outbound dispatcher started",
-		"Outbound dispatcher stopped",
-		"Unknown channel for outbound message",
-		"Channel has no active worker, skipping message",
-	)
-}
-
-func (m *Manager) dispatchOutboundMedia(ctx context.Context) {
-	dispatchLoop(
-		ctx, m,
-		m.bus.SubscribeOutboundMedia,
-		func(msg bus.OutboundMediaMessage) string { return msg.Channel },
-		func(ctx context.Context, w *channelWorker, msg bus.OutboundMediaMessage) bool {
-			select {
-			case w.mediaQueue <- msg:
-				return true
-			case <-ctx.Done():
-				return false
-			}
-		},
-		"Outbound media dispatcher started",
-		"Outbound media dispatcher stopped",
-		"Unknown channel for outbound media message",
-		"Channel has no active worker, skipping media message",
-	)
-}
-
-// lookupWorker finds the active worker for a channel, logging warnings for unknown or inactive channels.
-func (m *Manager) lookupWorker(channel, label string) *channelWorker {
-	m.mu.RLock()
-	_, exists := m.channels[channel]
-	w, wExists := m.workers[channel]
-	m.mu.RUnlock()
-
-	if !exists {
-		logger.WarnCF("channels", "Unknown channel for "+label+" message", map[string]any{
-			"channel": channel,
-		})
-		return nil
-	}
-	if !wExists || w == nil {
-		logger.WarnCF("channels", "Channel has no active worker, skipping "+label+" message", map[string]any{
-			"channel": channel,
-		})
-		return nil
-	}
-	return w
-}
-
-// runMediaWorker processes outbound media messages for a single channel.
-func (m *Manager) runMediaWorker(ctx context.Context, name string, w *channelWorker) {
-	defer close(w.mediaDone)
-	for {
-		select {
-		case msg, ok := <-w.mediaQueue:
-			if !ok {
-				return
-			}
-			m.sendMediaWithRetry(ctx, name, w, msg)
-		case <-ctx.Done():
-			return
-		}
-	}
-}
-
-// runTTLJanitor periodically scans the typingStops, reactionUndos, and placeholders maps
-// and evicts entries that have exceeded their TTL.
-func (m *Manager) runTTLJanitor(ctx context.Context) {
-	ticker := time.NewTicker(janitorInterval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case now := <-ticker.C:
-			m.evictStaleEntries(now)
-		}
-	}
-}
-
-// evictStaleEntries removes expired typing stops, reactions, and placeholders.
-func (m *Manager) evictStaleEntries(now time.Time) {
-	m.typingStops.Range(func(key, value any) bool {
-		if entry, ok := value.(typingEntry); ok {
-			if now.Sub(entry.createdAt) > typingStopTTL {
-				if _, loaded := m.typingStops.LoadAndDelete(key); loaded {
-					entry.stop()
-				}
-			}
-		}
-		return true
-	})
-	m.reactionUndos.Range(func(key, value any) bool {
-		if entry, ok := value.(reactionEntry); ok {
-			if now.Sub(entry.createdAt) > typingStopTTL {
-				if _, loaded := m.reactionUndos.LoadAndDelete(key); loaded {
-					entry.undo()
-				}
-			}
-		}
-		return true
-	})
-	m.placeholders.Range(func(key, value any) bool {
-		if entry, ok := value.(placeholderEntry); ok {
-			if now.Sub(entry.createdAt) > placeholderTTL {
-				m.placeholders.Delete(key)
-			}
-		}
-		return true
-	})
-}
-
 func (m *Manager) GetChannel(name string) (Channel, bool) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -1023,17 +538,6 @@ func uniqueID() string {
 	return uniqueIDPrefix + strconv.FormatUint(n, 16)
 }
 
-type Channel interface {
-	Name() string
-	Start(ctx context.Context) error
-	Stop(ctx context.Context) error
-	Send(ctx context.Context, msg bus.OutboundMessage) error
-	IsRunning() bool
-	IsAllowed(senderID string) bool
-	IsAllowedSender(sender bus.SenderInfo) bool
-	ReasoningChannelID() string
-}
-
 // BaseChannelOption is a functional option for configuring a BaseChannel.
 type BaseChannelOption func(*BaseChannel)
 
@@ -1066,13 +570,6 @@ func WithPlaceholder(ph config.PlaceholderConfig) BaseChannelOption {
 	}
 }
 
-// MessageLengthProvider is an opt-in interface that channels implement
-// to advertise their maximum message length. The Manager uses this via
-// type assertion to decide whether to split outbound messages.
-type MessageLengthProvider interface {
-	MaxMessageLength() int
-}
-
 type BaseChannel struct {
 	config              any
 	bus                 *bus.MessageBus
@@ -1101,7 +598,7 @@ func NewBaseChannel(
 		name:      name,
 		allowList: allowList,
 		// Default placeholder delay (threshold): avoids flicker for fast replies.
-		placeholderDelay: 2500 * time.Millisecond,
+		placeholderDelay: defaultPlaceholderDelay,
 	}
 	for _, opt := range opts {
 		opt(bc)
@@ -1448,56 +945,6 @@ func withSecurityHeaders(next http.Handler) http.Handler {
 	})
 }
 
-// TypingCapable — channels that can show a typing/thinking indicator.
-// StartTyping begins the indicator and returns a stop function.
-// The stop function MUST be idempotent and safe to call multiple times.
-type TypingCapable interface {
-	StartTyping(ctx context.Context, chatID string) (stop func(), err error)
-}
-
-// MessageEditor — channels that can edit an existing message.
-// messageID is always string; channels convert platform-specific types internally.
-type MessageEditor interface {
-	EditMessage(ctx context.Context, chatID string, messageID string, content string) error
-}
-
-// ReactionCapable — channels that can add a reaction (e.g. 👀) to an inbound message.
-// ReactToMessage adds a reaction and returns an undo function to remove it.
-// The undo function MUST be idempotent and safe to call multiple times.
-type ReactionCapable interface {
-	ReactToMessage(ctx context.Context, chatID, messageID string) (undo func(), err error)
-}
-
-// PlaceholderCapable — channels that can send a placeholder message.
-type PlaceholderCapable interface {
-	SendPlaceholder(ctx context.Context, chatID string) (messageID string, err error)
-}
-
-// PlaceholderRecorder is injected into channels by Manager.
-type PlaceholderRecorder interface {
-	RecordPlaceholder(channel, chatID, placeholderID string)
-	RecordTypingStop(channel, chatID string, stop func())
-	RecordReactionUndo(channel, chatID string, undo func())
-}
-
-// PlaceholderScheduler is an optional extension interface implemented by Manager.
-type PlaceholderScheduler interface {
-	SchedulePlaceholder(ctx context.Context, channel, chatID string, send func(context.Context) (string, error), delay time.Duration)
-	CancelPlaceholder(channel, chatID string)
-}
-
-// WebhookHandler is an optional interface for channels that receive messages via HTTP webhooks.
-type WebhookHandler interface {
-	WebhookPath() string
-	http.Handler
-}
-
-// HealthChecker is an optional interface for channels that expose a health check endpoint.
-type HealthChecker interface {
-	HealthPath() string
-	HealthHandler(w http.ResponseWriter, r *http.Request)
-}
-
 func SplitMessage(content string, maxLen int) []string {
 	if maxLen <= 0 {
 		if content == "" {
@@ -1736,27 +1183,4 @@ func ClassifyNetError(err error) error {
 
 type MediaSender interface {
 	SendMedia(ctx context.Context, msg bus.OutboundMediaMessage) error
-}
-
-// ChannelFactory is a constructor function that creates a Channel from config and message bus.
-type ChannelFactory func(cfg *config.Config, bus *bus.MessageBus) (Channel, error)
-
-var (
-	factoriesMu sync.RWMutex
-	factories   = map[string]ChannelFactory{}
-)
-
-// RegisterFactory registers a named channel factory. Called from subpackage init() functions.
-func RegisterFactory(name string, f ChannelFactory) {
-	factoriesMu.Lock()
-	defer factoriesMu.Unlock()
-	factories[name] = f
-}
-
-// getFactory looks up a channel factory by name.
-func getFactory(name string) (ChannelFactory, bool) {
-	factoriesMu.RLock()
-	defer factoriesMu.RUnlock()
-	f, ok := factories[name]
-	return f, ok
 }

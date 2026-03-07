@@ -1433,13 +1433,16 @@ func resolveFeishuFileUploadTypes(mediaType, filename, contentType string) (file
 	contentType = strings.ToLower(strings.TrimSpace(contentType))
 
 	ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(strings.TrimSpace(filename)), "."))
-	if ext == "" && (strings.HasPrefix(contentType, "video/") || strings.HasPrefix(contentType, "audio/")) {
-		parts := strings.SplitN(contentType, "/", 2)
-		if len(parts) == 2 {
-			sub := strings.TrimSpace(parts[1])
-			// Avoid overly generic values like "application/octet-stream".
-			if sub != "" && sub != "octet-stream" {
-				ext = sub
+	if ext == "" {
+		detectedType := channels.MediaTypeFromMIME(contentType)
+		if detectedType == "video" || detectedType == "audio" {
+			parts := strings.SplitN(contentType, "/", 2)
+			if len(parts) == 2 {
+				sub := strings.TrimSpace(parts[1])
+				// Avoid overly generic values like "application/octet-stream".
+				if sub != "" && sub != "octet-stream" {
+					ext = sub
+				}
 			}
 		}
 	}

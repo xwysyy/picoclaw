@@ -372,7 +372,6 @@ func TestConfig_Complete(t *testing.T) {
 	}
 }
 
-
 func TestToolsConfig_RemovedToolTogglesAreDisabled(t *testing.T) {
 	cfg := DefaultConfig()
 	for _, name := range []string{"find_skills", "install_skill", "spawn", "subagent"} {
@@ -635,6 +634,12 @@ func TestDefaultConfig_DMScope(t *testing.T) {
 
 	if cfg.Session.DMScope != "per-channel-peer" {
 		t.Errorf("Session.DMScope = %q, want 'per-channel-peer'", cfg.Session.DMScope)
+	}
+	if cfg.Session.MaxSessions != DefaultSessionMaxSessions {
+		t.Errorf("Session.MaxSessions = %d, want %d", cfg.Session.MaxSessions, DefaultSessionMaxSessions)
+	}
+	if cfg.Session.TTLHours != DefaultSessionTTLHours {
+		t.Errorf("Session.TTLHours = %d, want %d", cfg.Session.TTLHours, DefaultSessionTTLHours)
 	}
 }
 

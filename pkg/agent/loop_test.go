@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime/debug"
 	"slices"
 	"strconv"
@@ -1719,6 +1720,25 @@ func TestDetectToolCallLoop_ChangedResultsDoNotCountAsLoop(t *testing.T) {
 
 	if got := detectToolCallLoop(recent, current, 2); got != "" {
 		t.Fatalf("detectToolCallLoop = %q, want empty (result progress should reset loop detection)", got)
+	}
+}
+
+func TestCommandDispatch_KnownCommandsAndAliases(t *testing.T) {
+	required := []string{"/plan", "/approve", "/run", "/cancel", "/mode", "/show", "/list", "/tree", "/switch"}
+	for _, cmd := range required {
+		if _, ok := commandDispatch[cmd]; !ok {
+			t.Fatalf("commandDispatch missing %q", cmd)
+		}
+	}
+
+	approve := reflect.ValueOf(commandDispatch["/approve"]).Pointer()
+	run := reflect.ValueOf(commandDispatch["/run"]).Pointer()
+	if approve != run {
+		t.Fatal("expected /run to reuse /approve handler")
+	}
+
+	if _, ok := commandDispatch["/unknown"]; ok {
+		t.Fatal("unexpected handler for unknown command")
 	}
 }
 

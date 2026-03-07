@@ -117,7 +117,7 @@ func (s *JSONLStore) readMeta(key string) (sessionMeta, error) {
 // writeMeta atomically writes the metadata file using the project's
 // standard WriteFileAtomic (temp + fsync + rename).
 func (s *JSONLStore) writeMeta(key string, meta sessionMeta) error {
-	data, err := json.MarshalIndent(meta, "", "  ")
+	data, err := json.Marshal(meta)
 	if err != nil {
 		return fmt.Errorf("memory: encode meta: %w", err)
 	}

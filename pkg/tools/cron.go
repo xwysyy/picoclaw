@@ -11,6 +11,7 @@ import (
 	"github.com/xwysyy/X-Claw/pkg/config"
 	"github.com/xwysyy/X-Claw/pkg/constants"
 	"github.com/xwysyy/X-Claw/pkg/cron"
+	"github.com/xwysyy/X-Claw/pkg/logger"
 	"github.com/xwysyy/X-Claw/pkg/utils"
 )
 
@@ -482,11 +483,13 @@ func (t *CronTool) ExecuteJob(ctx context.Context, job *cron.CronJob) (string, e
 	if err != nil {
 		pubCtx, pubCancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer pubCancel()
-		_ = t.msgBus.PublishOutbound(pubCtx, bus.OutboundMessage{
+		if pubErr := t.msgBus.PublishOutbound(pubCtx, bus.OutboundMessage{
 			Channel: channel,
 			ChatID:  chatID,
 			Content: fmt.Sprintf("Cron job '%s' failed: %v", job.Name, err),
-		})
+		}); pubErr != nil {
+			logger.DebugCF("cron", "publish outbound failed", map[string]any{"channel": channel, "chat_id": chatID, "error": pubErr.Error()})
+		}
 		return "", err
 	}
 
@@ -494,11 +497,13 @@ func (t *CronTool) ExecuteJob(ctx context.Context, job *cron.CronJob) (string, e
 		err = errors.New(strings.TrimSpace(response))
 		pubCtx, pubCancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer pubCancel()
-		_ = t.msgBus.PublishOutbound(pubCtx, bus.OutboundMessage{
+		if pubErr := t.msgBus.PublishOutbound(pubCtx, bus.OutboundMessage{
 			Channel: channel,
 			ChatID:  chatID,
 			Content: fmt.Sprintf("Cron job '%s' failed:\n\n%s", job.Name, response),
-		})
+		}); pubErr != nil {
+			logger.DebugCF("cron", "publish outbound failed", map[string]any{"channel": channel, "chat_id": chatID, "error": pubErr.Error()})
+		}
 		return response, err
 	}
 

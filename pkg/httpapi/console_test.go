@@ -432,6 +432,66 @@ func TestResumeLastTaskHandler_Timeout(t *testing.T) {
 	}
 }
 
+func TestNotifyHandler_InvalidJSONTrailingGarbage(t *testing.T) {
+	sender := &recordSender{}
+	h := NewNotifyHandler(NotifyHandlerOptions{
+		Sender: sender,
+		LastActive: func() (string, string) {
+			return "feishu", "oc_test"
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "http://example.com/api/notify", strings.NewReader(`{"content":"done"} {}`))
+	req.RemoteAddr = "127.0.0.1:1234"
+	rr := httptest.NewRecorder()
+
+	h.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", rr.Code)
+	}
+	if sender.calls != 0 {
+		t.Fatalf("expected 0 send calls, got %d", sender.calls)
+	}
+	var resp notifyResponse
+	if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if resp.Error != "invalid json body" {
+		t.Fatalf("expected invalid json body error, got %q", resp.Error)
+	}
+}
+
+func TestResumeLastTaskHandler_InvalidJSONTrailingGarbage(t *testing.T) {
+	called := 0
+	h := NewResumeLastTaskHandler(ResumeLastTaskHandlerOptions{
+		Resume: func(_ctx context.Context) (any, string, error) {
+			called++
+			return map[string]any{"id": "r1"}, "ok", nil
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "http://example.com/api/resume_last_task", strings.NewReader(`{} {}`))
+	req.RemoteAddr = "127.0.0.1:1234"
+	rr := httptest.NewRecorder()
+
+	h.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", rr.Code)
+	}
+	if called != 0 {
+		t.Fatalf("expected resume not to be called, got %d", called)
+	}
+	var resp resumeLastTaskResponse
+	if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if resp.Error != "invalid json body" {
+		t.Fatalf("expected invalid json body error, got %q", resp.Error)
+	}
+}
+
 func TestSessionModelHandler_SetGetClear(t *testing.T) {
 	sm := session.NewSessionManager("")
 	h := NewSessionModelHandler(SessionModelHandlerOptions{
@@ -519,5 +579,35 @@ func TestSessionModelHandler_SetGetClear(t *testing.T) {
 		if resp.HasOverride || resp.Model != "" {
 			t.Fatalf("expected override cleared, got has=%v model=%q", resp.HasOverride, resp.Model)
 		}
+	}
+}
+
+func TestSessionModelHandler_InvalidJSONTrailingGarbage(t *testing.T) {
+	sm := session.NewSessionManager("")
+	h := NewSessionModelHandler(SessionModelHandlerOptions{
+		APIKey:   "k",
+		Sessions: sm,
+		Enabled:  true,
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "http://example.com/api/session_model", strings.NewReader(`{"session_key":"s1","model":"m1"} {}`))
+	req.RemoteAddr = "127.0.0.1:1234"
+	req.Header.Set("X-API-Key", "k")
+	rr := httptest.NewRecorder()
+
+	h.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", rr.Code)
+	}
+	var resp sessionModelResponse
+	if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if resp.Error != "invalid json body" {
+		t.Fatalf("expected invalid json body error, got %q", resp.Error)
+	}
+	if _, ok := sm.EffectiveModelOverride("s1"); ok {
+		t.Fatal("expected no override to be persisted on invalid json body")
 	}
 }

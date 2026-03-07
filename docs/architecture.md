@@ -67,5 +67,7 @@ accidental coupling and long-term "big-ball-of-mud" drift.
 
 - Minimal stable test suite for constrained environments:
   - `./scripts/test.sh`
+- Batch-oriented verification for environments where `go test ./...` may hit `SIGKILL(137)`:
+  - `./scripts/test-batches.sh`
 - Full CLI compile/tests:
   - `go test ./cmd/x-claw/...`

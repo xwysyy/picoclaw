@@ -12,6 +12,8 @@ import (
 	"time"
 
 	coresession "github.com/xwysyy/X-Claw/internal/core/session"
+	"github.com/xwysyy/X-Claw/pkg/config"
+	"github.com/xwysyy/X-Claw/pkg/logger"
 	"github.com/xwysyy/X-Claw/pkg/providers"
 	"github.com/xwysyy/X-Claw/pkg/utils"
 )
@@ -21,15 +23,38 @@ import (
 type Session = coresession.Session
 
 type SessionManager struct {
-	sessions map[string]*Session
-	mu       sync.RWMutex
-	storage  string
+	sessions    map[string]*Session
+	mu          sync.RWMutex
+	storage     string
+	maxSessions int
+	ttl         time.Duration
 }
 
 func NewSessionManager(storage string) *SessionManager {
+	return newSessionManagerWithSessionConfig(storage, config.SessionConfig{})
+}
+
+func NewSessionManagerWithConfig(storage string, sessionCfg config.SessionConfig) *SessionManager {
+	return newSessionManagerWithSessionConfig(storage, sessionCfg)
+}
+
+func newSessionManagerWithSessionConfig(storage string, sessionCfg config.SessionConfig) *SessionManager {
+	return newSessionManagerWithGC(storage, sessionCfg.EffectiveMaxSessions(), sessionCfg.EffectiveTTL())
+}
+
+func newSessionManagerWithGC(storage string, maxSessions int, ttl time.Duration) *SessionManager {
+	if maxSessions < 0 {
+		maxSessions = 0
+	}
+	if ttl < 0 {
+		ttl = 0
+	}
+
 	sm := &SessionManager{
-		sessions: make(map[string]*Session),
-		storage:  storage,
+		sessions:    make(map[string]*Session),
+		storage:     storage,
+		maxSessions: maxSessions,
+		ttl:         ttl,
 	}
 
 	if storage != "" {
@@ -37,15 +62,107 @@ func NewSessionManager(storage string) *SessionManager {
 		sm.loadSessions()
 	}
 
+	sm.mu.Lock()
+	sm.pruneSessionsLocked(time.Now(), 0)
+	sm.mu.Unlock()
+
 	return sm
 }
 
 func (sm *SessionManager) GetOrCreate(key string) *Session {
 	key = utils.CanonicalSessionKey(key)
+	if key == "" {
+		return nil
+	}
 
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
+
+	if session, ok := sm.sessions[key]; ok {
+		return session
+	}
+
+	sm.pruneSessionsLocked(time.Now(), 1)
 	return sm.ensureSessionLocked(key)
+}
+
+func (sm *SessionManager) pruneSessionsLocked(now time.Time, reserve int) {
+	if sm == nil {
+		return
+	}
+
+	ttlEvicted := 0
+
+	if sm.ttl > 0 {
+		for key, session := range sm.sessions {
+			if session == nil {
+				delete(sm.sessions, key)
+				ttlEvicted++
+				continue
+			}
+			updatedAt := session.Updated
+			if updatedAt.IsZero() {
+				updatedAt = session.Created
+			}
+			if updatedAt.IsZero() || now.Sub(updatedAt) <= sm.ttl {
+				continue
+			}
+			delete(sm.sessions, key)
+			ttlEvicted++
+		}
+		if ttlEvicted > 0 {
+			logger.InfoCF("session", "Evicted expired sessions from memory", map[string]any{
+				"count":     ttlEvicted,
+				"ttl_hours": int(sm.ttl / time.Hour),
+			})
+		}
+	}
+
+	if sm.maxSessions <= 0 {
+		return
+	}
+
+	allowed := sm.maxSessions - reserve
+	if allowed < 0 {
+		allowed = 0
+	}
+	if len(sm.sessions) <= allowed {
+		return
+	}
+
+	type sessionEntry struct {
+		key     string
+		updated time.Time
+	}
+
+	entries := make([]sessionEntry, 0, len(sm.sessions))
+	for key, session := range sm.sessions {
+		updatedAt := time.Time{}
+		if session != nil {
+			updatedAt = session.Updated
+			if updatedAt.IsZero() {
+				updatedAt = session.Created
+			}
+		}
+		entries = append(entries, sessionEntry{key: key, updated: updatedAt})
+	}
+
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].updated.Before(entries[j].updated)
+	})
+
+	toEvict := len(sm.sessions) - allowed
+	lruEvicted := 0
+	for i := 0; i < toEvict && i < len(entries); i++ {
+		delete(sm.sessions, entries[i].key)
+		lruEvicted++
+	}
+	if lruEvicted > 0 {
+		logger.InfoCF("session", "Evicted least recently updated sessions from memory", map[string]any{
+			"count":        lruEvicted,
+			"max_sessions": sm.maxSessions,
+		})
+	}
 }
 
 func (sm *SessionManager) AddMessage(sessionKey, role, content string) {
@@ -66,9 +183,11 @@ func (sm *SessionManager) AddFullMessage(sessionKey string, msg providers.Messag
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 
-	session := sm.ensureSessionLocked(sessionKey)
-
 	now := time.Now()
+	if _, ok := sm.sessions[sessionKey]; !ok {
+		sm.pruneSessionsLocked(now, 1)
+	}
+	session := sm.ensureSessionLocked(sessionKey)
 	if session.Created.IsZero() {
 		session.Created = now
 	}

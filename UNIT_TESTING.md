@@ -10,7 +10,30 @@
 
 ## 推荐命令
 
-### 1. 跑全量单测（推荐）
+### 1. 跑分批稳定测试（当前环境推荐）
+
+如果当前机器会在 `go test ./...` 或部分 `-race` 下被 `SIGKILL(137)`，优先使用：
+
+```bash
+./scripts/test-batches.sh
+```
+
+这个脚本会：
+- 先跑 `go build ./...` 与 `go vet ./...`
+- 先做一轮 `go test ./... -run '^$'` compile-only 检查
+- 按包分开执行 `go test`
+- 对 `pkg/agent` 按顶层测试分批执行，避免整包一次性拉高内存峰值
+
+常见用法：
+
+```bash
+./scripts/test-batches.sh
+./scripts/test-batches.sh --dry-run
+./scripts/test-batches.sh --race-safe
+X_CLAW_TEST_PKGS='github.com/xwysyy/X-Claw/pkg/config github.com/xwysyy/X-Claw/pkg/httpapi' ./scripts/test-batches.sh --skip-build --skip-vet
+```
+
+### 2. 跑全量单测（推荐）
 
 部分环境（小内存 VM / SBC / CI）可能会在 `go test ./...` 时被 OOM kill。
 为稳定起见，本仓库提供了按包顺序逐个执行的方式：
@@ -51,20 +74,20 @@ CGO_ENABLED=1 X_CLAW_TEST_PKGS='./pkg/agent ./pkg/tools' ./scripts/test-unit.sh 
 X_CLAW_TEST_PKGS='./pkg/agent ./pkg/tools' ./scripts/test-unit.sh
 ```
 
-### 2. 快速并行（可能更快，但更吃内存）
+### 3. 快速并行（可能更快，但更吃内存）
 
 ```bash
 make test-fast
 ```
 
-### 3. 跑单个包 / 单个用例
+### 4. 跑单个包 / 单个用例
 
 ```bash
 go test ./pkg/agent -count=1
 go test ./pkg/agent -run TestSanitizeHistoryForProvider -count=1
 ```
 
-### 4. 覆盖率
+### 5. 覆盖率
 
 全仓库覆盖率（推荐，内存更稳）：
 

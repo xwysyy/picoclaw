@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -822,4 +823,65 @@ func TestShellTool_TimeoutKillsChildProcess(t *testing.T) {
 	}
 
 	t.Fatalf("child process %d is still running after timeout", childPID)
+}
+
+func captureStdout(t *testing.T, fn func()) string {
+	t.Helper()
+	old := os.Stdout
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("pipe: %v", err)
+	}
+	defer r.Close()
+	os.Stdout = w
+	defer func() { os.Stdout = old }()
+
+	fn()
+	if err := w.Close(); err != nil {
+		t.Fatalf("close writer: %v", err)
+	}
+	data, err := io.ReadAll(r)
+	if err != nil {
+		t.Fatalf("read stdout: %v", err)
+	}
+	return string(data)
+}
+
+func TestNewExecToolWithConfig_DoesNotWriteCustomDenyPatternsToStdout(t *testing.T) {
+	cfg := &config.Config{}
+	cfg.Tools.Exec.EnableDenyPatterns = true
+	cfg.Tools.Exec.CustomDenyPatterns = []string{"echo.*"}
+
+	stdout := captureStdout(t, func() {
+		tool, err := NewExecToolWithConfig(t.TempDir(), false, cfg)
+		if err != nil {
+			t.Fatalf("NewExecToolWithConfig error: %v", err)
+		}
+		if tool == nil {
+			t.Fatal("expected tool")
+		}
+	})
+
+	if strings.TrimSpace(stdout) != "" {
+		t.Fatalf("expected no stdout output, got %q", stdout)
+	}
+}
+
+func TestNewExecToolWithConfig_DoesNotWriteDisabledWarningToStdout(t *testing.T) {
+	cfg := &config.Config{}
+	cfg.Tools.Exec.EnableDenyPatterns = false
+
+	stdout := captureStdout(t, func() {
+		tool, err := NewExecToolWithConfig(t.TempDir(), false, cfg)
+		if err != nil {
+			t.Fatalf("NewExecToolWithConfig error: %v", err)
+		}
+		if tool == nil {
+			t.Fatal("expected tool")
+		}
+	})
+
+	if strings.TrimSpace(stdout) != "" {
+		t.Fatalf("expected no stdout output, got %q", stdout)
+	}
 }

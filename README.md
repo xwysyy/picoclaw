@@ -685,6 +685,18 @@ docker compose -p x-claw -f docker/docker-compose.yml down
 
 单元测试与 TDD 工作流说明见：[UNIT_TESTING.md](UNIT_TESTING.md)。
 
+仓库还提供了一个适合当前受限环境的分批测试脚本：
+
+```bash
+./scripts/test-batches.sh
+```
+
+特点：
+- 先执行 `go build ./...`、`go vet ./...` 与 compile-only 全量检查
+- 再按包单独执行 `go test`，降低单次进程峰值内存
+- 对 `pkg/agent` 按顶层测试逐批执行，减少 `SIGKILL(137)` 概率
+- 可选 `--race-safe` 追加当前环境里相对稳定的 race 批次（`pkg/session`、`pkg/httpapi`）
+
 ## 排错
 
 参考：

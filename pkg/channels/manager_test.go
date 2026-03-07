@@ -612,6 +612,63 @@ done:
 	}
 }
 
+func TestSchedulePlaceholder_ImmediateSendInheritsCallerContext(t *testing.T) {
+	m := newTestManager()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	observed := make(chan error, 1)
+	send := func(sendCtx context.Context) (string, error) {
+		observed <- sendCtx.Err()
+		return "", sendCtx.Err()
+	}
+
+	m.SchedulePlaceholder(ctx, "test", "123", send, 0)
+
+	select {
+	case err := <-observed:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("expected canceled context, got %v", err)
+		}
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("expected send to observe parent context cancellation")
+	}
+}
+
+func TestSchedulePlaceholder_DelayedSendCancelsWhenParentContextCancels(t *testing.T) {
+	m := newTestManager()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	started := make(chan struct{}, 1)
+	finished := make(chan error, 1)
+	send := func(sendCtx context.Context) (string, error) {
+		started <- struct{}{}
+		<-sendCtx.Done()
+		finished <- sendCtx.Err()
+		return "", sendCtx.Err()
+	}
+
+	m.SchedulePlaceholder(ctx, "test", "123", send, 10*time.Millisecond)
+
+	select {
+	case <-started:
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("expected delayed send to start")
+	}
+
+	cancel()
+
+	select {
+	case err := <-finished:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("expected canceled send context, got %v", err)
+		}
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("expected delayed send context to be canceled by parent context")
+	}
+}
+
 func TestPreSend_PlaceholderEditFails_FallsThrough(t *testing.T) {
 	m := newTestManager()
 

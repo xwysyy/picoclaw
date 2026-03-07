@@ -1,11 +1,15 @@
 package session
 
 import (
+	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/xwysyy/X-Claw/pkg/config"
 	"github.com/xwysyy/X-Claw/pkg/providers"
 )
 
@@ -404,5 +408,156 @@ func TestSessionModelOverride_TTLAndPersistence(t *testing.T) {
 	sm3 := NewSessionManager(tmpDir)
 	if got, ok := sm3.EffectiveModelOverride(key); ok || got != "" {
 		t.Fatalf("expected override to remain cleared after reload, got model=%q ok=%v", got, ok)
+	}
+}
+
+func TestSessionManager_EvictsExpiredSessionsOnCreate(t *testing.T) {
+	tmpDir := t.TempDir()
+	sm := newSessionManagerWithGC(tmpDir, 10, 25*time.Millisecond)
+
+	staleKey := "telegram:stale"
+	sm.AddMessage(staleKey, "user", "old")
+
+	sm.mu.Lock()
+	stale := sm.sessions[staleKey]
+	stale.Updated = time.Now().Add(-time.Hour)
+	sm.mu.Unlock()
+
+	time.Sleep(30 * time.Millisecond)
+	sm.GetOrCreate("telegram:new")
+
+	if _, ok := sm.GetSessionSnapshot(staleKey); ok {
+		t.Fatalf("expected expired session %q to be evicted from memory", staleKey)
+	}
+
+	reloaded := NewSessionManager(tmpDir)
+	if snapshot, ok := reloaded.GetSessionSnapshot(staleKey); !ok || snapshot == nil {
+		t.Fatalf("expected expired session %q to remain reloadable from disk", staleKey)
+	}
+}
+
+func TestSessionManager_EvictsLeastRecentlyUpdatedSession(t *testing.T) {
+	tmpDir := t.TempDir()
+	sm := newSessionManagerWithGC(tmpDir, 2, 0)
+
+	sm.AddMessage("telegram:oldest", "user", "one")
+	sm.AddMessage("telegram:middle", "user", "two")
+
+	sm.mu.Lock()
+	sm.sessions["telegram:oldest"].Updated = time.Now().Add(-2 * time.Hour)
+	sm.sessions["telegram:middle"].Updated = time.Now().Add(-1 * time.Hour)
+	sm.mu.Unlock()
+
+	sm.GetOrCreate("telegram:newest")
+
+	if _, ok := sm.GetSessionSnapshot("telegram:oldest"); ok {
+		t.Fatal("expected oldest session to be evicted")
+	}
+	if _, ok := sm.GetSessionSnapshot("telegram:middle"); !ok {
+		t.Fatal("expected more recent session to remain")
+	}
+	if _, ok := sm.GetSessionSnapshot("telegram:newest"); !ok {
+		t.Fatal("expected newly created session to remain")
+	}
+}
+
+func TestSessionManager_SessionConfigDefaults(t *testing.T) {
+	sm := newSessionManagerWithSessionConfig(t.TempDir(), config.SessionConfig{})
+
+	if sm.maxSessions != config.DefaultSessionMaxSessions {
+		t.Fatalf("maxSessions = %d, want %d", sm.maxSessions, config.DefaultSessionMaxSessions)
+	}
+	if sm.ttl != time.Duration(config.DefaultSessionTTLHours)*time.Hour {
+		t.Fatalf("ttl = %v, want %v", sm.ttl, time.Duration(config.DefaultSessionTTLHours)*time.Hour)
+	}
+}
+
+func TestSessionManager_SessionConfigJSONOverrides(t *testing.T) {
+	var cfg struct {
+		Session config.SessionConfig `json:"session"`
+	}
+
+	if err := json.Unmarshal([]byte(`{"session":{"max_sessions":7,"ttl_hours":12}}`), &cfg); err != nil {
+		t.Fatalf("json.Unmarshal() error: %v", err)
+	}
+
+	sm := newSessionManagerWithSessionConfig(t.TempDir(), cfg.Session)
+	if sm.maxSessions != 7 {
+		t.Fatalf("maxSessions = %d, want 7", sm.maxSessions)
+	}
+	if sm.ttl != 12*time.Hour {
+		t.Fatalf("ttl = %v, want %v", sm.ttl, 12*time.Hour)
+	}
+}
+
+func TestSessionManager_NewSessionManagerWithConfigUsesOverrides(t *testing.T) {
+	sm := NewSessionManagerWithConfig(t.TempDir(), config.SessionConfig{MaxSessions: 9, TTLHours: 6})
+	if sm.maxSessions != 9 {
+		t.Fatalf("maxSessions = %d, want 9", sm.maxSessions)
+	}
+	if sm.ttl != 6*time.Hour {
+		t.Fatalf("ttl = %v, want %v", sm.ttl, 6*time.Hour)
+	}
+}
+
+func TestSessionManager_ConcurrentGCWithReadsAndWrites(t *testing.T) {
+	tmpDir := t.TempDir()
+	sm := newSessionManagerWithGC(tmpDir, 8, 0)
+
+	const (
+		goroutines = 4
+		iterations = 8
+		keySpace   = 10
+	)
+
+	var wg sync.WaitGroup
+	start := make(chan struct{})
+	errCh := make(chan error, goroutines)
+
+	for worker := 0; worker < goroutines; worker++ {
+		wg.Add(1)
+		go func(worker int) {
+			defer wg.Done()
+			<-start
+			for iter := 0; iter < iterations; iter++ {
+				key := fmt.Sprintf("telegram:%02d", (worker+iter)%keySpace)
+				session := sm.GetOrCreate(key)
+				if session == nil {
+					errCh <- fmt.Errorf("GetOrCreate(%q) returned nil", key)
+					return
+				}
+				sm.AddMessage(key, "user", fmt.Sprintf("worker=%d iter=%d", worker, iter))
+				_ = sm.GetHistory(key)
+				_, _ = sm.GetSessionSnapshot(key)
+			}
+		}(worker)
+	}
+
+	close(start)
+	wg.Wait()
+	close(errCh)
+
+	for err := range errCh {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	sm.mu.RLock()
+	inMemory := len(sm.sessions)
+	sm.mu.RUnlock()
+	if inMemory > sm.maxSessions {
+		t.Fatalf("expected in-memory sessions <= %d, got %d", sm.maxSessions, inMemory)
+	}
+
+	reloaded := NewSessionManagerWithConfig(tmpDir, config.SessionConfig{MaxSessions: sm.maxSessions})
+	found := 0
+	for key := 0; key < keySpace; key++ {
+		if history := reloaded.GetHistory(fmt.Sprintf("telegram:%02d", key)); len(history) > 0 {
+			found++
+		}
+	}
+	if found == 0 {
+		t.Fatal("expected persisted sessions to remain reloadable after concurrent GC activity")
 	}
 }

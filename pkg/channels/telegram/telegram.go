@@ -272,7 +272,9 @@ func (c *TelegramChannel) StartTyping(ctx context.Context, chatID string) (func(
 	}
 
 	// Send the first typing action immediately
-	_ = c.bot.SendChatAction(ctx, tu.ChatAction(tu.ID(cid), telego.ChatActionTyping))
+	if err := c.bot.SendChatAction(ctx, tu.ChatAction(tu.ID(cid), telego.ChatActionTyping)); err != nil {
+		logger.DebugCF("telegram", "send chat action failed", map[string]any{"chat_id": chatID, "error": err.Error()})
+	}
 
 	typingCtx, cancel := context.WithCancel(ctx)
 	go func() {
@@ -283,7 +285,9 @@ func (c *TelegramChannel) StartTyping(ctx context.Context, chatID string) (func(
 			case <-typingCtx.Done():
 				return
 			case <-ticker.C:
-				_ = c.bot.SendChatAction(typingCtx, tu.ChatAction(tu.ID(cid), telego.ChatActionTyping))
+				if err := c.bot.SendChatAction(typingCtx, tu.ChatAction(tu.ID(cid), telego.ChatActionTyping)); err != nil {
+					logger.DebugCF("telegram", "send chat action failed", map[string]any{"chat_id": chatID, "error": err.Error()})
+				}
 			}
 		}
 	}()

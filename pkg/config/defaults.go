@@ -77,7 +77,9 @@ func DefaultConfig() *Config {
 		},
 		Bindings: []AgentBinding{},
 		Session: SessionConfig{
-			DMScope: "per-channel-peer",
+			DMScope:     "per-channel-peer",
+			MaxSessions: DefaultSessionMaxSessions,
+			TTLHours:    DefaultSessionTTLHours,
 		},
 		Channels: ChannelsConfig{
 			WhatsApp: WhatsAppConfig{

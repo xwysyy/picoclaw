@@ -3,12 +3,51 @@ package auth
 import (
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
 )
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
+}
+
+type errReadCloser struct {
+	err error
+}
+
+func (e errReadCloser) Read(_ []byte) (int, error) {
+	return 0, e.err
+}
+
+func (e errReadCloser) Close() error {
+	return nil
+}
+
+func withDefaultHTTPClient(t *testing.T, client *http.Client) {
+	t.Helper()
+	old := http.DefaultClient
+	http.DefaultClient = client
+	t.Cleanup(func() {
+		http.DefaultClient = old
+	})
+}
+
+func errorBodyClient(readErr error) *http.Client {
+	return &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     make(http.Header),
+			Body:       errReadCloser{err: readErr},
+			Request:    req,
+		}, nil
+	})}
+}
 
 func makeJWTForClaims(t *testing.T, claims map[string]any) string {
 	t.Helper()
@@ -371,5 +410,80 @@ func TestParseDeviceCodeResponseInvalidInterval(t *testing.T) {
 
 	if _, err := parseDeviceCodeResponse(body); err == nil {
 		t.Fatal("expected error for invalid interval")
+	}
+}
+
+func TestParseFlexibleInt_InvalidStringReturnsHelpfulError(t *testing.T) {
+	_, err := parseFlexibleInt(json.RawMessage(`"abc"`))
+	if err == nil {
+		t.Fatal("expected error for invalid interval string")
+	}
+	if !strings.Contains(err.Error(), `invalid integer value: "abc"`) {
+		t.Fatalf("parseFlexibleInt() error = %q, want contains %q", err.Error(), `invalid integer value: "abc"`)
+	}
+}
+
+func TestRequestDeviceCode_ReadBodyError(t *testing.T) {
+	readErr := errors.New("boom read body")
+	withDefaultHTTPClient(t, errorBodyClient(readErr))
+
+	_, err := RequestDeviceCode(OAuthProviderConfig{Issuer: "https://auth.example.com", ClientID: "cid"})
+	if err == nil {
+		t.Fatal("expected read body error")
+	}
+	if !strings.Contains(err.Error(), "read response body") {
+		t.Fatalf("RequestDeviceCode() error = %q, want contains %q", err.Error(), "read response body")
+	}
+}
+
+func TestLoginDeviceCode_ReadBodyError(t *testing.T) {
+	readErr := errors.New("boom read body")
+	withDefaultHTTPClient(t, errorBodyClient(readErr))
+
+	_, err := LoginDeviceCode(OAuthProviderConfig{Issuer: "https://auth.example.com", ClientID: "cid"})
+	if err == nil {
+		t.Fatal("expected read body error")
+	}
+	if !strings.Contains(err.Error(), "read response body") {
+		t.Fatalf("LoginDeviceCode() error = %q, want contains %q", err.Error(), "read response body")
+	}
+}
+
+func TestPollDeviceCodeOnce_ReadBodyError(t *testing.T) {
+	readErr := errors.New("boom read body")
+	withDefaultHTTPClient(t, errorBodyClient(readErr))
+
+	_, err := PollDeviceCodeOnce(OAuthProviderConfig{Issuer: "https://auth.example.com", ClientID: "cid"}, "device-auth-id", "user-code")
+	if err == nil {
+		t.Fatal("expected read body error")
+	}
+	if !strings.Contains(err.Error(), "read response body") {
+		t.Fatalf("PollDeviceCodeOnce() error = %q, want contains %q", err.Error(), "read response body")
+	}
+}
+
+func TestRefreshAccessToken_ReadBodyError(t *testing.T) {
+	readErr := errors.New("boom read body")
+	withDefaultHTTPClient(t, errorBodyClient(readErr))
+
+	_, err := RefreshAccessToken(&AuthCredential{RefreshToken: "refresh", Provider: "openai"}, OAuthProviderConfig{Issuer: "https://auth.example.com", ClientID: "cid"})
+	if err == nil {
+		t.Fatal("expected read body error")
+	}
+	if !strings.Contains(err.Error(), "read response body") {
+		t.Fatalf("RefreshAccessToken() error = %q, want contains %q", err.Error(), "read response body")
+	}
+}
+
+func TestExchangeCodeForTokens_ReadBodyError(t *testing.T) {
+	readErr := errors.New("boom read body")
+	withDefaultHTTPClient(t, errorBodyClient(readErr))
+
+	_, err := ExchangeCodeForTokens(OAuthProviderConfig{Issuer: "https://auth.example.com", ClientID: "cid"}, "code", "verifier", "http://localhost/callback")
+	if err == nil {
+		t.Fatal("expected read body error")
+	}
+	if !strings.Contains(err.Error(), "read response body") {
+		t.Fatalf("ExchangeCodeForTokens() error = %q, want contains %q", err.Error(), "read response body")
 	}
 }

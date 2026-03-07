@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/xwysyy/X-Claw/pkg/config"
+	"github.com/xwysyy/X-Claw/pkg/logger"
 )
 
 type ExecTool struct {
@@ -145,7 +146,9 @@ func NewExecToolWithConfig(workingDir string, restrict bool, config *config.Conf
 		if enableDenyPatterns {
 			denyPatterns = append(denyPatterns, defaultDenyPatterns...)
 			if len(execConfig.CustomDenyPatterns) > 0 {
-				fmt.Printf("Using custom deny patterns: %v\n", execConfig.CustomDenyPatterns)
+				logger.InfoCF("tools/shell", "Using custom deny patterns", map[string]any{
+					"patterns": execConfig.CustomDenyPatterns,
+				})
 				for _, pattern := range execConfig.CustomDenyPatterns {
 					re, err := regexp.Compile(pattern)
 					if err != nil {
@@ -155,8 +158,7 @@ func NewExecToolWithConfig(workingDir string, restrict bool, config *config.Conf
 				}
 			}
 		} else {
-			// If deny patterns are disabled, we won't add any patterns, allowing all commands.
-			fmt.Println("Warning: deny patterns are disabled. All commands will be allowed.")
+			logger.WarnCF("tools/shell", "Deny patterns disabled, all commands allowed", nil)
 		}
 		for _, pattern := range execConfig.CustomAllowPatterns {
 			re, err := regexp.Compile(pattern)
@@ -513,7 +515,9 @@ func (t *ExecTool) executeDockerSync(ctx context.Context, command, cwd string, t
 	select {
 	case err = <-done:
 	case <-cmdCtx.Done():
-		_ = terminateProcessTree(cmd)
+		if termErr := terminateProcessTree(cmd); termErr != nil {
+			logger.DebugCF("tools/shell", "terminate process tree failed", map[string]any{"error": termErr.Error()})
+		}
 		select {
 		case err = <-done:
 		case <-time.After(2 * time.Second):
@@ -594,7 +598,9 @@ func (t *ExecTool) executeSync(ctx context.Context, command, cwd string, timeout
 	select {
 	case err = <-done:
 	case <-cmdCtx.Done():
-		_ = terminateProcessTree(cmd)
+		if termErr := terminateProcessTree(cmd); termErr != nil {
+			logger.DebugCF("tools/shell", "terminate process tree failed", map[string]any{"error": termErr.Error()})
+		}
 		select {
 		case err = <-done:
 		case <-time.After(2 * time.Second):
@@ -745,7 +751,9 @@ func (t *ExecTool) watchManagedCommand(
 	select {
 	case waitErr = <-waitDone:
 	case <-cmdCtx.Done():
-		_ = terminateProcessTree(cmd)
+		if termErr := terminateProcessTree(cmd); termErr != nil {
+			logger.DebugCF("tools/shell", "terminate process tree failed", map[string]any{"error": termErr.Error()})
+		}
 		select {
 		case waitErr = <-waitDone:
 		case <-time.After(2 * time.Second):
@@ -1461,7 +1469,9 @@ func (pm *ProcessManager) Kill(sessionID string) (bool, error) {
 		cancel()
 	}
 	if cmd != nil {
-		_ = terminateProcessTree(cmd)
+		if err := terminateProcessTree(cmd); err != nil {
+			logger.DebugCF("tools/shell", "terminate process tree failed", map[string]any{"error": err.Error()})
+		}
 	}
 	return true, nil
 }

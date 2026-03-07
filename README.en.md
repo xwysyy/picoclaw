@@ -502,6 +502,18 @@ For advanced options, inspect in-code config structs under `pkg/config`.
 
 See: [UNIT_TESTING.md](UNIT_TESTING.md) (Chinese doc, includes the recommended TDD workflow and project-specific test commands).
 
+The repo also provides a batch-oriented test runner for constrained environments:
+
+```bash
+./scripts/test-batches.sh
+```
+
+It is designed to:
+- run `go build ./...`, `go vet ./...`, and an all-package compile-only pass first
+- execute package tests in separate processes to reduce peak RSS
+- run `pkg/agent` one top-level test at a time to avoid `SIGKILL(137)` in low-memory environments
+- optionally add the currently stable race-safe batches via `--race-safe` (`pkg/session`, `pkg/httpapi`)
+
 ## Troubleshooting
 
 Use:

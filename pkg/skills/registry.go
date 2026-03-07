@@ -98,6 +98,21 @@ type RegistryManager struct {
 	mu            sync.RWMutex
 }
 
+var sharedSkillHTTPTransport = &http.Transport{
+	Proxy:               http.ProxyFromEnvironment,
+	MaxIdleConns:        20,
+	MaxIdleConnsPerHost: 5,
+	IdleConnTimeout:     90 * time.Second,
+	TLSHandshakeTimeout: 10 * time.Second,
+}
+
+func newSkillHTTPClient(timeout time.Duration) *http.Client {
+	return &http.Client{
+		Timeout:   timeout,
+		Transport: sharedSkillHTTPTransport,
+	}
+}
+
 // NewRegistryManager creates an empty RegistryManager.
 func NewRegistryManager() *RegistryManager {
 	return &RegistryManager{
@@ -254,7 +269,7 @@ func (si *SkillInstaller) InstallFromGitHub(ctx context.Context, repo string) er
 
 	url := fmt.Sprintf("https://raw.githubusercontent.com/%s/main/SKILL.md", repo)
 
-	client := &http.Client{Timeout: 15 * time.Second}
+	client := newSkillHTTPClient(15 * time.Second)
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
@@ -873,15 +888,7 @@ func NewClawHubRegistry(cfg ClawHubConfig) *ClawHubRegistry {
 		downloadPath:    downloadPath,
 		maxZipSize:      maxZip,
 		maxResponseSize: maxResp,
-		client: &http.Client{
-			Timeout: timeout,
-			Transport: &http.Transport{
-				Proxy:               http.ProxyFromEnvironment,
-				MaxIdleConns:        5,
-				IdleConnTimeout:     30 * time.Second,
-				TLSHandshakeTimeout: 10 * time.Second,
-			},
-		},
+		client:          newSkillHTTPClient(timeout),
 	}
 }
 

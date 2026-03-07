@@ -1,0 +1,31 @@
+package channels
+
+import (
+	"sync"
+
+	"github.com/xwysyy/X-Claw/pkg/bus"
+	"github.com/xwysyy/X-Claw/pkg/config"
+)
+
+// ChannelFactory is a constructor function that creates a Channel from config and message bus.
+type ChannelFactory func(cfg *config.Config, bus *bus.MessageBus) (Channel, error)
+
+var (
+	factoriesMu sync.RWMutex
+	factories   = map[string]ChannelFactory{}
+)
+
+// RegisterFactory registers a named channel factory. Called from subpackage init() functions.
+func RegisterFactory(name string, f ChannelFactory) {
+	factoriesMu.Lock()
+	defer factoriesMu.Unlock()
+	factories[name] = f
+}
+
+// getFactory looks up a channel factory by name.
+func getFactory(name string) (ChannelFactory, bool) {
+	factoriesMu.RLock()
+	defer factoriesMu.RUnlock()
+	f, ok := factories[name]
+	return f, ok
+}

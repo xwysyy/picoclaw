@@ -274,7 +274,12 @@ func (al *AgentLoop) buildUserMessage(agent *AgentInstance, msg bus.InboundMessa
 	}
 	if note := al.importInboundMediaAndBuildNote(agent, msg); note != "" {
 		if strings.TrimSpace(userMessage) != "" {
-			userMessage += "\n\n" + note
+			var msgBuilder strings.Builder
+			msgBuilder.Grow(len(userMessage) + len(note) + 2)
+			msgBuilder.WriteString(userMessage)
+			msgBuilder.WriteString("\n\n")
+			msgBuilder.WriteString(note)
+			userMessage = msgBuilder.String()
 		} else {
 			userMessage = note
 		}
@@ -567,11 +572,13 @@ func (al *AgentLoop) notifyLastActiveOnInternalRun(
 		return
 	}
 	if al.bus != nil {
-		_ = al.bus.PublishOutbound(ctx, bus.OutboundMessage{
+		if err := al.bus.PublishOutbound(ctx, bus.OutboundMessage{
 			Channel: targetCh,
 			ChatID:  targetChat,
 			Content: notifyText,
-		})
+		}); err != nil {
+			logger.DebugCF("agent", "failed to publish completion notification", map[string]any{"channel": targetCh, "chat_id": targetChat, "error": err.Error()})
+		}
 	}
 }
 
@@ -766,6 +773,7 @@ func (ws *WorkingState) FormatForContext() string {
 	}
 
 	var sb strings.Builder
+	sb.Grow(256)
 	sb.WriteString("## Working State\n\n")
 	fmt.Fprintf(&sb, "**Task**: %s\n", ws.OriginalTask)
 	fmt.Fprintf(&sb, "**Progress**: %d tool calls, %d errors\n", ws.ToolCallCount, ws.ErrorCount)
@@ -1389,6 +1397,15 @@ func sanitizePathSegment(s string) string {
 	return out
 }
 
+type copyFileDestination interface {
+	io.Writer
+	Close() error
+}
+
+var copyFileOpenDestination = func(dstPath string, flag int, perm os.FileMode) (copyFileDestination, error) {
+	return os.OpenFile(dstPath, flag, perm)
+}
+
 func copyFile(dstPath, srcPath string, perm os.FileMode) (int64, error) {
 	in, err := os.Open(srcPath)
 	if err != nil {
@@ -1396,7 +1413,7 @@ func copyFile(dstPath, srcPath string, perm os.FileMode) (int64, error) {
 	}
 	defer in.Close()
 
-	out, err := os.OpenFile(dstPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, perm)
+	out, err := copyFileOpenDestination(dstPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, perm)
 	if err != nil {
 		return 0, err
 	}
@@ -1405,11 +1422,11 @@ func copyFile(dstPath, srcPath string, perm os.FileMode) (int64, error) {
 	closeErr := out.Close()
 	if copyErr != nil {
 		_ = os.Remove(dstPath)
-		return n, copyErr
+		return 0, fmt.Errorf("copy: %w", copyErr)
 	}
 	if closeErr != nil {
 		_ = os.Remove(dstPath)
-		return n, closeErr
+		return 0, fmt.Errorf("close destination: %w", closeErr)
 	}
 	return n, nil
 }
