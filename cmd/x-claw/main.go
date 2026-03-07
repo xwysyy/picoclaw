@@ -14,21 +14,17 @@ import (
 
 	"github.com/xwysyy/X-Claw/cmd/x-claw/internal"
 	"github.com/xwysyy/X-Claw/cmd/x-claw/internal/agent"
-	"github.com/xwysyy/X-Claw/cmd/x-claw/internal/auditlog"
-	"github.com/xwysyy/X-Claw/cmd/x-claw/internal/auth"
-	"github.com/xwysyy/X-Claw/cmd/x-claw/internal/config"
-	"github.com/xwysyy/X-Claw/cmd/x-claw/internal/cron"
-	"github.com/xwysyy/X-Claw/cmd/x-claw/internal/doctor"
-	"github.com/xwysyy/X-Claw/cmd/x-claw/internal/estop"
-	"github.com/xwysyy/X-Claw/cmd/x-claw/internal/export"
 	"github.com/xwysyy/X-Claw/cmd/x-claw/internal/gateway"
-	"github.com/xwysyy/X-Claw/cmd/x-claw/internal/migrate"
-	"github.com/xwysyy/X-Claw/cmd/x-claw/internal/onboard"
-	"github.com/xwysyy/X-Claw/cmd/x-claw/internal/security"
-	"github.com/xwysyy/X-Claw/cmd/x-claw/internal/skills"
-	"github.com/xwysyy/X-Claw/cmd/x-claw/internal/status"
 	"github.com/xwysyy/X-Claw/cmd/x-claw/internal/version"
 )
+
+func slimRootCommands() []*cobra.Command {
+	return []*cobra.Command{
+		agent.NewAgentCommand(),
+		gateway.NewGatewayCommand(),
+		version.NewVersionCommand(),
+	}
+}
 
 func NewXClawCommand() *cobra.Command {
 	short := fmt.Sprintf("%s x-claw - Personal AI Assistant v%s\n\n", internal.Logo, internal.GetVersion())
@@ -36,26 +32,10 @@ func NewXClawCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "x-claw",
 		Short:   short,
-		Example: "x-claw status",
+		Example: "x-claw gateway",
 	}
 
-	cmd.AddCommand(
-		onboard.NewOnboardCommand(),
-		agent.NewAgentCommand(),
-		auditlog.NewAuditLogCommand(),
-		auth.NewAuthCommand(),
-		config.NewConfigCommand(),
-		doctor.NewDoctorCommand(),
-		gateway.NewGatewayCommand(),
-		status.NewStatusCommand(),
-		cron.NewCronCommand(),
-		security.NewSecurityCommand(),
-		export.NewExportCommand(),
-		estop.NewEstopCommand(),
-		migrate.NewMigrateCommand(),
-		skills.NewSkillsCommand(),
-		version.NewVersionCommand(),
-	)
+	cmd.AddCommand(slimRootCommands()...)
 
 	return cmd
 }

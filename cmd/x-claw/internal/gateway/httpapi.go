@@ -5,7 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/xwysyy/X-Claw/pkg/httpapi"
+	coregateway "github.com/xwysyy/X-Claw/internal/gateway"
+	oldhttpapi "github.com/xwysyy/X-Claw/pkg/httpapi"
 	"github.com/xwysyy/X-Claw/pkg/session"
 )
 
@@ -19,7 +20,7 @@ func registerGatewayHTTPAPI(svc *gatewayServices) error {
 		return fmt.Errorf("gateway.api_key: %w", err)
 	}
 
-	notify := httpapi.NewNotifyHandler(httpapi.NotifyHandlerOptions{
+	notify := coregateway.NewNotifyHandler(coregateway.NotifyHandlerOptions{
 		Sender: svc.channelManager,
 		APIKey: apiKey,
 		LastActive: func() (string, string) {
@@ -29,12 +30,11 @@ func registerGatewayHTTPAPI(svc *gatewayServices) error {
 			return svc.agentLoop.LastActive()
 		},
 	})
-
 	if err := svc.channelManager.RegisterHTTPHandler("/api/notify", notify); err != nil {
 		fmt.Printf("⚠ Warning: failed to register /api/notify: %v\n", err)
 	}
 
-	resume := httpapi.NewResumeLastTaskHandler(httpapi.ResumeLastTaskHandlerOptions{
+	resume := coregateway.NewResumeLastTaskHandler(coregateway.ResumeLastTaskHandlerOptions{
 		APIKey:  apiKey,
 		Timeout: 2 * time.Minute,
 		Resume: func(ctx context.Context) (any, string, error) {
@@ -49,7 +49,7 @@ func registerGatewayHTTPAPI(svc *gatewayServices) error {
 		fmt.Printf("⚠ Warning: failed to register /api/resume_last_task: %v\n", err)
 	}
 
-	estop := httpapi.NewEstopHandler(httpapi.EstopHandlerOptions{
+	estop := oldhttpapi.NewEstopHandler(oldhttpapi.EstopHandlerOptions{
 		APIKey:       apiKey,
 		Workspace:    svc.cfg.WorkspacePath(),
 		Enabled:      svc.cfg.Tools.Estop.Enabled,
@@ -60,7 +60,7 @@ func registerGatewayHTTPAPI(svc *gatewayServices) error {
 		fmt.Printf("⚠ Warning: failed to register /api/estop: %v\n", err)
 	}
 
-	sessionModel := httpapi.NewSessionModelHandler(httpapi.SessionModelHandlerOptions{
+	sessionModel := oldhttpapi.NewSessionModelHandler(oldhttpapi.SessionModelHandlerOptions{
 		APIKey:    apiKey,
 		Workspace: svc.cfg.WorkspacePath(),
 		Sessions: func() session.Store {
@@ -76,7 +76,7 @@ func registerGatewayHTTPAPI(svc *gatewayServices) error {
 		fmt.Printf("⚠ Warning: failed to register /api/session_model: %v\n", err)
 	}
 
-	security := httpapi.NewSecurityHandler(httpapi.SecurityHandlerOptions{
+	security := oldhttpapi.NewSecurityHandler(oldhttpapi.SecurityHandlerOptions{
 		APIKey:    apiKey,
 		Workspace: svc.cfg.WorkspacePath(),
 		Config:    svc.cfg,
@@ -85,7 +85,7 @@ func registerGatewayHTTPAPI(svc *gatewayServices) error {
 		fmt.Printf("⚠ Warning: failed to register /api/security: %v\n", err)
 	}
 
-	console := httpapi.NewConsoleHandler(httpapi.ConsoleHandlerOptions{
+	console := coregateway.NewConsoleHandler(coregateway.ConsoleHandlerOptions{
 		Workspace: svc.cfg.WorkspacePath(),
 		APIKey:    apiKey,
 		LastActive: func() (string, string) {
@@ -94,7 +94,7 @@ func registerGatewayHTTPAPI(svc *gatewayServices) error {
 			}
 			return svc.agentLoop.LastActive()
 		},
-		Info: httpapi.ConsoleInfo{
+		Info: coregateway.ConsoleInfo{
 			Model:                      svc.cfg.Agents.Defaults.ModelName,
 			NotifyOnTaskComplete:       svc.cfg.Notify.OnTaskComplete,
 			ToolTraceEnabled:           svc.cfg.Tools.Trace.Enabled,

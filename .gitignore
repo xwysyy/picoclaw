@@ -46,3 +46,5 @@ dist/
 
 # Windows Application Icon/Resource
 *.syso
+
+.worktrees/
