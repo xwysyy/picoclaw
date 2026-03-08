@@ -321,8 +321,9 @@ func TestCronToolExecuteJob_DeliverFalseNoUpdateIsSilent(t *testing.T) {
 func TestCronToolExecuteJob_DeliverTrueUsesLastActive(t *testing.T) {
 	mb := bus.NewMessageBus()
 	exec := &stubCronExecutor{
-		lastCh: "feishu",
-		lastID: "oc_test",
+		lastCh:         "feishu",
+		lastID:         "oc_test",
+		lastSessionKey: "conv:feishu:direct:oc_test",
 	}
 	tool := newCronToolWithExecutorForTest(t, exec, mb)
 
@@ -351,6 +352,59 @@ func TestCronToolExecuteJob_DeliverTrueUsesLastActive(t *testing.T) {
 	}
 	if msg.Content != "ping" {
 		t.Fatalf("unexpected content: %q", msg.Content)
+	}
+	if msg.SessionKey != "" {
+		t.Fatalf("expected empty outbound session_key for deliver=true, got %q", msg.SessionKey)
+	}
+	if job.State.LastSessionKey != "conv:feishu:direct:oc_test" {
+		t.Fatalf("LastSessionKey = %q, want %q", job.State.LastSessionKey, "conv:feishu:direct:oc_test")
+	}
+}
+
+func TestCronToolExecuteJob_CommandPublishesWithoutSessionKey(t *testing.T) {
+	mb := bus.NewMessageBus()
+	exec := &stubCronExecutor{
+		lastCh:         "feishu",
+		lastID:         "oc_test",
+		lastSessionKey: "conv:feishu:direct:oc_test",
+	}
+	tool := newCronToolWithExecutorForTest(t, exec, mb)
+
+	job := &cronpkg.CronJob{
+		ID:   "job_cmd",
+		Name: "commanded",
+		Payload: cronpkg.CronPayload{
+			Message: "run command",
+			Deliver: false,
+			Command: "printf 'hello-from-command'",
+		},
+	}
+
+	out, err := tool.ExecuteJob(context.Background(), job)
+	if err != nil {
+		t.Fatalf("expected success, got error: %v", err)
+	}
+	if !strings.Contains(out, "hello-from-command") {
+		t.Fatalf("expected command output in result, got %q", out)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	msg, ok := mb.SubscribeOutbound(ctx)
+	if !ok {
+		t.Fatal("expected outbound message")
+	}
+	if msg.Channel != "feishu" || msg.ChatID != "oc_test" {
+		t.Fatalf("unexpected outbound destination: %q %q", msg.Channel, msg.ChatID)
+	}
+	if !strings.Contains(msg.Content, "hello-from-command") {
+		t.Fatalf("expected command output in outbound message, got %q", msg.Content)
+	}
+	if msg.SessionKey != "" {
+		t.Fatalf("expected empty outbound session_key for command job, got %q", msg.SessionKey)
+	}
+	if job.State.LastSessionKey != "conv:feishu:direct:oc_test" {
+		t.Fatalf("LastSessionKey = %q, want %q", job.State.LastSessionKey, "conv:feishu:direct:oc_test")
 	}
 }
 

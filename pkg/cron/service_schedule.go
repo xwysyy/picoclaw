@@ -87,6 +87,8 @@ func (cs *CronService) clearStaleRunningStatesUnsafe(nowMS int64) {
 		if duration < 0 {
 			duration = 0
 		}
+		preview := truncateRunes(job.State.LastOutputPreview, defaultOutputPreviewRunes)
+		sessionKey := strings.TrimSpace(job.State.LastSessionKey)
 		errMsg := "aborted: service restarted while job was running"
 		job.State.Running = false
 		job.State.RunningSinceMS = nil
@@ -94,9 +96,10 @@ func (cs *CronService) clearStaleRunningStatesUnsafe(nowMS int64) {
 		job.State.LastRunAtMS = &startedAt
 		job.State.LastStatus = "aborted"
 		job.State.LastError = errMsg
-		job.State.LastOutputPreview = ""
+		job.State.LastOutputPreview = preview
+		job.State.LastSessionKey = sessionKey
 		job.State.LastDurationMS = &duration
-		job.State.RunHistory = append(job.State.RunHistory, CronRunRecord{RunID: runID, StartedAtMS: startedAt, FinishedAtMS: nowMS, DurationMS: duration, Status: "aborted", Error: errMsg})
+		job.State.RunHistory = append(job.State.RunHistory, CronRunRecord{RunID: runID, StartedAtMS: startedAt, FinishedAtMS: nowMS, DurationMS: duration, Status: "aborted", SessionKey: sessionKey, Error: errMsg, Output: preview})
 		if len(job.State.RunHistory) > defaultRunHistoryLimit {
 			job.State.RunHistory = job.State.RunHistory[len(job.State.RunHistory)-defaultRunHistoryLimit:]
 		}

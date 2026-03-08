@@ -8,7 +8,7 @@ import (
 )
 
 func LoginPasteToken(provider string, r io.Reader) (*AuthCredential, error) {
-	fmt.Printf("Paste your API key or session token from %s:\n", providerDisplayName(provider))
+	fmt.Printf("Paste your API key or session token from %s:\n", ProviderDisplayName(provider))
 	fmt.Print("> ")
 
 	scanner := bufio.NewScanner(r)
@@ -29,15 +29,4 @@ func LoginPasteToken(provider string, r io.Reader) (*AuthCredential, error) {
 		Provider:    provider,
 		AuthMethod:  "token",
 	}, nil
-}
-
-func providerDisplayName(provider string) string {
-	switch provider {
-	case "anthropic":
-		return "console.anthropic.com"
-	case "openai":
-		return "platform.openai.com"
-	default:
-		return provider
-	}
 }

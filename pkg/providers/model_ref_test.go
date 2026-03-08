@@ -142,3 +142,32 @@ func TestParseModelRef_DefaultProviderNormalization(t *testing.T) {
 		t.Errorf("provider = %q, want openai (normalized from GPT)", ref.Provider)
 	}
 }
+
+func TestCanonicalProtocol_AcceptsKnownAliases(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"gpt", "openai"},
+		{"claude", "anthropic"},
+		{"glm", "zhipu"},
+		{"z.ai", "zhipu"},
+		{"z-ai", "zhipu"},
+		{"google", "gemini"},
+		{"qwen", "qwen"},
+		{"qwen-portal", "qwen"},
+		{"copilot", "github-copilot"},
+		{"github_copilot", "github-copilot"},
+		{"github-copilot", "github-copilot"},
+		{"claudecli", "claude-cli"},
+		{"claude-cli", "claude-cli"},
+		{"codexcli", "codex-cli"},
+		{"codex-cli", "codex-cli"},
+	}
+
+	for _, tt := range tests {
+		if got := CanonicalProtocol(tt.input); got != tt.want {
+			t.Fatalf("CanonicalProtocol(%q) = %q, want %q", tt.input, got, tt.want)
+		}
+	}
+}

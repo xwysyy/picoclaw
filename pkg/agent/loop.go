@@ -19,6 +19,7 @@ import (
 	"github.com/xwysyy/X-Claw/pkg/constants"
 	"github.com/xwysyy/X-Claw/pkg/logger"
 	"github.com/xwysyy/X-Claw/pkg/mcp"
+	"github.com/xwysyy/X-Claw/pkg/media"
 	"github.com/xwysyy/X-Claw/pkg/providers"
 	"github.com/xwysyy/X-Claw/pkg/routing"
 	"github.com/xwysyy/X-Claw/pkg/session"
@@ -50,6 +51,7 @@ type AgentLoop struct {
 	fallback         *providers.FallbackChain
 	channelDirectory ChannelDirectory
 	mediaResolver    MediaResolver
+	mediaStore       media.MediaStore
 	transcriber      voice.Transcriber
 	mcpMgr           *mcp.Manager
 
@@ -456,6 +458,138 @@ func (al *AgentLoop) SetChannelManager(dir ChannelDirectory) {
 // SetMediaResolver injects a media resolver for media:// lifecycle lookups.
 func (al *AgentLoop) SetMediaResolver(r MediaResolver) {
 	al.mediaResolver = r
+}
+
+// SetMediaStore injects the shared media store for tools that must publish
+// media:// refs rather than raw local filesystem paths.
+func (al *AgentLoop) SetMediaStore(store media.MediaStore) {
+	if al == nil {
+		return
+	}
+	al.mediaStore = store
+	if al.registry == nil {
+		return
+	}
+	cfg := al.Config()
+	sendFileEnabled := cfg != nil && cfg.Tools.IsToolEnabled("send_file")
+	for _, agentID := range al.registry.ListAgentIDs() {
+		agent, ok := al.registry.GetAgent(agentID)
+		if !ok || agent == nil || agent.Tools == nil {
+			continue
+		}
+
+		if store == nil || !sendFileEnabled {
+			agent.Tools.Unregister("send_file")
+			continue
+		}
+
+		sendFileTool := ensureSendFileToolRegistered(agent, cfg)
+		if sendFileTool == nil {
+			continue
+		}
+		sendFileTool.SetPublishCallback(func(_ context.Context, msg bus.OutboundMediaMessage) error {
+			if al.bus == nil {
+				return fmt.Errorf("outbound media bus not configured")
+			}
+			pubCtx, pubCancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer pubCancel()
+			return al.bus.PublishOutboundMedia(pubCtx, msg)
+		})
+		sendFileTool.SetStoreRefCallback(func(ctx context.Context, localPath string, part bus.MediaPart) (string, error) {
+			stagedPath, err := stageSendFileForMediaStore(localPath, part.Filename)
+			if err != nil {
+				return "", err
+			}
+			ref, err := store.Store(stagedPath, media.MediaMeta{
+				Filename:    strings.TrimSpace(part.Filename),
+				ContentType: strings.TrimSpace(part.ContentType),
+				Source:      "tool:send_file",
+			}, sendFileMediaScope(ctx))
+			if err != nil {
+				_ = os.Remove(stagedPath)
+				return "", err
+			}
+			return ref, nil
+		})
+	}
+}
+
+func ensureSendFileToolRegistered(agent *AgentInstance, cfg *config.Config) *tools.SendFileTool {
+	if agent == nil || agent.Tools == nil || cfg == nil {
+		return nil
+	}
+	if existing, ok := agent.Tools.Get("send_file"); ok {
+		if sendFileTool, ok := existing.(*tools.SendFileTool); ok && sendFileTool != nil {
+			return sendFileTool
+		}
+	}
+
+	const defaultSendFileMaxBytes = 10 * 1024 * 1024
+	sendFileTool := tools.NewSendFileTool(agent.Workspace, cfg.Agents.Defaults.RestrictToWorkspace, defaultSendFileMaxBytes)
+	agent.Tools.Register(sendFileTool)
+	return sendFileTool
+}
+
+func sendFileMediaScope(ctx context.Context) string {
+	sessionKey := strings.TrimSpace(tools.ExecutionSessionKey(ctx))
+	if sessionKey != "" {
+		return fmt.Sprintf("tool:send_file:%s:%d", sessionKey, time.Now().UnixNano())
+	}
+
+	channel := strings.TrimSpace(tools.ToolChannel(ctx))
+	chatID := strings.TrimSpace(tools.ToolChatID(ctx))
+	if channel == "" {
+		channel = "unknown"
+	}
+	if chatID == "" {
+		chatID = "unknown"
+	}
+	return fmt.Sprintf("tool:send_file:%s:%s:%d", channel, chatID, time.Now().UnixNano())
+}
+
+func stageSendFileForMediaStore(localPath, filename string) (string, error) {
+	mediaDir := utils.MediaTempDir()
+	if err := os.MkdirAll(mediaDir, 0o700); err != nil {
+		return "", fmt.Errorf("create media temp dir: %w", err)
+	}
+
+	pattern := "send-file-*"
+	ext := strings.TrimSpace(filepath.Ext(filename))
+	if ext == "" {
+		ext = strings.TrimSpace(filepath.Ext(localPath))
+	}
+	if ext != "" {
+		pattern += ext
+	}
+
+	src, err := os.Open(localPath)
+	if err != nil {
+		return "", fmt.Errorf("open source file: %w", err)
+	}
+	defer src.Close()
+
+	dst, err := os.CreateTemp(mediaDir, pattern)
+	if err != nil {
+		return "", fmt.Errorf("create staged media file: %w", err)
+	}
+	stagedPath := dst.Name()
+
+	if _, err := io.Copy(dst, src); err != nil {
+		dst.Close()
+		_ = os.Remove(stagedPath)
+		return "", fmt.Errorf("copy media file into staging area: %w", err)
+	}
+	if err := dst.Sync(); err != nil {
+		dst.Close()
+		_ = os.Remove(stagedPath)
+		return "", fmt.Errorf("sync staged media file: %w", err)
+	}
+	if err := dst.Close(); err != nil {
+		_ = os.Remove(stagedPath)
+		return "", fmt.Errorf("close staged media file: %w", err)
+	}
+
+	return stagedPath, nil
 }
 
 func (al *AgentLoop) GetTaskLedger() *tools.TaskLedger {
@@ -1388,6 +1522,9 @@ func (r *llmIterationRunner) handleLLMResponse(response *providers.LLMResponse) 
 
 	if len(response.ToolCalls) == 0 {
 		r.finalContent = response.Content
+		if r.finalContent == "" && response.ReasoningContent != "" {
+			r.finalContent = response.ReasoningContent
+		}
 		logger.InfoCF("agent", "LLM response without tool calls (direct answer)",
 			map[string]any{
 				"agent_id":      r.agent.ID,

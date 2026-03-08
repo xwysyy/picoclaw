@@ -2131,3 +2131,180 @@ func TestSplitMessage_CodeBlockIntegrity(t *testing.T) {
 		t.Errorf("First chunk exceeded maxLen: length %d runes", len([]rune(chunks[0])))
 	}
 }
+
+type mockReplyCapableMediaChannel struct {
+	mockChannel
+	sendWithIDFn func(ctx context.Context, msg bus.OutboundMessage) (string, error)
+	sendMediaFn  func(ctx context.Context, msg bus.OutboundMediaMessage) error
+}
+
+func (m *mockReplyCapableMediaChannel) SendWithMessageID(ctx context.Context, msg bus.OutboundMessage) (string, error) {
+	return m.sendWithIDFn(ctx, msg)
+}
+
+func (m *mockReplyCapableMediaChannel) SendMedia(ctx context.Context, msg bus.OutboundMediaMessage) error {
+	return m.sendMediaFn(ctx, msg)
+}
+
+func TestReplyContract_EditPlaceholderPreservesReplyBinding(t *testing.T) {
+	mb := bus.NewMessageBus()
+	defer mb.Close()
+
+	m := &Manager{bus: mb}
+	ch := &mockMessageEditor{
+		mockChannel: mockChannel{sendFn: func(context.Context, bus.OutboundMessage) error { return nil }},
+		editFn:      func(context.Context, string, string, string) error { return nil },
+	}
+
+	m.RecordPlaceholder("test", "chat-1", "ph-1")
+	edited := m.preSend(context.Background(), "test", bus.OutboundMessage{
+		Channel:    "test",
+		ChatID:     "chat-1",
+		Content:    "hello",
+		SessionKey: "conv:test:chat-1",
+	}, ch)
+	if !edited {
+		t.Fatal("expected placeholder edit path")
+	}
+
+	got, ok := mb.LookupReplyContext("test", "chat-1", "ph-1")
+	if !ok {
+		t.Fatal("expected reply binding for placeholder edit")
+	}
+	if got.SessionKey != "conv:test:chat-1" {
+		t.Fatalf("session key = %q, want %q", got.SessionKey, "conv:test:chat-1")
+	}
+}
+
+func TestReplyContract_MediaSendDoesNotBreakMessageBinding(t *testing.T) {
+	mb := bus.NewMessageBus()
+	defer mb.Close()
+
+	var mediaCalls atomic.Int32
+	ch := &mockReplyCapableMediaChannel{
+		mockChannel: mockChannel{sendFn: func(context.Context, bus.OutboundMessage) error { return nil }},
+		sendWithIDFn: func(_ context.Context, msg bus.OutboundMessage) (string, error) {
+			if msg.SessionKey != "conv:test:chat-1" {
+				t.Fatalf("session key = %q, want %q", msg.SessionKey, "conv:test:chat-1")
+			}
+			return "msg-42", nil
+		},
+		sendMediaFn: func(_ context.Context, msg bus.OutboundMediaMessage) error {
+			mediaCalls.Add(1)
+			if msg.ChatID != "chat-1" {
+				t.Fatalf("chat_id = %q, want %q", msg.ChatID, "chat-1")
+			}
+			if len(msg.Parts) != 1 || msg.Parts[0].Ref != "media://test-ref" {
+				t.Fatalf("unexpected media parts: %+v", msg.Parts)
+			}
+			return nil
+		},
+	}
+	m := &Manager{bus: mb}
+	w := &channelWorker{ch: ch, limiter: rate.NewLimiter(rate.Inf, 1)}
+
+	m.sendWithRetry(context.Background(), "test", w, bus.OutboundMessage{
+		Channel:    "test",
+		ChatID:     "chat-1",
+		Content:    "hello",
+		SessionKey: "conv:test:chat-1",
+	})
+
+	got, ok := mb.LookupReplyContext("test", "chat-1", "msg-42")
+	if !ok {
+		t.Fatal("expected reply binding after text send")
+	}
+	if got.SessionKey != "conv:test:chat-1" {
+		t.Fatalf("session key = %q, want %q", got.SessionKey, "conv:test:chat-1")
+	}
+
+	m.sendMediaWithRetry(context.Background(), "test", w, bus.OutboundMediaMessage{
+		Channel: "test",
+		ChatID:  "chat-1",
+		Parts: []bus.MediaPart{{
+			Type: "file",
+			Ref:  "media://test-ref",
+		}},
+	})
+
+	if mediaCalls.Load() != 1 {
+		t.Fatalf("expected 1 media send, got %d", mediaCalls.Load())
+	}
+	got, ok = mb.LookupReplyContext("test", "chat-1", "msg-42")
+	if !ok {
+		t.Fatal("expected reply binding to survive media send")
+	}
+	if got.SessionKey != "conv:test:chat-1" {
+		t.Fatalf("session key after media send = %q, want %q", got.SessionKey, "conv:test:chat-1")
+	}
+}
+
+func TestReplyContract_StopAllClearsReplyCapableWorkers(t *testing.T) {
+	mb := bus.NewMessageBus()
+	defer mb.Close()
+
+	var sendCalls atomic.Int32
+	var mediaCalls atomic.Int32
+	ch := &mockReplyCapableMediaChannel{
+		mockChannel: mockChannel{sendFn: func(_ context.Context, _ bus.OutboundMessage) error {
+			sendCalls.Add(1)
+			return nil
+		}},
+		sendWithIDFn: func(_ context.Context, _ bus.OutboundMessage) (string, error) {
+			sendCalls.Add(1)
+			return "msg-after-stop", nil
+		},
+		sendMediaFn: func(_ context.Context, _ bus.OutboundMediaMessage) error {
+			mediaCalls.Add(1)
+			return nil
+		},
+	}
+
+	m := &Manager{
+		channels: map[string]Channel{"test": ch},
+		workers:  map[string]*channelWorker{},
+		bus:      mb,
+	}
+
+	workerCtx, cancel := context.WithCancel(context.Background())
+	m.dispatchTask = &asyncTask{cancel: cancel}
+	w := newChannelWorker("test", ch)
+	m.workers["test"] = w
+
+	go m.runWorker(workerCtx, "test", w)
+	go m.runMediaWorker(workerCtx, "test", w)
+	go m.dispatchOutbound(workerCtx)
+	go m.dispatchOutboundMedia(workerCtx)
+
+	if err := m.StopAll(context.Background()); err != nil {
+		t.Fatalf("StopAll() error = %v", err)
+	}
+
+	if err := m.SendToChannel(context.Background(), "test", "chat-1", "hello"); !errors.Is(err, ErrNotRunning) {
+		t.Fatalf("expected ErrNotRunning after StopAll, got %v", err)
+	}
+	if err := mb.PublishOutbound(context.Background(), bus.OutboundMessage{Channel: "test", ChatID: "chat-1", Content: "hello", SessionKey: "conv:test:chat-1"}); err != nil {
+		t.Fatalf("PublishOutbound() error = %v", err)
+	}
+	if err := mb.PublishOutboundMedia(context.Background(), bus.OutboundMediaMessage{Channel: "test", ChatID: "chat-1", Parts: []bus.MediaPart{{Type: "file", Ref: "media://after-stop"}}}); err != nil {
+		t.Fatalf("PublishOutboundMedia() error = %v", err)
+	}
+
+	time.Sleep(50 * time.Millisecond)
+	if sendCalls.Load() != 0 {
+		t.Fatalf("expected no text sends after StopAll, got %d", sendCalls.Load())
+	}
+	if mediaCalls.Load() != 0 {
+		t.Fatalf("expected no media sends after StopAll, got %d", mediaCalls.Load())
+	}
+
+	m.mu.RLock()
+	workers := len(m.workers)
+	m.mu.RUnlock()
+	if workers != 0 {
+		t.Fatalf("expected workers to be cleared after StopAll, got %d", workers)
+	}
+	if _, ok := mb.LookupReplyContext("test", "chat-1", "msg-after-stop"); ok {
+		t.Fatal("did not expect reply binding after StopAll")
+	}
+}

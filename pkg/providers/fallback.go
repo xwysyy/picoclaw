@@ -119,17 +119,21 @@ func (fc *FallbackChain) Execute(
 
 		// Check cooldown.
 		if !fc.cooldown.IsAvailable(candidate.Provider) {
-			remaining := fc.cooldown.CooldownRemaining(candidate.Provider)
+			reason := fc.cooldown.unavailabilityReason(candidate.Provider)
+			if reason == "" {
+				reason = FailoverRateLimit
+			}
+			detail := fc.cooldown.unavailabilityDetail(candidate.Provider)
+			if detail == "" {
+				remaining := fc.cooldown.CooldownRemaining(candidate.Provider)
+				detail = fmt.Sprintf("provider %s in cooldown (%s remaining)", candidate.Provider, remaining.Round(time.Second))
+			}
 			result.Attempts = append(result.Attempts, FallbackAttempt{
 				Provider: candidate.Provider,
 				Model:    candidate.Model,
 				Skipped:  true,
-				Reason:   FailoverRateLimit,
-				Error: fmt.Errorf(
-					"provider %s in cooldown (%s remaining)",
-					candidate.Provider,
-					remaining.Round(time.Second),
-				),
+				Reason:   reason,
+				Error:    fmt.Errorf("%s", detail),
 			})
 			continue
 		}
@@ -292,7 +296,11 @@ func (e *FallbackExhaustedError) Error() string {
 	sb.WriteString(fmt.Sprintf("fallback: all %d candidates failed:", len(e.Attempts)))
 	for i, a := range e.Attempts {
 		if a.Skipped {
-			sb.WriteString(fmt.Sprintf("\n  [%d] %s/%s: skipped (cooldown)", i+1, a.Provider, a.Model))
+			if a.Error != nil {
+				sb.WriteString(fmt.Sprintf("\n  [%d] %s/%s: skipped (%v)", i+1, a.Provider, a.Model, a.Error))
+			} else {
+				sb.WriteString(fmt.Sprintf("\n  [%d] %s/%s: skipped (cooldown)", i+1, a.Provider, a.Model))
+			}
 		} else {
 			sb.WriteString(fmt.Sprintf("\n  [%d] %s/%s: %v (reason=%s, %s)",
 				i+1, a.Provider, a.Model, a.Error, a.Reason, a.Duration.Round(time.Millisecond)))

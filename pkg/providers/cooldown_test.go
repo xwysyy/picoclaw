@@ -1,6 +1,7 @@
 package providers
 
 import (
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -196,6 +197,27 @@ func TestCooldown_BillingTakesPrecedence(t *testing.T) {
 	*current = now.Add(5*time.Hour + 1*time.Second)
 	if !ct.IsAvailable("openai") {
 		t.Error("should be available after all cooldowns expire")
+	}
+}
+
+func TestCooldown_UnavailabilityDetailPrefersBillingCooldown(t *testing.T) {
+	now := time.Now()
+	ct, current := newTestTracker(now)
+
+	ct.MarkFailure("openai", FailoverRateLimit)
+	ct.MarkFailure("openai", FailoverBilling)
+
+	detail := ct.unavailabilityDetail("openai")
+	if !strings.Contains(detail, "billing cooldown") {
+		t.Fatalf("detail = %q, want billing cooldown detail", detail)
+	}
+	if !strings.Contains(detail, "remaining") {
+		t.Fatalf("detail = %q, want remaining hint", detail)
+	}
+
+	*current = now.Add(5*time.Hour + 1*time.Second)
+	if detail := ct.unavailabilityDetail("openai"); detail != "" {
+		t.Fatalf("detail after expiry = %q, want empty", detail)
 	}
 }
 

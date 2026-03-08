@@ -57,6 +57,9 @@ var (
 		substr("credit balance"),
 		substr("plans & billing"),
 		substr("insufficient balance"),
+		substr("daily output token limit"),
+		substr("spend limit"),
+		substr("billing cooldown"),
 	}
 
 	authPatterns = []errorPattern{
@@ -103,6 +106,13 @@ var (
 
 // ClassifyError classifies an error into a FailoverError with reason.
 // Returns nil if the error is not classifiable (unknown errors should not trigger fallback).
+func normalizeProviderErrorMessage(err error) string {
+	if err == nil {
+		return ""
+	}
+	return strings.Join(strings.Fields(strings.ToLower(strings.TrimSpace(err.Error()))), " ")
+}
+
 func ClassifyError(err error, provider, model string) *FailoverError {
 	if err == nil {
 		return nil
@@ -123,7 +133,7 @@ func ClassifyError(err error, provider, model string) *FailoverError {
 		}
 	}
 
-	msg := strings.ToLower(err.Error())
+	msg := normalizeProviderErrorMessage(err)
 
 	// Image dimension/size errors: non-retriable, non-fallback.
 	if IsImageDimensionError(msg) || IsImageSizeError(msg) {

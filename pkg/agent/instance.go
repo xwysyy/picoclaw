@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"regexp"
 	"strings"
@@ -477,6 +478,25 @@ func (r toolRegistrar) registerMessageTool(agent *AgentInstance) {
 		})
 	})
 	agent.Tools.Register(messageTool)
+}
+
+func (r toolRegistrar) registerSendFileTool(agent *AgentInstance) {
+	if r.cfg == nil || !r.cfg.Tools.IsToolEnabled("send_file") {
+		return
+	}
+
+	const defaultSendFileMaxBytes = 10 * 1024 * 1024
+
+	sendFileTool := tools.NewSendFileTool(agent.Workspace, r.cfg.Agents.Defaults.RestrictToWorkspace, defaultSendFileMaxBytes)
+	sendFileTool.SetPublishCallback(func(ctx context.Context, msg bus.OutboundMediaMessage) error {
+		if r.msgBus == nil {
+			return fmt.Errorf("outbound media bus not configured")
+		}
+		pubCtx, pubCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer pubCancel()
+		return r.msgBus.PublishOutboundMedia(pubCtx, msg)
+	})
+	agent.Tools.Register(sendFileTool)
 }
 
 func (r toolRegistrar) registerCalendarTool(agent *AgentInstance) {

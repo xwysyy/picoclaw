@@ -114,6 +114,8 @@ func (t *ToolsConfig) IsToolEnabled(name string) bool {
 		return t.ListDir.Enabled
 	case "message":
 		return t.Message.Enabled
+	case "send_file":
+		return t.SendFile.Enabled
 	case "read_file":
 		return t.ReadFile.Enabled
 	case "spi":

@@ -1,6 +1,7 @@
 package providers
 
 import (
+	"fmt"
 	"math"
 	"sync"
 	"time"
@@ -105,6 +106,47 @@ func (ct *CooldownTracker) IsAvailable(provider string) bool {
 	}
 
 	return true
+}
+
+func (ct *CooldownTracker) unavailabilityReason(provider string) FailoverReason {
+	ct.mu.RLock()
+	defer ct.mu.RUnlock()
+
+	entry := ct.entries[provider]
+	if entry == nil {
+		return ""
+	}
+
+	now := ct.nowFunc()
+	if !entry.DisabledUntil.IsZero() && now.Before(entry.DisabledUntil) {
+		if entry.DisabledReason != "" {
+			return entry.DisabledReason
+		}
+		return FailoverBilling
+	}
+	if !entry.CooldownEnd.IsZero() && now.Before(entry.CooldownEnd) {
+		return FailoverRateLimit
+	}
+	return ""
+}
+
+func (ct *CooldownTracker) unavailabilityDetail(provider string) string {
+	ct.mu.RLock()
+	defer ct.mu.RUnlock()
+
+	entry := ct.entries[provider]
+	if entry == nil {
+		return ""
+	}
+
+	now := ct.nowFunc()
+	if !entry.DisabledUntil.IsZero() && now.Before(entry.DisabledUntil) {
+		return fmt.Sprintf("provider %s in billing cooldown (%s remaining)", provider, entry.DisabledUntil.Sub(now).Round(time.Second))
+	}
+	if !entry.CooldownEnd.IsZero() && now.Before(entry.CooldownEnd) {
+		return fmt.Sprintf("provider %s in cooldown (%s remaining)", provider, entry.CooldownEnd.Sub(now).Round(time.Second))
+	}
+	return ""
 }
 
 // CooldownRemaining returns how long until the provider becomes available.

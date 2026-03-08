@@ -610,3 +610,82 @@ func TestConvertProvidersToModelList_LegacyModelWithProtocolPrefix(t *testing.T)
 		t.Errorf("Model = %q, want %q (should not duplicate prefix)", result[0].Model, "openrouter/auto")
 	}
 }
+
+func TestMigration_DefaultProviderAliasesStayInSync(t *testing.T) {
+	tests := []struct {
+		name      string
+		provider  string
+		model     string
+		configure func(*Config)
+		wantModel string
+	}{
+		{
+			name:     "gpt alias preserves openai model",
+			provider: "gpt",
+			model:    "gpt-4-custom",
+			configure: func(cfg *Config) {
+				cfg.Providers.OpenAI = OpenAIProviderConfig{ProviderConfig: ProviderConfig{APIKey: SecretRef{Inline: "key"}}}
+			},
+			wantModel: "openai/gpt-4-custom",
+		},
+		{
+			name:     "claude alias preserves anthropic model",
+			provider: "claude",
+			model:    "claude-custom",
+			configure: func(cfg *Config) {
+				cfg.Providers.Anthropic = ProviderConfig{APIKey: SecretRef{Inline: "key"}}
+			},
+			wantModel: "anthropic/claude-custom",
+		},
+		{
+			name:     "z.ai alias preserves zhipu model",
+			provider: "z.ai",
+			model:    "glm-4.7",
+			configure: func(cfg *Config) {
+				cfg.Providers.Zhipu = ProviderConfig{APIKey: SecretRef{Inline: "key"}}
+			},
+			wantModel: "zhipu/glm-4.7",
+		},
+		{
+			name:     "qwen-portal alias preserves qwen model",
+			provider: "qwen-portal",
+			model:    "qwen-plus",
+			configure: func(cfg *Config) {
+				cfg.Providers.Qwen = ProviderConfig{APIKey: SecretRef{Inline: "key"}}
+			},
+			wantModel: "qwen/qwen-plus",
+		},
+		{
+			name:     "github-copilot alias preserves copilot model",
+			provider: "github-copilot",
+			model:    "claude-sonnet-4.5",
+			configure: func(cfg *Config) {
+				cfg.Providers.GitHubCopilot = ProviderConfig{ConnectMode: "grpc"}
+			},
+			wantModel: "github-copilot/claude-sonnet-4.5",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &Config{
+				Agents: AgentsConfig{
+					Defaults: AgentDefaults{
+						Provider: tt.provider,
+						Model:    tt.model,
+					},
+				},
+				Providers: ProvidersConfig{},
+			}
+			tt.configure(cfg)
+
+			result := ConvertProvidersToModelList(cfg)
+			if len(result) != 1 {
+				t.Fatalf("len(result) = %d, want 1", len(result))
+			}
+			if result[0].Model != tt.wantModel {
+				t.Fatalf("Model = %q, want %q", result[0].Model, tt.wantModel)
+			}
+		})
+	}
+}

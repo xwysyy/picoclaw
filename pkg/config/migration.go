@@ -140,7 +140,7 @@ func ConvertProvidersToModelList(cfg *Config) []ModelConfig {
 			},
 		},
 		{
-			providerNames: []string{"zhipu", "glm"},
+			providerNames: []string{"zhipu", "glm", "z.ai", "z-ai"},
 			protocol:      "zhipu",
 			buildConfig: func(p ProvidersConfig) (ModelConfig, bool) {
 				if p.Zhipu.APIKey.IsZero() && p.Zhipu.APIBase == "" {
@@ -310,7 +310,7 @@ func ConvertProvidersToModelList(cfg *Config) []ModelConfig {
 			},
 		},
 		{
-			providerNames: []string{"github_copilot", "copilot"},
+			providerNames: []string{"github-copilot", "github_copilot", "copilot"},
 			protocol:      "github-copilot",
 			buildConfig: func(p ProvidersConfig) (ModelConfig, bool) {
 				if p.GitHubCopilot.APIKey.IsZero() && p.GitHubCopilot.APIBase == "" && p.GitHubCopilot.ConnectMode == "" {
@@ -340,7 +340,7 @@ func ConvertProvidersToModelList(cfg *Config) []ModelConfig {
 			},
 		},
 		{
-			providerNames: []string{"qwen", "tongyi"},
+			providerNames: []string{"qwen", "qwen-portal", "tongyi"},
 			protocol:      "qwen",
 			buildConfig: func(p ProvidersConfig) (ModelConfig, bool) {
 				if p.Qwen.APIKey.IsZero() && p.Qwen.APIBase == "" {

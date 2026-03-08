@@ -3,21 +3,25 @@ package providers
 import (
 	"fmt"
 	"strings"
+
+	"github.com/xwysyy/X-Claw/pkg/auth"
 )
 
 func missingOAuthCredentialError(provider string) error {
-	provider = strings.TrimSpace(provider)
+	provider = auth.NormalizeBootstrapProvider(provider)
 	return fmt.Errorf(
-		"no credentials for %s. Configure `api_key` in config, or populate the local auth store before using oauth/token auth",
-		provider,
+		"no credentials for %s. Configure `api_key` in config, or %s before using oauth/token auth",
+		strings.TrimSpace(provider),
+		auth.BootstrapMethodHelp(provider),
 	)
 }
 
 func expiredOAuthCredentialError(provider string) error {
-	provider = strings.TrimSpace(provider)
+	provider = auth.NormalizeBootstrapProvider(provider)
 	return fmt.Errorf(
-		"%s credentials expired. Refresh the local auth store credential and retry",
-		provider,
+		"%s credentials expired. Refresh the local auth store credential via %s and retry",
+		strings.TrimSpace(provider),
+		auth.BootstrapMethodHelp(provider),
 	)
 }
 

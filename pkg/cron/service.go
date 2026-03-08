@@ -38,6 +38,7 @@ type CronJobState struct {
 
 	LastDurationMS    *int64          `json:"lastDurationMs,omitempty"`
 	LastOutputPreview string          `json:"lastOutputPreview,omitempty"`
+	LastSessionKey    string          `json:"lastSessionKey,omitempty"`
 	RunHistory        []CronRunRecord `json:"runHistory,omitempty"`
 }
 
@@ -47,6 +48,7 @@ type CronRunRecord struct {
 	FinishedAtMS int64  `json:"finishedAtMs"`
 	DurationMS   int64  `json:"durationMs"`
 	Status       string `json:"status"`
+	SessionKey   string `json:"sessionKey,omitempty"`
 	Error        string `json:"error,omitempty"`
 	Output       string `json:"output,omitempty"`
 }

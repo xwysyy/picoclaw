@@ -3,6 +3,7 @@ package cron
 import (
 	"fmt"
 	"log"
+	"strings"
 	"time"
 )
 
@@ -16,13 +17,14 @@ func (cs *CronService) executeJobByID(jobID string) {
 	if !ok {
 		return
 	}
+	log.Printf("[cron] start job=%s run_id=%s", jobCopy.ID, runID)
 
 	output, runErr := cs.executeJobHandler(&jobCopy)
 	finishedAtMS := time.Now().UnixMilli()
 
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
-	cs.finishJobRunUnsafe(jobID, runID, startedAtMS, finishedAtMS, output, runErr)
+	cs.finishJobRunUnsafe(jobID, runID, startedAtMS, finishedAtMS, output, runErr, strings.TrimSpace(jobCopy.State.LastSessionKey))
 }
 
 func (cs *CronService) beginJobRunUnsafe(jobID string, startedAtMS int64, runID string) (CronJob, bool) {
@@ -63,12 +65,14 @@ func (cs *CronService) executeJobHandler(job *CronJob) (string, error) {
 	return output, err
 }
 
-func (cs *CronService) finishJobRunUnsafe(jobID, runID string, startedAtMS, finishedAtMS int64, output string, runErr error) {
+func (cs *CronService) finishJobRunUnsafe(jobID, runID string, startedAtMS, finishedAtMS int64, output string, runErr error, lastSessionKey string) {
 	job := cs.findJobUnsafe(jobID)
 	if job == nil {
 		log.Printf("[cron] job %s disappeared before state update", jobID)
 		return
 	}
+	jobKind := job.Schedule.Kind
+	deleteAfterRun := job.DeleteAfterRun
 
 	durationMS := finishedAtMS - startedAtMS
 	if durationMS < 0 {
@@ -81,6 +85,7 @@ func (cs *CronService) finishJobRunUnsafe(jobID, runID string, startedAtMS, fini
 	job.State.LastRunAtMS = &startedAtMS
 	job.State.LastDurationMS = &durationMS
 	job.State.LastOutputPreview = truncateRunes(output, defaultOutputPreviewRunes)
+	job.State.LastSessionKey = lastSessionKey
 	job.UpdatedAtMS = time.Now().UnixMilli()
 
 	status, errText := summarizeRunError(runErr)
@@ -92,6 +97,7 @@ func (cs *CronService) finishJobRunUnsafe(jobID, runID string, startedAtMS, fini
 		FinishedAtMS: finishedAtMS,
 		DurationMS:   durationMS,
 		Status:       status,
+		SessionKey:   lastSessionKey,
 		Error:        errText,
 		Output:       job.State.LastOutputPreview,
 	})
@@ -100,6 +106,10 @@ func (cs *CronService) finishJobRunUnsafe(jobID, runID string, startedAtMS, fini
 	}
 
 	cs.updateNextRunAfterCompletionUnsafe(job, finishedAtMS)
+	log.Printf("[cron] finish job=%s run_id=%s status=%s duration_ms=%d", jobID, runID, status, durationMS)
+	if !(jobKind == "at" && deleteAfterRun) && job.State.NextRunAtMS != nil {
+		log.Printf("[cron] next job=%s next_run_ms=%d", jobID, *job.State.NextRunAtMS)
+	}
 	if err := cs.saveStoreUnsafe(); err != nil {
 		log.Printf("[cron] failed to save store: %v", err)
 	}

@@ -265,6 +265,7 @@ type ToolsConfig struct {
 	ListDir    ToolConfig `json:"list_dir,omitempty"      envPrefix:"X_CLAW_TOOLS_LIST_DIR_"`
 	Message    ToolConfig `json:"message,omitempty"       envPrefix:"X_CLAW_TOOLS_MESSAGE_"`
 	ReadFile   ToolConfig `json:"read_file,omitempty"     envPrefix:"X_CLAW_TOOLS_READ_FILE_"`
+	SendFile   ToolConfig `json:"send_file,omitempty"     envPrefix:"X_CLAW_TOOLS_SEND_FILE_"`
 	SPI        ToolConfig `json:"spi,omitempty"           envPrefix:"X_CLAW_TOOLS_SPI_"`
 	WebFetch   ToolConfig `json:"web_fetch,omitempty"     envPrefix:"X_CLAW_TOOLS_WEB_FETCH_"`
 	WriteFile  ToolConfig `json:"write_file,omitempty"    envPrefix:"X_CLAW_TOOLS_WRITE_FILE_"`

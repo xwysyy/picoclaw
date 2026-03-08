@@ -90,6 +90,58 @@ func TestConsoleHandler_APIKeyBearerWorks(t *testing.T) {
 	}
 }
 
+func TestConsoleHandler_StatusCronSummaryIncludesSessionTraceHints(t *testing.T) {
+	ws := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(ws, "cron"), 0o755); err != nil {
+		t.Fatalf("mkdir cron: %v", err)
+	}
+	store := `{"version":1,"jobs":[{"id":"job-1","name":"traceable cron","enabled":true,"schedule":{"kind":"every","everyMs":60000},"payload":{"kind":"agent_turn","message":"work","deliver":false,"channel":"feishu","to":"oc_test"},"state":{"lastStatus":"ok","lastDurationMs":42,"lastSessionKey":"cron-job-1","runHistory":[{"runId":"run-1","startedAtMs":1000,"finishedAtMs":1042,"durationMs":42,"status":"ok","sessionKey":"cron-job-1","output":"done"}]},"createdAtMs":1000,"updatedAtMs":1042}]}`
+	if err := os.WriteFile(filepath.Join(ws, "cron", "jobs.json"), []byte(store), 0o644); err != nil {
+		t.Fatalf("write jobs.json: %v", err)
+	}
+
+	h := NewConsoleHandler(ConsoleHandlerOptions{Workspace: ws})
+	req := httptest.NewRequest(http.MethodGet, "http://example.com/api/console/status", nil)
+	req.RemoteAddr = "127.0.0.1:1234"
+	rr := httptest.NewRecorder()
+
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+
+	var payload map[string]any
+	if err := json.NewDecoder(rr.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode json: %v", err)
+	}
+	cronSummary, ok := payload["cron"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected cron summary object, got %#v", payload["cron"])
+	}
+	jobStates, ok := cronSummary["jobStates"].([]any)
+	if !ok || len(jobStates) != 1 {
+		t.Fatalf("expected 1 cron job state, got %#v", cronSummary["jobStates"])
+	}
+	jobState, ok := jobStates[0].(map[string]any)
+	if !ok {
+		t.Fatalf("expected cron job state object, got %#v", jobStates[0])
+	}
+	if got := jobState["lastSessionKey"]; got != "cron-job-1" {
+		t.Fatalf("lastSessionKey = %#v, want %q", got, "cron-job-1")
+	}
+	runHistory, ok := jobState["runHistory"].([]any)
+	if !ok || len(runHistory) != 1 {
+		t.Fatalf("expected 1 runHistory item, got %#v", jobState["runHistory"])
+	}
+	runItem, ok := runHistory[0].(map[string]any)
+	if !ok {
+		t.Fatalf("expected runHistory object, got %#v", runHistory[0])
+	}
+	if got := runItem["sessionKey"]; got != "cron-job-1" {
+		t.Fatalf("runHistory.sessionKey = %#v, want %q", got, "cron-job-1")
+	}
+}
+
 func TestConsoleHandler_UI_LoopbackOnlyWhenNoAPIKey(t *testing.T) {
 	ws := t.TempDir()
 	h := NewConsoleHandler(ConsoleHandlerOptions{Workspace: ws})

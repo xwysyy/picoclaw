@@ -61,6 +61,7 @@ func initGatewayServices(debug bool) (*gatewayServices, error) {
 	}
 
 	agentLoop.SetChannelManager(channelManager)
+	agentLoop.SetMediaStore(mediaStore)
 	agentLoop.SetMediaResolver(media.AsMediaResolver(mediaStore))
 
 	if transcriber := voice.DetectTranscriber(cfg); transcriber != nil {

@@ -61,6 +61,38 @@ func makeJWTForClaims(t *testing.T, claims map[string]any) string {
 	return header + "." + payload + ".sig"
 }
 
+func TestResolveAuthBootstrapMethod(t *testing.T) {
+	tests := []struct {
+		name     string
+		provider string
+		want     BootstrapMethod
+	}{
+		{name: "openai uses browser oauth", provider: " openai ", want: BootstrapOAuthBrowser},
+		{name: "anthropic uses pasted token", provider: "anthropic", want: BootstrapPasteToken},
+		{name: "google antigravity uses browser oauth", provider: "google-antigravity", want: BootstrapOAuthBrowser},
+		{name: "antigravity alias uses browser oauth", provider: "antigravity", want: BootstrapOAuthBrowser},
+		{name: "unknown defaults to pasted token", provider: "custom-provider", want: BootstrapPasteToken},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := ResolveAuthBootstrapMethod(tt.provider); got != tt.want {
+				t.Fatalf("ResolveAuthBootstrapMethod(%q) = %q, want %q", tt.provider, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestLoginPasteToken_PreservesProviderValue(t *testing.T) {
+	cred, err := LoginPasteToken("antigravity", strings.NewReader("token\n"))
+	if err != nil {
+		t.Fatalf("LoginPasteToken() error = %v", err)
+	}
+	if cred.Provider != "antigravity" {
+		t.Fatalf("Provider = %q, want %q", cred.Provider, "antigravity")
+	}
+}
+
 func TestBuildAuthorizeURL(t *testing.T) {
 	cfg := OAuthProviderConfig{
 		Issuer:     "https://auth.example.com",

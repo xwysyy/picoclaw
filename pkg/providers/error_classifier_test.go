@@ -133,6 +133,35 @@ func TestClassifyError_BillingPatterns(t *testing.T) {
 	}
 }
 
+func TestClassifyError_BillingTemporaryLimitPatterns(t *testing.T) {
+	patterns := []string{
+		"daily output token limit exceeded",
+		"temporary spend\nlimit reached",
+		"billing\tcooldown\nin effect",
+	}
+
+	for _, msg := range patterns {
+		result := ClassifyError(errors.New(msg), "openai", "gpt-4.1")
+		if result == nil {
+			t.Fatalf("%q: expected classification", msg)
+		}
+		if result.Reason != FailoverBilling {
+			t.Fatalf("%q: reason=%q want=%q", msg, result.Reason, FailoverBilling)
+		}
+	}
+}
+
+func TestClassifyError_HTMLGatewayBodyPrefersTimeoutOrRateLimit(t *testing.T) {
+	err := errors.New("HTTP 502 <html><title>Bad Gateway</title></html>")
+	result := ClassifyError(err, "openai", "gpt-4.1")
+	if result == nil {
+		t.Fatal("expected classification")
+	}
+	if result.Reason != FailoverTimeout {
+		t.Fatalf("reason=%q want=%q", result.Reason, FailoverTimeout)
+	}
+}
+
 func TestClassifyError_TimeoutPatterns(t *testing.T) {
 	patterns := []string{
 		"request timeout",

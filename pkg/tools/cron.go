@@ -409,6 +409,22 @@ func (t *CronTool) ExecuteJob(ctx context.Context, job *cron.CronJob) (string, e
 		}
 	}
 
+	sessionKey := fmt.Sprintf("cron-%s", job.ID)
+	if lastSessionKey != "" && strings.EqualFold(channel, lastChannel) && chatID == lastChatID {
+		sessionKey = lastSessionKey
+	}
+	job.State.LastSessionKey = sessionKey
+	if t.cronService != nil {
+		if err := t.cronService.UpdateJob(job); err != nil {
+			logger.WarnCF("cron", "Persisting running cron session context failed", map[string]any{
+				"job_id":      job.ID,
+				"run_id":      job.State.RunningRunID,
+				"session_key": sessionKey,
+				"error":       err.Error(),
+			})
+		}
+	}
+
 	if channel == "" || chatID == "" {
 		// Backward-compatible fallback (CLI), but treat as an error in gateway mode so job state shows it.
 		// Note: internal channels are not delivered to users.
@@ -418,8 +434,20 @@ func (t *CronTool) ExecuteJob(ctx context.Context, job *cron.CronJob) (string, e
 		if chatID == "" {
 			chatID = "direct"
 		}
+		logger.WarnCF("cron", "Cron job missing delivery destination", map[string]any{"job_id": job.ID, "session_key": sessionKey, "channel": channel, "chat_id": chatID})
 		return "", fmt.Errorf("no delivery destination for cron job %q (channel/to missing and last_active unavailable)", job.ID)
 	}
+
+	logger.InfoCF("cron", "Executing cron job", map[string]any{
+		"job_id":      job.ID,
+		"job_name":    job.Name,
+		"run_id":      job.State.RunningRunID,
+		"session_key": sessionKey,
+		"channel":     channel,
+		"chat_id":     chatID,
+		"deliver":     job.Payload.Deliver,
+		"has_command": strings.TrimSpace(job.Payload.Command) != "",
+	})
 
 	// Execute command if present
 	if job.Payload.Command != "" {
@@ -467,10 +495,6 @@ func (t *CronTool) ExecuteJob(ctx context.Context, job *cron.CronJob) (string, e
 	// For deliver=false, process through agent (for complex tasks)
 	if t.executor == nil {
 		return "", fmt.Errorf("cron executor is not configured")
-	}
-	sessionKey := fmt.Sprintf("cron-%s", job.ID)
-	if lastSessionKey != "" && strings.EqualFold(channel, lastChannel) && chatID == lastChatID {
-		sessionKey = lastSessionKey
 	}
 
 	// Call agent with job's message. Prefer a session-preserving API when available

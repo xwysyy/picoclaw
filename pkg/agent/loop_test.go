@@ -290,6 +290,74 @@ func TestAgentLoop_GetStartupInfo(t *testing.T) {
 	}
 }
 
+func TestAgentLoop_SendFileRegisteredOnlyAfterMediaStore(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.Agents.Defaults.Workspace = t.TempDir()
+	cfg.Agents.Defaults.Model = "test-model"
+	cfg.Agents.Defaults.MaxTokens = 4096
+	cfg.Agents.Defaults.MaxToolIterations = 10
+	cfg.Tools.SendFile.Enabled = true
+
+	msgBus := bus.NewMessageBus()
+	al := NewAgentLoop(cfg, msgBus, &mockProvider{})
+	defaultAgent := al.registry.GetDefaultAgent()
+	if defaultAgent == nil {
+		t.Fatal("expected default agent")
+	}
+	if _, ok := defaultAgent.Tools.Get("send_file"); ok {
+		t.Fatal("send_file should not be registered before media store injection")
+	}
+
+	mediaStore := media.NewFileMediaStore()
+	al.SetMediaStore(mediaStore)
+
+	tool, ok := defaultAgent.Tools.Get("send_file")
+	if !ok {
+		t.Fatal("expected send_file to be registered after media store injection")
+	}
+
+	uploadsDir := filepath.Join(defaultAgent.Workspace, "uploads")
+	if err := os.MkdirAll(uploadsDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	relPath := filepath.Join("uploads", "report.pdf")
+	absPath := filepath.Join(defaultAgent.Workspace, relPath)
+	if err := os.WriteFile(absPath, []byte("%PDF-1.4\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	result := defaultAgent.Tools.ExecuteWithContext(context.Background(), "send_file", map[string]any{"path": relPath}, "telegram", "chat-42", "", nil)
+	if result == nil {
+		t.Fatal("expected ToolResult")
+	}
+	if result.IsError {
+		t.Fatalf("expected success, got error: %s", result.ForLLM)
+	}
+
+	outCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	outbound, ok := msgBus.SubscribeOutboundMedia(outCtx)
+	if !ok {
+		t.Fatal("expected outbound media message")
+	}
+	if outbound.Channel != "telegram" || outbound.ChatID != "chat-42" {
+		t.Fatalf("unexpected outbound media target: %+v", outbound)
+	}
+	if len(outbound.Parts) != 1 {
+		t.Fatalf("len(Parts) = %d, want 1", len(outbound.Parts))
+	}
+	if !strings.HasPrefix(outbound.Parts[0].Ref, "media://") {
+		t.Fatalf("Ref = %q, want media:// prefix", outbound.Parts[0].Ref)
+	}
+	if _, err := mediaStore.Resolve(outbound.Parts[0].Ref); err != nil {
+		t.Fatalf("Resolve() error = %v", err)
+	}
+
+	if sendFileTool, ok := tool.(*tools.SendFileTool); !ok || sendFileTool == nil {
+		t.Fatalf("expected *tools.SendFileTool, got %T", tool)
+	}
+}
+
 // TestAgentLoop_Stop verifies Stop() sets running to false
 func TestAgentLoop_Stop(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "agent-test-*")
@@ -1919,5 +1987,75 @@ func TestAgentLoop_RunLLMIteration_ParallelToolCallsPreserveOrder(t *testing.T) 
 	}
 	if finalContent != "final-from-provider" {
 		t.Fatalf("finalContent = %q, want %q", finalContent, "final-from-provider")
+	}
+}
+
+type reasoningOnlyDirectAnswerProvider struct{}
+
+func (p *reasoningOnlyDirectAnswerProvider) Chat(
+	_ context.Context,
+	_ []providers.Message,
+	_ []providers.ToolDefinition,
+	_ string,
+	_ map[string]any,
+) (*providers.LLMResponse, error) {
+	return &providers.LLMResponse{
+		Content:          "",
+		ReasoningContent: "fallback reasoning answer",
+		ToolCalls:        []providers.ToolCall{},
+	}, nil
+}
+
+func (p *reasoningOnlyDirectAnswerProvider) GetDefaultModel() string {
+	return "reasoning-direct-answer"
+}
+
+func TestAgentLoop_UsesReasoningContentWhenDirectAnswerContentEmpty(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "agent-loop-reasoning-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	cfg := config.DefaultConfig()
+	cfg.Agents.Defaults.Workspace = tmpDir
+	cfg.Agents.Defaults.Model = "test-model"
+	cfg.Agents.Defaults.MaxToolIterations = 2
+
+	msgBus := bus.NewMessageBus()
+	provider := &reasoningOnlyDirectAnswerProvider{}
+	al := NewAgentLoop(cfg, msgBus, provider)
+
+	agent := al.registry.GetDefaultAgent()
+	if agent == nil {
+		t.Fatal("default agent not found")
+	}
+
+	finalContent, iterations, _, err := al.runLLMIteration(
+		context.Background(),
+		agent,
+		[]providers.Message{
+			{Role: "system", Content: "you are a test assistant"},
+			{Role: "user", Content: "answer directly"},
+		},
+		processOptions{
+			SessionKey:      "reasoning-fallback-session",
+			Channel:         "cli",
+			ChatID:          "direct",
+			SenderID:        "tester",
+			DefaultResponse: "default fallback reply",
+			SendResponse:    false,
+		},
+		nil,
+		agent.Model,
+	)
+	if err != nil {
+		t.Fatalf("runLLMIteration() error = %v", err)
+	}
+	if iterations != 1 {
+		t.Fatalf("iterations = %d, want 1", iterations)
+	}
+	if finalContent != "fallback reasoning answer" {
+		t.Fatalf("finalContent = %q, want %q", finalContent, "fallback reasoning answer")
 	}
 }

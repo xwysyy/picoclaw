@@ -644,6 +644,9 @@ func DefaultConfig() *Config {
 			Message: ToolConfig{
 				Enabled: true,
 			},
+			SendFile: ToolConfig{
+				Enabled: true,
+			},
 			ReadFile: ToolConfig{
 				Enabled: true,
 			},

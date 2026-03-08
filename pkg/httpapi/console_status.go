@@ -157,20 +157,92 @@ func (h *ConsoleHandler) summarizeCron() map[string]any {
 	}
 
 	jobsCount := 0
+	jobStates := []map[string]any{}
 	if data, err := os.ReadFile(storePath); err == nil {
 		var store cron.CronStore
 		if json.Unmarshal(data, &store) == nil {
 			jobsCount = len(store.Jobs)
+			jobStates = summarizeCronJobStates(store.Jobs)
 		}
 	}
 
-	return map[string]any{
+	summary := map[string]any{
 		"path":    filepath.ToSlash(filepath.Join("cron", "jobs.json")),
 		"exists":  true,
 		"jobs":    jobsCount,
 		"modTime": st.ModTime().UTC().Format(time.RFC3339Nano),
 		"size":    st.Size(),
 	}
+	if len(jobStates) > 0 {
+		summary["jobStates"] = jobStates
+	}
+	return summary
+}
+
+func summarizeCronJobStates(jobs []cron.CronJob) []map[string]any {
+	states := make([]map[string]any, 0, len(jobs))
+	for _, job := range jobs {
+		state := map[string]any{
+			"id":      job.ID,
+			"name":    job.Name,
+			"enabled": job.Enabled,
+			"running": job.State.Running,
+		}
+		if job.State.NextRunAtMS != nil {
+			state["nextRunAtMS"] = *job.State.NextRunAtMS
+		}
+		if strings.TrimSpace(job.State.LastStatus) != "" {
+			state["lastStatus"] = strings.TrimSpace(job.State.LastStatus)
+		}
+		if job.State.LastDurationMS != nil {
+			state["lastDurationMS"] = *job.State.LastDurationMS
+		}
+		if preview := strings.TrimSpace(job.State.LastOutputPreview); preview != "" {
+			state["lastOutputPreview"] = preview
+		}
+		if lastSessionKey := strings.TrimSpace(job.State.LastSessionKey); lastSessionKey != "" {
+			state["lastSessionKey"] = lastSessionKey
+		}
+		if lastError := strings.TrimSpace(job.State.LastError); lastError != "" {
+			state["lastError"] = lastError
+		}
+		if history := summarizeCronRunHistory(job.State.RunHistory); len(history) > 0 {
+			state["runHistory"] = history
+		}
+		states = append(states, state)
+	}
+	return states
+}
+
+func summarizeCronRunHistory(records []cron.CronRunRecord) []map[string]any {
+	if len(records) == 0 {
+		return nil
+	}
+	start := len(records) - 3
+	if start < 0 {
+		start = 0
+	}
+	summary := make([]map[string]any, 0, len(records)-start)
+	for _, record := range records[start:] {
+		item := map[string]any{
+			"runId":        record.RunID,
+			"startedAtMS":  record.StartedAtMS,
+			"finishedAtMS": record.FinishedAtMS,
+			"durationMS":   record.DurationMS,
+			"status":       record.Status,
+		}
+		if errText := strings.TrimSpace(record.Error); errText != "" {
+			item["error"] = errText
+		}
+		if sessionKey := strings.TrimSpace(record.SessionKey); sessionKey != "" {
+			item["sessionKey"] = sessionKey
+		}
+		if output := strings.TrimSpace(record.Output); output != "" {
+			item["output"] = output
+		}
+		summary = append(summary, item)
+	}
+	return summary
 }
 
 func (h *ConsoleHandler) countTraceSessions(dir string) int {
