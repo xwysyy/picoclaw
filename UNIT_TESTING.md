@@ -1,30 +1,30 @@
-# 单元测试与 TDD 指南
+# Unit Testing & TDD Guide
 
-为了避免回归、提升可维护性，我们把「高质量单元测试」当作一等公民：
+To prevent regressions and improve maintainability, we treat high-quality unit tests as first-class citizens:
 
-- 覆盖关键路径与边界条件
-- 尽量测试失败路径（错误返回、超时、空输入、非法输入、资源限制等）
-- 保持测试确定性（可重复、无外部依赖、运行时间可控）
+- Cover critical paths and boundary conditions
+- Test failure paths thoroughly (error returns, timeouts, empty/invalid input, resource limits, etc.)
+- Keep tests deterministic (repeatable, no external dependencies, predictable runtime)
 
-本文档是面向 X-Claw 的测试约定与落地方法，包含推荐命令、TDD 工作流和项目内的常用测试模式。
+This document describes X-Claw's testing conventions, recommended commands, TDD workflow, and common test patterns.
 
-## 推荐命令
+## Recommended Commands
 
-### 1. 跑分批稳定测试（当前环境推荐）
+### 1. Batch-Oriented Test Runner (Recommended for Constrained Environments)
 
-如果当前机器会在 `go test ./...` 或部分 `-race` 下被 `SIGKILL(137)`，优先使用：
+If your machine hits `SIGKILL(137)` during `go test ./...` or `-race`, prefer:
 
 ```bash
 ./scripts/test-batches.sh
 ```
 
-这个脚本会：
-- 先跑 `go build ./...` 与 `go vet ./...`
-- 先做一轮 `go test ./... -run '^$'` compile-only 检查
-- 按包分开执行 `go test`
-- 对 `pkg/agent` 按顶层测试分批执行，避免整包一次性拉高内存峰值
+This script will:
+- Run `go build ./...` and `go vet ./...` first
+- Perform a compile-only pass via `go test ./... -run '^$'`
+- Execute `go test` per package in separate processes
+- Split `pkg/agent` into per-test batches to reduce peak memory
 
-常见用法：
+Common usage:
 
 ```bash
 ./scripts/test-batches.sh
@@ -33,27 +33,27 @@
 X_CLAW_TEST_PKGS='github.com/xwysyy/X-Claw/pkg/config github.com/xwysyy/X-Claw/pkg/httpapi' ./scripts/test-batches.sh --skip-build --skip-vet
 ```
 
-### 2. 跑全量单测（推荐）
+### 2. Full Unit Tests (Recommended)
 
-部分环境（小内存 VM / SBC / CI）可能会在 `go test ./...` 时被 OOM kill。
-为稳定起见，本仓库提供了按包顺序逐个执行的方式：
+Some environments (low-memory VMs / SBCs / CI) may get OOM-killed during `go test ./...`.
+For stability, this repo provides a per-package sequential runner:
 
 ```bash
 make test
 ```
 
-等价于：
+Equivalent to:
 
 ```bash
 ./scripts/test-unit.sh
 ```
 
-脚本内部会对每个包执行两步：
+The script runs two steps per package:
 
-- `go test -c` 编译出该包的测试二进制（降低 `go test` 同时“编译+执行”时的峰值内存）
-- 直接运行测试二进制（更不容易被 OOM kill）
+- `go test -c` compiles the test binary (reduces peak memory vs compile+run simultaneously)
+- Runs the test binary directly (less likely to be OOM-killed)
 
-你也可以给脚本追加常用的 `go test` 参数（会对每个包生效；脚本会把部分参数转换成测试二进制的 `-test.*` 参数）：
+You can append standard `go test` flags (applied to each package; the script converts some flags to `-test.*` format):
 
 ```bash
 ./scripts/test-unit.sh -race
@@ -61,142 +61,142 @@ make test
 ./scripts/test-unit.sh -v
 ```
 
-提示：`-race` 通常需要 `CGO_ENABLED=1` 且机器上有可用的 C 编译器（gcc/clang）。
-同时 race 检测会显著增加 CPU/内存消耗；在小内存环境建议只对关键包启用，例如：
+Note: `-race` requires `CGO_ENABLED=1` and a C compiler (gcc/clang).
+Race detection significantly increases CPU/memory usage; on low-memory machines, enable it only for critical packages:
 
 ```bash
 CGO_ENABLED=1 X_CLAW_TEST_PKGS='./pkg/agent ./pkg/tools' ./scripts/test-unit.sh -race
 ```
 
-如果只想测试部分包，可以用环境变量覆盖：
+To test specific packages only:
 
 ```bash
 X_CLAW_TEST_PKGS='./pkg/agent ./pkg/tools' ./scripts/test-unit.sh
 ```
 
-### 3. 快速并行（可能更快，但更吃内存）
+### 3. Fast Parallel (Faster but More Memory-Hungry)
 
 ```bash
 make test-fast
 ```
 
-### 4. 跑单个包 / 单个用例
+### 4. Single Package / Single Test
 
 ```bash
 go test ./pkg/agent -count=1
 go test ./pkg/agent -run TestSanitizeHistoryForProvider -count=1
 ```
 
-### 5. 覆盖率
+### 5. Coverage
 
-全仓库覆盖率（推荐，内存更稳）：
+Repository-wide coverage (recommended, more memory-stable):
 
 ```bash
 make cover
 ```
 
-这会生成：
+This generates:
 
-- `coverage.out`（coverprofile）
-- `coverage.html`（可视化报告）
+- `coverage.out` (coverprofile)
+- `coverage.html` (visual report)
 
-等价于：
+Equivalent to:
 
 ```bash
 ./scripts/cover-unit.sh
 ```
 
-单包覆盖率：
+Single-package coverage:
 
 ```bash
 go test ./pkg/agent -cover -count=1
 ```
 
-生成可视化报告（单包示例）：
+Generate a visual report (single package):
 
 ```bash
 go test ./pkg/agent -coverprofile=coverage.out -count=1
 go tool cover -html=coverage.out -o coverage.html
 ```
 
-提示：全仓库覆盖率聚合（`go test ./... -coverprofile=...`）在某些机器上会比较重，优先按包评估并逐步补齐边界用例。
+Note: Repository-wide coverage aggregation (`go test ./... -coverprofile=...`) can be heavy on some machines. Prefer evaluating per-package and incrementally adding boundary test cases.
 
-## 依赖下载与代理（本环境注意）
+## Dependency Download & Proxy
 
-如果需要下载 Go 依赖或工具链，在非交互 shell 下建议：
+If you need to download Go dependencies or toolchains in a non-interactive shell:
 
 ```bash
 source ~/.zshrc && proxy_on
 go test ./... -count=1
 ```
 
-说明：`proxy_on` 是 `~/.zshrc` 里定义的函数，非交互环境不会自动加载。
+Note: `proxy_on` is defined in `~/.zshrc` and is not auto-loaded in non-interactive environments.
 
-## TDD（测试驱动开发）工作流
+## TDD (Test-Driven Development) Workflow
 
-推荐采用经典的 Red-Green-Refactor：
+Follow the classic Red-Green-Refactor cycle:
 
-1. **Red**：先写一个失败的测试，用例明确描述预期行为。
-2. **Green**：用最小实现让测试通过，避免一次写太多逻辑。
-3. **Refactor**：在测试保护下重构代码（去重复、拆分函数、命名优化、抽象边界）。
-4. **补边界**：把“现实世界会发生的坏输入”补成用例（空字符串、nil、超时、错误码、权限、重复调用等）。
+1. **Red**: Write a failing test that clearly describes expected behavior.
+2. **Green**: Write the minimal implementation to make the test pass.
+3. **Refactor**: Refactor under test protection (deduplicate, extract functions, improve naming, adjust abstractions).
+4. **Add boundaries**: Cover real-world bad inputs (empty strings, nil, timeouts, error codes, permissions, duplicate calls, etc.).
 
-对于回归问题：
+For regression bugs:
 
-- 先写一个能稳定复现的测试（锁住 bug）
-- 再修复实现
-- 最后加上相邻边界条件，避免换个输入又复发
+- First write a test that reliably reproduces the bug (lock it down)
+- Then fix the implementation
+- Finally add adjacent boundary cases to prevent similar regressions
 
-## 项目内的测试模式（建议遵循）
+## Test Patterns (Project Conventions)
 
 ### 1. Table-Driven Tests
 
-优先用表驱动覆盖边界输入：
+Prefer table-driven tests for boundary coverage:
 
-- 空值 / 缺字段
-- 不同组合（参数缺失、类型错误、范围错误）
-- 关键分支（成功 / 失败 / 超时）
+- Empty / missing fields
+- Different combinations (missing params, type errors, range errors)
+- Key branches (success / failure / timeout)
 
-### 2. 避免真实外部依赖
+### 2. No Real External Dependencies
 
-单元测试默认不应依赖：
+Unit tests should not depend on:
 
-- 真实网络（使用 `httptest.NewServer`）
-- 真实 API Key
-- 真实时间长等待（使用短 timeout + context）
+- Real network (use `httptest.NewServer`)
+- Real API keys
+- Long real-time waits (use short timeouts + context)
 
-例如 HTTP 逻辑：用 `httptest` 断言请求形状并返回伪响应。
+For HTTP logic: use `httptest` to assert request shape and return fake responses.
 
-### 3. 文件系统与临时目录
+### 3. Filesystem & Temp Directories
 
-使用 `t.TempDir()`，避免污染工作区：
+Use `t.TempDir()` to avoid polluting the workspace:
 
-- 创建临时 workspace
-- 写入测试文件
-- 断言输出
+- Create temporary workspaces
+- Write test files
+- Assert outputs
 
-### 4. Context 与超时
+### 4. Context & Timeouts
 
-所有可能阻塞的逻辑（channel publish、HTTP、长任务）都应在测试里：
+All potentially blocking logic (channel publish, HTTP, long tasks) should:
 
-- 使用 `context.WithTimeout`
-- 断言在合理时间内返回
-- 超时属于失败（避免测试挂死）
+- Use `context.WithTimeout` in tests
+- Assert completion within a reasonable time
+- Treat timeout as failure (prevent hanging tests)
 
-### 5. Mock / Fake 的优先级
+### 5. Mock / Fake Priority
 
-- 能 fake 就 fake（更轻、更确定）
-- 只有必要时才 mock 复杂组件
+- Prefer fakes when possible (lighter, more deterministic)
+- Only mock complex components when necessary
 
-项目内已有参考实现：
+Existing reference implementations:
 
-- `pkg/agent/mock_provider_test.go`：LLM provider mock
-- `pkg/agent/loop_test.go`：bus/channel 等组合测试示例
+- `pkg/agent/mock_provider_test.go`: LLM provider mock
+- `pkg/agent/loop_test.go`: bus/channel integration test examples
 
-## 质量标准（写新单测时自检）
+## Quality Checklist (Self-Review for New Tests)
 
-- 用例名称清晰，失败时能一眼知道哪里错了
-- 对边界条件有覆盖（尤其是错误路径）
-- 不依赖随机与全局状态（必要时固定种子、用临时目录）
-- 不做长 sleep（用 channel、context、可控超时替代）
-- 不引入新的外部依赖（除非确实需要且能稳定下载/缓存）
+- Test names are clear — failures are immediately understandable
+- Boundary conditions are covered (especially error paths)
+- No reliance on randomness or global state (fix seeds, use temp dirs when needed)
+- No long sleeps (use channels, context, controllable timeouts instead)
+- No new external dependencies unless genuinely needed and reliably cached

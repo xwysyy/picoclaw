@@ -1,3 +1,47 @@
+# Architecture
+
+## Overview
+
+X-Claw is structured as a layered application with clear separation between core logic, infrastructure adapters, and application wiring.
+
+## Component Relationships
+
+```
+cmd/x-claw/          -> CLI entry points (gateway, agent, version)
+  └─ internal/gateway/  -> Gateway-specific wiring (HTTP API registration)
+pkg/agent/            -> Agent loop orchestrator (depends on core ports only)
+pkg/channels/         -> Channel adapters (Feishu, Telegram, etc.)
+pkg/config/           -> Configuration loading and validation
+pkg/httpapi/          -> HTTP API handlers (Console, Notify, Resume)
+pkg/providers/        -> LLM provider implementations
+pkg/session/          -> Session management and persistence
+pkg/tools/            -> Tool executor and registry
+pkg/health/           -> Health/readiness server
+internal/core/        -> Zero-dependency core interfaces and types
+  ├─ ports/           -> Port interfaces (ChannelDirectory, MediaResolver, SessionStore, EventSink)
+  ├─ events/          -> Canonical event taxonomy
+  ├─ routing/         -> Session key construction and normalization
+  ├─ provider/        -> Provider protocol types
+  └─ session/         -> Session domain types
+```
+
+## Package Dependency Rules
+
+- `internal/core/` has zero external dependencies -- only stdlib
+- `pkg/agent/` depends on `internal/core/ports/` for infra access, never on `pkg/channels/`, `pkg/httpapi/`, or `pkg/media/` directly
+- `pkg/channels/` implements `internal/core/ports/ChannelDirectory`
+- `pkg/session/` implements `internal/core/ports/SessionStore`
+- `cmd/x-claw/` is the only place that wires all packages together
+
+## Data Flow
+
+1. **Inbound**: Channel receives message -> Gateway inbound queue -> Agent loop processes
+2. **Outbound**: Agent produces response -> Channel sends to user
+3. **Tools**: Agent calls tool -> Tool executor (policy check -> trace -> execute -> error template)
+4. **Persistence**: Sessions, traces, cron state -> workspace filesystem
+
+---
+
 # Architecture Guardrails (WIP)
 
 This repo is actively being refactored towards a "ports/adapters + layered" shape to avoid
